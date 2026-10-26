@@ -1,0 +1,64 @@
+{
+  "pid": 1321025,
+  "pgid": 1290503,
+  "purpose": "Unperturbed near-wall preservation",
+  "started_utc": "2026-10-20T17:12:40.172447+00:00",
+  "comparisons": {
+    "source_degree_comparison": {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 127630,
+      "fine_cells": 127630,
+      "coarse_midpoint": 0.0007500000000000002,
+      "fine_midpoint": 0.0007500000000000002,
+      "coarse_degree": 5,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 2.2659640914026623e-09,
+        "coarse_l2_norm": 0.0018566269311019587,
+        "fine_l2_norm": 0.0018566270049813097,
+        "relative_l2_difference": 1.2204735174717948e-06
+      },
+      "density": {
+        "l2_difference": 4.3019576346989435e-06,
+        "coarse_l2_norm": 0.5508825995166012,
+        "fine_l2_norm": 0.5508825217837606,
+        "relative_l2_difference": 7.809210611309979e-06
+      },
+      "gradient": {
+        "l2_difference": 1.803479270389185e-05,
+        "coarse_l2_norm": 0.01747611492324599,
+        "fine_l2_norm": 0.017476112528550074,
+        "relative_l2_difference": 0.001031968218013536
+      }
+    },
+    "source_quadrature_comparison": {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 127630,
+      "fine_cells": 127630,
+      "coarse_midpoint": 0.0007500000000000002,
+      "fine_midpoint": 0.0007500000000000002,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 1.3290575813035238e-18,
+        "coarse_l2_norm": 0.0018566270049813097,
+        "fine_l2_norm": 0.0018566270049813097,
+        "relative_l2_difference": 7.158452277908687e-16
+      },
+      "density": {
+        "l2_difference": 4.235683031659273e-15,
+        "coarse_l2_norm": 0.5508825217837608,
+        "fine_l2_norm": 0.5508825217837606,
+        "relative_l2_difference": 7.688904374646173e-15
+      },
+      "gradient": {
+        "l2_difference": 1.2679364739339459e-15,
+        "coarse_l2_norm": 0.017476112528550074,
+        "fine_l2_norm": 0.017476112528550074,
+        "relative_l2_difference": 7.255254690438536e-14
+      }
+    }
+  },
+  "status": "completed",
+  "finished_utc": "2026-10-20T17:18:53.481314+00:00"
+}

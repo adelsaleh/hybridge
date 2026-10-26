@@ -1,0 +1,14 @@
+{
+  "geometry": "horseshoe",
+  "requested_size": 0.006,
+  "num_cells": 185876,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "9b55ec025a9e5fd4cb1449cf87cd9d0b65cd720655d36d384b8de04bc63ff6c9",
+  "source_archive_id": "horseshoe_centerward_20261015_01-e7d2014fe7d2",
+  "source_checkpoint_sha256": "e7d2014fe7d24e7390c31dac784678a3bf9239b29ee2946dc88f2bcf10b8a8b4",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 4860,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": null
+}

@@ -1,0 +1,7 @@
+{
+  "time": 1792156565.0712907,
+  "driver_pid": 2461041,
+  "reason": "User requests high polynomial degree, up to about 300k triangles at degree 6. Hold queued larger CG2 meshes; current worker may finish.",
+  "state": "old CG2 driver stopped after current worker completed",
+  "stopped": 1792157166.42347
+}

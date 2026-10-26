@@ -1,0 +1,37 @@
+{
+  "geometry": "uglypacman",
+  "requested_size": 0.006,
+  "num_cells": 215246,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "1cc613ad1158a34fecdcfce6fa3daa8788b64e483a661769a6b1e14fdf567234",
+  "source_archive_id": "uglypacman_dt080_cg6_20261016-8be04755cdf7",
+  "source_checkpoint_sha256": "8be04755cdf76da3f87d2d3d02273f0aad569d1ace02042765da6f64a810e883",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 4112,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/uglypacman/contours.npz",
+    "contours_sha256": "77c75890e3c8c460c4f8923143f7806e82e0e10790ecd412b083e29d1a1a41b3",
+    "band_size": 0.0025,
+    "buffer": 0.003,
+    "grading": 0.3,
+    "distance_samples": 4382,
+    "definition": "distance to sampled outer/inner transition contours"
+  },
+  "corner_refinement": {
+    "size": 1e-05,
+    "grading": 0.15,
+    "minimum_angle_deviation": 25.0,
+    "points": [
+      [
+        1.08,
+        0.06
+      ],
+      [
+        0.35,
+        -0.1
+      ]
+    ]
+  }
+}

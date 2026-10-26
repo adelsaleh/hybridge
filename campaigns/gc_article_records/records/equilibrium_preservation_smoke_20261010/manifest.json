@@ -1,0 +1,308 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_preservation_smoke_20261010",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 6432568,
+  "file_count": 58,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "horseshoe_02_p2_si-bdf2.csv",
+      "copy": "horseshoe_02_p2_si-bdf2.csv",
+      "bytes": 27099,
+      "sha256": "6486406821e53a0eea8b4e307bcbb5a37c2dd20a9a5b8f4f9b25d45096c6d522"
+    },
+    {
+      "path": "horseshoe_02_p2_si-bdf2.jsonl",
+      "copy": "horseshoe_02_p2_si-bdf2.jsonl",
+      "bytes": 58975,
+      "sha256": "f5a7a27a76dca6d70c6b1a13eabf81ffd531bda413b10dd21fbd4f2ef6bb7c7d"
+    },
+    {
+      "path": "horseshoe_02_p2_si-bdf2_config.json",
+      "copy": "horseshoe_02_p2_si-bdf2_config.json",
+      "bytes": 4227,
+      "sha256": "aaf54c2caff0e7999684765778519a9e6b2c397805f0ce2237630f133975cd32"
+    },
+    {
+      "path": "horseshoe_02_p2_si-bdf2_initial_positivity.json",
+      "copy": "horseshoe_02_p2_si-bdf2_initial_positivity.json",
+      "bytes": 488,
+      "sha256": "5da1d1f4ff1aed3375ee4aef438703014bd51e605e8dc404661fd12605b14aa1"
+    },
+    {
+      "path": "horseshoe_02_p2_si-bdf2_timings.csv",
+      "copy": "horseshoe_02_p2_si-bdf2_timings.csv",
+      "bytes": 20860,
+      "sha256": "bea7b21c12448bb1ee26c5cd34fd77af6c758408f54abbb5ed99858b3a6d46cf"
+    },
+    {
+      "path": "horseshoe_02_p2_si-bdf2_timings.jsonl",
+      "copy": "horseshoe_02_p2_si-bdf2_timings.jsonl",
+      "bytes": 45107,
+      "sha256": "c8dab2d39605e54fdb1d1eeee1f5bf2b59edac718fce4992709a0842af7854c3"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler.csv",
+      "copy": "horseshoe_02_p2_si-euler.csv",
+      "bytes": 26939,
+      "sha256": "e026f27bdebbfedc360fc0ce88c081c657c659aba17c136507bb7a15d36d5331"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler.jsonl",
+      "copy": "horseshoe_02_p2_si-euler.jsonl",
+      "bytes": 58605,
+      "sha256": "543e58b8ef443576aaad3a95ff85e58558883a16bc51afb59bb555cd6d034718"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler_config.json",
+      "copy": "horseshoe_02_p2_si-euler_config.json",
+      "bytes": 4230,
+      "sha256": "b2b8255d1092bd04f64efd792fc5072b562524cf0ebc6bad3f4af51b443ef7da"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler_initial_positivity.json",
+      "copy": "horseshoe_02_p2_si-euler_initial_positivity.json",
+      "bytes": 488,
+      "sha256": "5da1d1f4ff1aed3375ee4aef438703014bd51e605e8dc404661fd12605b14aa1"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler_timings.csv",
+      "copy": "horseshoe_02_p2_si-euler_timings.csv",
+      "bytes": 20699,
+      "sha256": "e5d8d315dee49e84270ed44947cc6dd47e225a93c7ef2bcf2344e7f7396d397d"
+    },
+    {
+      "path": "horseshoe_02_p2_si-euler_timings.jsonl",
+      "copy": "horseshoe_02_p2_si-euler_timings.jsonl",
+      "bytes": 44736,
+      "sha256": "59551053a55453b3fc5206e7d1df4d59e3e773bde904343af6c7e36621af6570"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2.csv",
+      "copy": "iter_02_p2_si-bdf2.csv",
+      "bytes": 27014,
+      "sha256": "221bf9e9f9239142b2e426ceb564cf101bbbe98a9b7215a436eec39835d9665c"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2.jsonl",
+      "copy": "iter_02_p2_si-bdf2.jsonl",
+      "bytes": 58890,
+      "sha256": "960e022eaf9666b1303fe444498b7e8183fa142177b565c71cd3d87e96d73178"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2_config.json",
+      "copy": "iter_02_p2_si-bdf2_config.json",
+      "bytes": 4210,
+      "sha256": "f3036c670b2e6eed2782e216f927deae4d5a14cac4f8f18da10139998e8a4ab1"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2_initial_positivity.json",
+      "copy": "iter_02_p2_si-bdf2_initial_positivity.json",
+      "bytes": 483,
+      "sha256": "04a0171b7ea1865c9abf731b0e3ec329deda607ca78394d4cfe44f6cae42d57f"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2_timings.csv",
+      "copy": "iter_02_p2_si-bdf2_timings.csv",
+      "bytes": 20856,
+      "sha256": "a55e1714afcb5ac2c8ef62fc6d483836cf4661a8fc8710c77d6510da4f3057f3"
+    },
+    {
+      "path": "iter_02_p2_si-bdf2_timings.jsonl",
+      "copy": "iter_02_p2_si-bdf2_timings.jsonl",
+      "bytes": 45103,
+      "sha256": "faa361dfdb46ec8d9e0a6f340488ace1f9b9b23e03708f6e38b1d5f694c7e66f"
+    },
+    {
+      "path": "iter_02_p2_si-euler.csv",
+      "copy": "iter_02_p2_si-euler.csv",
+      "bytes": 26752,
+      "sha256": "f7b45f6e8e98c2a60d39ed34b36a4e73f2abcafd3cb452eb8db9d64a9112d233"
+    },
+    {
+      "path": "iter_02_p2_si-euler.jsonl",
+      "copy": "iter_02_p2_si-euler.jsonl",
+      "bytes": 58418,
+      "sha256": "fa2e56f5002fa88f38f55868c2bb4a52691ef699612cd9f598e637adb4e1ae98"
+    },
+    {
+      "path": "iter_02_p2_si-euler_config.json",
+      "copy": "iter_02_p2_si-euler_config.json",
+      "bytes": 4213,
+      "sha256": "2ae298167287489cfc22c7fd3498435dc281652e20f7424fa326aebfdbdb9528"
+    },
+    {
+      "path": "iter_02_p2_si-euler_initial_positivity.json",
+      "copy": "iter_02_p2_si-euler_initial_positivity.json",
+      "bytes": 483,
+      "sha256": "04a0171b7ea1865c9abf731b0e3ec329deda607ca78394d4cfe44f6cae42d57f"
+    },
+    {
+      "path": "iter_02_p2_si-euler_timings.csv",
+      "copy": "iter_02_p2_si-euler_timings.csv",
+      "bytes": 20643,
+      "sha256": "b7355c1c4e0694faf17612ea00367c614f2fec751794d5ff9037dc75c303e059"
+    },
+    {
+      "path": "iter_02_p2_si-euler_timings.jsonl",
+      "copy": "iter_02_p2_si-euler_timings.jsonl",
+      "bytes": 44680,
+      "sha256": "76ade0bf22bb76785d6622ca94ab8a72c55ecae2425a351de0cf659495f6a9d8"
+    },
+    {
+      "path": "star_02_p2_si-bdf2.csv",
+      "copy": "star_02_p2_si-bdf2.csv",
+      "bytes": 27052,
+      "sha256": "41ea0c9564d2b901f638263fd3fc4b2178e66bb9c6d2f3d1fcc0659935454de4"
+    },
+    {
+      "path": "star_02_p2_si-bdf2.jsonl",
+      "copy": "star_02_p2_si-bdf2.jsonl",
+      "bytes": 58928,
+      "sha256": "53f419b0f838698b44d8cfefbd5b1222138b3cdbc1299749a907e22fc408104d"
+    },
+    {
+      "path": "star_02_p2_si-bdf2_config.json",
+      "copy": "star_02_p2_si-bdf2_config.json",
+      "bytes": 4212,
+      "sha256": "69cc57a14d03eaeded52ec672a718f9eba534ca9e57631b8353a6edfcd23fcd1"
+    },
+    {
+      "path": "star_02_p2_si-bdf2_initial_positivity.json",
+      "copy": "star_02_p2_si-bdf2_initial_positivity.json",
+      "bytes": 488,
+      "sha256": "4f201a3d9750fefb827e0ae479959da7fcefb99b004463765605fd965c927841"
+    },
+    {
+      "path": "star_02_p2_si-bdf2_timings.csv",
+      "copy": "star_02_p2_si-bdf2_timings.csv",
+      "bytes": 20855,
+      "sha256": "929239500763a2dfb5da1040b2994db18373521848ecff171cc446b1d25125f1"
+    },
+    {
+      "path": "star_02_p2_si-bdf2_timings.jsonl",
+      "copy": "star_02_p2_si-bdf2_timings.jsonl",
+      "bytes": 45102,
+      "sha256": "2f9e9c8f32f4aa841826ed5042c216eda6b0e001037aa3c9c390e1e89d1e9e3a"
+    },
+    {
+      "path": "star_02_p2_si-euler.csv",
+      "copy": "star_02_p2_si-euler.csv",
+      "bytes": 26935,
+      "sha256": "6fb879315b3e3dc60b80b7af3b4534c52ab6ae01721817b721c83c0c1bd92b5f"
+    },
+    {
+      "path": "star_02_p2_si-euler.jsonl",
+      "copy": "star_02_p2_si-euler.jsonl",
+      "bytes": 58601,
+      "sha256": "4779f53930a3fa1b6963f6e87c4fd991889ffae4d619e9bc2cb1aa1c50aa2f13"
+    },
+    {
+      "path": "star_02_p2_si-euler_config.json",
+      "copy": "star_02_p2_si-euler_config.json",
+      "bytes": 4215,
+      "sha256": "4bb32facdf0a2a06d481d647d6ae1fbe0a17efdb3978cbca3fbedb22c2055adf"
+    },
+    {
+      "path": "star_02_p2_si-euler_initial_positivity.json",
+      "copy": "star_02_p2_si-euler_initial_positivity.json",
+      "bytes": 488,
+      "sha256": "4f201a3d9750fefb827e0ae479959da7fcefb99b004463765605fd965c927841"
+    },
+    {
+      "path": "star_02_p2_si-euler_timings.csv",
+      "copy": "star_02_p2_si-euler_timings.csv",
+      "bytes": 20699,
+      "sha256": "2ef21ed034befbb656a8a458d913104631289181fb3f3a37ee0efa4ed19300f9"
+    },
+    {
+      "path": "star_02_p2_si-euler_timings.jsonl",
+      "copy": "star_02_p2_si-euler_timings.jsonl",
+      "bytes": 44736,
+      "sha256": "35d58fdac5aa2b23fe90684792f08eecacca3548ff66103cd7f4b8d699fd613b"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 22484,
+      "sha256": "8c03e80c2dac49dfe5e0302d490cc87978bf4568cb9ed6ed356f7495449eea02"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2.csv",
+      "copy": "uglypacman_04_p2_si-bdf2.csv",
+      "bytes": 27024,
+      "sha256": "c07688b85a289b582d582f4303a22e8b1a22b2270bdc697def00adebaed26c5a"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2.jsonl",
+      "copy": "uglypacman_04_p2_si-bdf2.jsonl",
+      "bytes": 58900,
+      "sha256": "4b22134d19916e568edc341b2f7a65fd876ebbb6d44b5fd6a76076cb45136e2a"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2_config.json",
+      "copy": "uglypacman_04_p2_si-bdf2_config.json",
+      "bytes": 4230,
+      "sha256": "5161779a12a3a6c4fc53766434a42311a8213344ee3d0620c05fb37f9ef2bf20"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2_initial_positivity.json",
+      "copy": "uglypacman_04_p2_si-bdf2_initial_positivity.json",
+      "bytes": 482,
+      "sha256": "5147fab10d4060d67be53505f3cb534b29850ddb1454709ce8915d126c2a6276"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2_timings.csv",
+      "copy": "uglypacman_04_p2_si-bdf2_timings.csv",
+      "bytes": 20843,
+      "sha256": "4d90b2fb7a16db69578adb20ac70b0c5caff8aa83b58b3fa4f23d55325db75f5"
+    },
+    {
+      "path": "uglypacman_04_p2_si-bdf2_timings.jsonl",
+      "copy": "uglypacman_04_p2_si-bdf2_timings.jsonl",
+      "bytes": 45090,
+      "sha256": "2a4def346e0d02e9204332c14b54f5e2cd670183be297b771bbe418b2bff690b"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler.csv",
+      "copy": "uglypacman_04_p2_si-euler.csv",
+      "bytes": 26910,
+      "sha256": "f1469be7887b2c78f8c351eddb4109609d927bd4a22d64f423a3e631e02df60a"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler.jsonl",
+      "copy": "uglypacman_04_p2_si-euler.jsonl",
+      "bytes": 58576,
+      "sha256": "89b25018db2b74666ab3a88b926897c64e76846072c183359fc94476e11ab270"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler_config.json",
+      "copy": "uglypacman_04_p2_si-euler_config.json",
+      "bytes": 4233,
+      "sha256": "5f9fc74535959e44243f81fa1a7e64e3262d365f3f1e27f59d6f074fb26bc564"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler_initial_positivity.json",
+      "copy": "uglypacman_04_p2_si-euler_initial_positivity.json",
+      "bytes": 482,
+      "sha256": "5147fab10d4060d67be53505f3cb534b29850ddb1454709ce8915d126c2a6276"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler_timings.csv",
+      "copy": "uglypacman_04_p2_si-euler_timings.csv",
+      "bytes": 20717,
+      "sha256": "33925a12a0f5d0d35f6a69f676a03bdbea4496eff76ea40d79d152bb3f8c083f"
+    },
+    {
+      "path": "uglypacman_04_p2_si-euler_timings.jsonl",
+      "copy": "uglypacman_04_p2_si-euler_timings.jsonl",
+      "bytes": 44754,
+      "sha256": "b305ffe0f912c356ec0fd84d3070409d6e8997424454b58a320621bb0a916ef1"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

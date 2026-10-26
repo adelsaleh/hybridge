@@ -1,0 +1,8 @@
+{
+  "pid": 1286084,
+  "pgid": 1286084,
+  "started_utc": "2026-10-20T16:41:23.591125+00:00",
+  "status": "failed",
+  "error": "CalledProcessError: Command '['/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python', '-u', '/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/launch_source_refinement.py']' returned non-zero exit status 1.",
+  "finished_utc": "2026-10-20T16:43:47.121919+00:00"
+}

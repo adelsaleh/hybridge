@@ -1,0 +1,92 @@
+{
+  "pid": 1290505,
+  "pgid": 1290503,
+  "selected": {
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/predicted/nearwall_018.npz",
+    "midpoint": 0.0007500000000000002,
+    "delta": 0.0007500000000000002,
+    "progress": 1.0,
+    "mean_thickness": 0.03415586061126914,
+    "wall_clearance": 0.010185772278270083,
+    "dual_residual": 1.5962113937429743e-16,
+    "state_id": "05c51bbc47ac408d9f9621b70a0b9d57",
+    "archive_id": "nearwall_018-bcc52b613d2f"
+  },
+  "started_utc": "2026-10-20T16:45:27.037042+00:00",
+  "status": "completed",
+  "entries": {
+    "refined_cg4_r08": {
+      "name": "refined_cg4_r08_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.34886914538285624,
+      "mean_thickness": 0.03383057303917735,
+      "wall_clearance": 0.010183729504723633,
+      "dual_residual": 3.652306789681197e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg4_r08/refined_cg4_r08_01.npz",
+      "state_id": "0e2f9c70679f4284b53c9683c28e6092",
+      "archive_id": "refined_cg4_r08_01-c05dac80450c"
+    },
+    "refined_cg4_r04": {
+      "name": "refined_cg4_r04_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.34922087279213493,
+      "mean_thickness": 0.03529966009263097,
+      "wall_clearance": 0.010126274254327203,
+      "dual_residual": 3.584579875132454e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg4_r04/refined_cg4_r04_01.npz",
+      "state_id": "7770ae777adc479181ec9873c972b694",
+      "archive_id": "refined_cg4_r04_01-ebd135ea0a08"
+    },
+    "refined_cg4_r02": {
+      "name": "refined_cg4_r02_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.3493531195707347,
+      "mean_thickness": 0.03638746027372423,
+      "wall_clearance": 0.010110275442746801,
+      "dual_residual": 3.6237087315346703e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg4_r02/refined_cg4_r02_01.npz",
+      "state_id": "9bb2f6c7cca24018b8809d3ecb7b3677",
+      "archive_id": "refined_cg4_r02_01-d0ca3a1886d5"
+    },
+    "refined_cg5_r02": {
+      "name": "refined_cg5_r02_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.3493529050082798,
+      "mean_thickness": 0.036386452007249395,
+      "wall_clearance": 0.010110081826210112,
+      "dual_residual": 4.913557348299568e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg5_r02/refined_cg5_r02_01.npz",
+      "state_id": "7711d84fb35042bf871f5599daaab864",
+      "archive_id": "refined_cg5_r02_01-4ed7500223e8"
+    },
+    "refined_cg6_r02": {
+      "name": "refined_cg6_r02_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.3493528028985204,
+      "mean_thickness": 0.03638590374545566,
+      "wall_clearance": 0.010109990012483755,
+      "dual_residual": 6.519797450961613e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_r02/refined_cg6_r02_01.npz",
+      "state_id": "8661f14fd68c49eca083f90f3ae1f9de",
+      "archive_id": "refined_cg6_r02_01-bfaa39cdee9b"
+    },
+    "refined_cg6_q48": {
+      "name": "refined_cg6_q48_01",
+      "midpoint": 0.0007500000000000002,
+      "distance": null,
+      "mass": 0.3493528028970371,
+      "mean_thickness": 0.03638590374545519,
+      "wall_clearance": 0.010109990012483767,
+      "dual_residual": 6.266593889861238e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+      "state_id": "60cf2d1c4d0c43c49d46c7d60d66b21c",
+      "archive_id": "refined_cg6_q48_01-4a7bf9500531"
+    }
+  },
+  "finished_utc": "2026-10-20T17:12:28.676752+00:00"
+}

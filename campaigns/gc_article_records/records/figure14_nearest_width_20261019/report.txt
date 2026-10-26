@@ -1,0 +1,43 @@
+Figure 14: nearest-inner-boundary width measurements
+
+Definition: w(x) = min_{y on inner boundary} |x-y|, x on outer boundary.
+Edges: outer phi=m-delta/2, inner phi=m+delta/2, both approximately rho=1/2.
+Figure selection: run_outputs/equilibrium_dt080_20261016/article_selection.json.
+Figure number verified from main.aux; four selected eps/delta=0.005 CG6 fields.
+
+Method: 65,536 equally spaced outer-arclength samples per band, exact projection
+onto inner polygon segments. A KD-tree candidate search is conservatively bounded.
+At 128 random points and the two sampled extrema per geometry, exhaustive searches
+over all inner segments agreed to within 4e-16 coordinate units.
+Every saved outer vertex was checked additionally for extrema; these vertices
+were not included in the uniformly weighted mean or standard deviation.
+
+Geometry         Mean         Min          Max         Std/mean
+star           0.04355043   0.04228262   0.04528078   2.295%
+uglypacman     0.04354697   0.04074632   0.04696781   2.256%
+iter           0.12288472   0.12179457   0.12690854   0.984%
+horseshoe      0.04347426   0.04243244   0.04681881   2.278%
+
+Observed width is nearly constant, with arclength standard deviation 0.98–2.30%
+of the mean. Maximum local departures from the mean range from 3.27% to 7.86%.
+The larger departures occur locally near strongly curved parts of the contours.
+
+Numerical checks:
+- Increasing outer samples from 16,384 to 65,536 changes mean width by <5.1e-9.
+- The same increase changes sampled extrema by at most 2.12e-6.
+- Distance is 1-Lipschitz: extrema over each saved outer polyline lie within
+  L_outer/(2*65536) of uniform-sample extrema, a conservative bound.
+- An independent check at 1,024 points per edge evaluated the full saved CG6
+  polynomial and locally projected onto the threshold. Maximum corrections
+  were <0.03% of mean width (sampled evidence, not a global bound).
+- No equilibrium solve or time integration was performed.
+
+Limitations: these checks verify distance evaluation and contour extraction.
+They do not establish mesh convergence of the equilibria or exact constant width.
+
+Reproduce from this directory:
+/home/adelsaleh/src/hybridge/.venv/bin/python measure.py
+/home/adelsaleh/src/hybridge/.venv/bin/python contour_field_audit.py
+
+Files: nearest_width.png/pdf, summary.csv/json, samples.npz,
+contour_field_audit.py/json, measure.py, completed.json.

@@ -1,0 +1,70 @@
+{
+  "ranks": {
+    "2765231": {
+      "cpu": 36.0,
+      "rss_bytes": 2942590976,
+      "affinity": [
+        0
+      ],
+      "measured_cpu_cores": 0.9972183607550513
+    },
+    "2765232": {
+      "cpu": 34.78,
+      "rss_bytes": 2373238784,
+      "affinity": [
+        1
+      ],
+      "measured_cpu_cores": 1.0005424219575687
+    },
+    "2765233": {
+      "cpu": 35.18,
+      "rss_bytes": 2586714112,
+      "affinity": [
+        2
+      ],
+      "measured_cpu_cores": 1.0005424219575676
+    },
+    "2765234": {
+      "cpu": 34.84,
+      "rss_bytes": 2361356288,
+      "affinity": [
+        3
+      ],
+      "measured_cpu_cores": 0.9972183607550525
+    },
+    "2765235": {
+      "cpu": 35.07,
+      "rss_bytes": 2336149504,
+      "affinity": [
+        4
+      ],
+      "measured_cpu_cores": 1.0005424219575676
+    },
+    "2765236": {
+      "cpu": 35.28,
+      "rss_bytes": 2595065856,
+      "affinity": [
+        5
+      ],
+      "measured_cpu_cores": 1.0005424219575676
+    },
+    "2765237": {
+      "cpu": 35.15,
+      "rss_bytes": 2185945088,
+      "affinity": [
+        6
+      ],
+      "measured_cpu_cores": 1.0005424219575676
+    },
+    "2765238": {
+      "cpu": 36.01,
+      "rss_bytes": 2057838592,
+      "affinity": [
+        7
+      ],
+      "measured_cpu_cores": 1.0005424219575676
+    }
+  },
+  "interval_seconds": 3.0083681950345635,
+  "scope": "Initial setup sample; later solve-level peak activity is recorded in execution/"
+}

@@ -1,0 +1,21 @@
+{
+  "pid": 1563260,
+  "pgid": 1563260,
+  "stop": "kill -- -1563260",
+  "lane": "b",
+  "labels": [
+    "wall_072",
+    "wall_148",
+    "inner_410"
+  ],
+  "final": 300,
+  "started_utc": "2026-10-25T18:45:24.045973+00:00",
+  "finished_utc": "2026-10-25T22:39:05.497580+00:00",
+  "done": [
+    "wall_072",
+    "wall_148",
+    "inner_410"
+  ],
+  "failures": [],
+  "pending": []
+}

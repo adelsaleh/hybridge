@@ -1,0 +1,943 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Historical stage; consult the saved completion markers and per-run summaries.",
+  "total_bytes": 44627489779,
+  "file_count": 2706,
+  "subdirectories": 42,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 464,
+      "sha256": "92c5fa27c050075a02a0e9b2288d35b623ccd4b9f5207ebb71e09ff05bd50935"
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 464,
+      "sha256": "92c5fa27c050075a02a0e9b2288d35b623ccd4b9f5207ebb71e09ff05bd50935"
+    },
+    {
+      "path": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 464,
+      "sha256": "92c5fa27c050075a02a0e9b2288d35b623ccd4b9f5207ebb71e09ff05bd50935"
+    },
+    {
+      "path": "mag2_summary.csv",
+      "copy": "mag2_summary.csv",
+      "bytes": 2117,
+      "sha256": "4f494bf030d88498880e158ee3d653d1e8a1e515c33c3121267de6be4c211e84"
+    },
+    {
+      "path": "mag2_summary.json",
+      "copy": "mag2_summary.json",
+      "bytes": 3794,
+      "sha256": "59e6c94df975d0097724514e107575b57b30630604ebaac6d779bb47bc788e29"
+    },
+    {
+      "path": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 484,
+      "sha256": "bfd3fe9ee89b4e455595f69a4cef056b82729c78aaa50031f8c502523a29eca4"
+    },
+    {
+      "path": "mag_summary.csv",
+      "copy": "mag_summary.csv",
+      "bytes": 3469,
+      "sha256": "e02dec9ae02d426ce0cf3054965b6449a78bdf29009acd5427a9bb418b286953"
+    },
+    {
+      "path": "mag_summary.json",
+      "copy": "mag_summary.json",
+      "bytes": 7186,
+      "sha256": "11fd180eb424606ccec7b8d23446f445b8ef4c06cf3124eb7f16d687bfc0ac46"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "847abd3184745a4d6c05d8b501bdbf8471a0ea0b5f46d129f8344f922d5e5ff0"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "847abd3184745a4d6c05d8b501bdbf8471a0ea0b5f46d129f8344f922d5e5ff0"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "b985e87edbb5df1b546daf9ead1766271b7617f2a26e43247027fadd40301567"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "b985e87edbb5df1b546daf9ead1766271b7617f2a26e43247027fadd40301567"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "847abd3184745a4d6c05d8b501bdbf8471a0ea0b5f46d129f8344f922d5e5ff0"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "847abd3184745a4d6c05d8b501bdbf8471a0ea0b5f46d129f8344f922d5e5ff0"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "b985e87edbb5df1b546daf9ead1766271b7617f2a26e43247027fadd40301567"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "b985e87edbb5df1b546daf9ead1766271b7617f2a26e43247027fadd40301567"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "8dcb8f56b097a49b9eb6a8b121187a60b551bc3499595e3e550d4c0ffbbc0d6d"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "copy": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magc2_summary.csv",
+      "copy": "magc2_summary.csv",
+      "bytes": 17132,
+      "sha256": "a17aee3e5e7dc5536d1899d6655f8646ba5ce04d9e214901f3ecb416e9606725"
+    },
+    {
+      "path": "magc2_summary.json",
+      "copy": "magc2_summary.json",
+      "bytes": 35809,
+      "sha256": "788634925396cef80b31d541e5449df1207a9d9e4a69b47dd49880f47c2674c9"
+    },
+    {
+      "path": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "copy": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_initial_positivity.json",
+      "bytes": 485,
+      "sha256": "5f03a2e042bea503d0041f7e36f146e202a4960a13ca646bd02533e406ae9de8"
+    },
+    {
+      "path": "magv_summary.csv",
+      "copy": "magv_summary.csv",
+      "bytes": 2169,
+      "sha256": "c494f2d098012dbd651294bd9aeb69d285be28bf1c8e1ded6c8813fce8170c5c"
+    },
+    {
+      "path": "magv_summary.json",
+      "copy": "magv_summary.json",
+      "bytes": 3846,
+      "sha256": "3d83e103802cdc8053658b452887a7aecb14058aeb87be96274d8b0f34658b37"
+    }
+  ],
+  "too_large_or_nontext": [
+    {
+      "path": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23201043
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81739498
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19861424
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72723924
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23190348
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81728803
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19856121
+    },
+    {
+      "path": "mag2_N6_a0p025_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72718621
+    },
+    {
+      "path": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23036695
+    },
+    {
+      "path": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81575150
+    },
+    {
+      "path": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19684990
+    },
+    {
+      "path": "mag2_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p025_hb0p0125_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72547490
+    },
+    {
+      "path": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22810913
+    },
+    {
+      "path": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80230702
+    },
+    {
+      "path": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19482575
+    },
+    {
+      "path": "mag_N6_a0p025_w0p25_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71226409
+    },
+    {
+      "path": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22794625
+    },
+    {
+      "path": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80214414
+    },
+    {
+      "path": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19478673
+    },
+    {
+      "path": "mag_N6_a0p025_w0p29_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71222507
+    },
+    {
+      "path": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22864115
+    },
+    {
+      "path": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80283904
+    },
+    {
+      "path": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19532292
+    },
+    {
+      "path": "mag_N6_a0p025_w0p2_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71276126
+    },
+    {
+      "path": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22818369
+    },
+    {
+      "path": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80238158
+    },
+    {
+      "path": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19485119
+    },
+    {
+      "path": "mag_N6_a0p025_w0p33_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71228953
+    },
+    {
+      "path": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22849588
+    },
+    {
+      "path": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80269377
+    },
+    {
+      "path": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19478865
+    },
+    {
+      "path": "mag_N6_a0p025_w0p38_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71222699
+    },
+    {
+      "path": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 22941587
+    },
+    {
+      "path": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 80361376
+    },
+    {
+      "path": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 19515484
+    },
+    {
+      "path": "mag_nowave_rc0p5_rh0p65_V0p1_k1_p6_h0p025_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 71259318
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22551024
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 79970813
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 22946405
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81484860
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19643608
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72506108
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19214033
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 70957867
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22621425
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80041214
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23006434
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81544889
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19696017
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72558517
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19277206
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71021040
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible.csv",
+      "bytes": 181633151
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible.jsonl",
+      "bytes": 641076940
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense.csv",
+      "bytes": 184724464
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense.jsonl",
+      "bytes": 653119919
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense_timings.csv",
+      "bytes": 158240724
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_kktdense_timings.jsonl",
+      "bytes": 581228224
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_timings.csv",
+      "bytes": 154924373
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p00625_compatible_timings.jsonl",
+      "bytes": 568960207
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible.csv",
+      "bytes": 90813661
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible.jsonl",
+      "bytes": 320529450
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense.csv",
+      "bytes": 92371930
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense.jsonl",
+      "bytes": 326563385
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense_timings.csv",
+      "bytes": 79120857
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_kktdense_timings.jsonl",
+      "bytes": 290608357
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_timings.csv",
+      "bytes": 77444172
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p0125_compatible_timings.jsonl",
+      "bytes": 284456006
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible.csv",
+      "bytes": 45420574
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible.jsonl",
+      "bytes": 160272363
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense.csv",
+      "bytes": 46175128
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense.jsonl",
+      "bytes": 163264583
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_timings.csv",
+      "bytes": 39554255
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_timings.jsonl",
+      "bytes": 145291755
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_timings.csv",
+      "bytes": 38732465
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_timings.jsonl",
+      "bytes": 142232299
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22697012
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80116801
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23074719
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81613174
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19763907
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72626407
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19351610
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71095444
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 11350331
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 40054120
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 11545675
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 40808630
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 9888303
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 36313303
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 9676313
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 35542147
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22785218
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80205007
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23167969
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81706424
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19854952
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72717452
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19440380
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71184214
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22540105
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 79959894
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 22947467
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81485922
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19642962
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72505462
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19214746
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0053_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 70958580
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22610691
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80030480
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23018434
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81556889
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19705426
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72567926
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19277048
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0075_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71020882
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible.csv",
+      "bytes": 45396414
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible.jsonl",
+      "bytes": 160248203
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense.csv",
+      "bytes": 45964459
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense.jsonl",
+      "bytes": 163053914
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_timings.csv",
+      "bytes": 39344191
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_kktdense_timings.jsonl",
+      "bytes": 145081691
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_timings.csv",
+      "bytes": 38717495
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p025_compatible_timings.jsonl",
+      "bytes": 142217329
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22677385
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80097174
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23080576
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81619031
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19768128
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72630628
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19343060
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71086894
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible.csv",
+      "bytes": 11348061
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible.jsonl",
+      "bytes": 40051850
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 11548031
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 40810986
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 9890655
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 36315655
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_timings.csv",
+      "bytes": 9677960
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p0106_vanes12_rb1p35_si_bdf2_dt0p1_compatible_timings.jsonl",
+      "bytes": 35543794
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible.csv",
+      "bytes": 22771140
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible.jsonl",
+      "bytes": 80190929
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.csv",
+      "bytes": 23169387
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense.jsonl",
+      "bytes": 81707842
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.csv",
+      "bytes": 19855777
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_kktdense_timings.jsonl",
+      "bytes": 72718277
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.csv",
+      "bytes": 19437269
+    },
+    {
+      "path": "magc2_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p05_compatible_timings.jsonl",
+      "bytes": 71181103
+    },
+    {
+      "path": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23143701
+    },
+    {
+      "path": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81682156
+    },
+    {
+      "path": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19836776
+    },
+    {
+      "path": "magv_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72699276
+    },
+    {
+      "path": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23143188
+    },
+    {
+      "path": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81681643
+    },
+    {
+      "path": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19836420
+    },
+    {
+      "path": "magv_N6_a0p05_w0p29_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72698920
+    },
+    {
+      "path": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.csv",
+      "bytes": 23148358
+    },
+    {
+      "path": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense.jsonl",
+      "bytes": 81686813
+    },
+    {
+      "path": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.csv",
+      "bytes": 19757081
+    },
+    {
+      "path": "magv_nowave_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p03_hb0p015_vanes12_rb1p35_si_bdf2_dt0p1_compatible_kktdense_timings.jsonl",
+      "bytes": 72619581
+    }
+  ],
+  "inventory_errors": []
+}

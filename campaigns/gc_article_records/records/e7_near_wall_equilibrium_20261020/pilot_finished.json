@@ -1,0 +1,9 @@
+{
+  "pid": 1268032,
+  "pgid": 1268032,
+  "started_utc": "2026-10-20T16:25:14.821613+00:00",
+  "purpose": "Equilibrium source feasibility; no perturbation",
+  "status": "failed",
+  "error": "RuntimeError: thin_100: exit 1; inspect its log",
+  "finished_utc": "2026-10-20T16:35:13.822690+00:00"
+}

@@ -1,0 +1,68 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 81543015000,
+  "file_count": 8394,
+  "subdirectories": 4,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "native_hp_completion_2026_09_21/completion.json",
+      "copy": "native_hp_completion_2026_09_21/completion.json",
+      "bytes": 430,
+      "sha256": "291e1b76aeb1c7550507ffbf641ac8909efcac9c0f1db8cd0378358c4cc2ec48"
+    },
+    {
+      "path": "oscillatory/checks/completion.json",
+      "copy": "oscillatory/checks/completion.json",
+      "bytes": 108,
+      "sha256": "0bc9c78b91acee2c01a987f7f03bf837f74b047203293ccf4bff1d90c42c3bb4"
+    },
+    {
+      "path": "oscillatory/diagnostics/completion.json",
+      "copy": "oscillatory/diagnostics/completion.json",
+      "bytes": 92,
+      "sha256": "318d281c5463d1a16bd3657c2849a3ca50c0a3ac80717468fa82b633f634b390"
+    },
+    {
+      "path": "oscillatory/initial_runs/adr_oscillatory_screen_20260918/completion.json",
+      "copy": "oscillatory/initial_runs/adr_oscillatory_screen_20260918/completion.json",
+      "bytes": 461,
+      "sha256": "8b6ecdc594f5cbe3803f47b00cc68fde0811a3d8ef6de3f063e9c4cc3dd37416"
+    },
+    {
+      "path": "oscillatory/initial_runs/adr_oscillatory_square_p6_20260918/completion.json",
+      "copy": "oscillatory/initial_runs/adr_oscillatory_square_p6_20260918/completion.json",
+      "bytes": 458,
+      "sha256": "f358a5cab6c88eaba4bc45f2b98d08c7103c89c0d9c87eaab2210be8f7d5e670"
+    },
+    {
+      "path": "oscillatory/initial_runs/adr_oscillatory_star_h0.02_p6_20260918/completion.json",
+      "copy": "oscillatory/initial_runs/adr_oscillatory_star_h0.02_p6_20260918/completion.json",
+      "bytes": 575,
+      "sha256": "51e1bd0ee945ea720f5bac37c0ae7d2510d080ede10e800ba37841cd10a42bbd"
+    },
+    {
+      "path": "oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918/completion.json",
+      "copy": "oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918/completion.json",
+      "bytes": 459,
+      "sha256": "4ae9e93aa768ff834773ce36551624672524a51806e328c0ccb35a6d0273fcab"
+    },
+    {
+      "path": "oscillatory/scaling/annulus/completion.json",
+      "copy": "oscillatory/scaling/annulus/completion.json",
+      "bytes": 6960,
+      "sha256": "772cc3cb124f9b1d95f6b4e4eaba6bb8de26db2cc5d03958c4d7810c0be37975"
+    },
+    {
+      "path": "oscillatory/scaling/square/completion.json",
+      "copy": "oscillatory/scaling/square/completion.json",
+      "bytes": 7111,
+      "sha256": "6ee9a5ede166fa28a6d348582fff61d6e9ea139f5c4a7a54cc5fe29e3fb7dbe7"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

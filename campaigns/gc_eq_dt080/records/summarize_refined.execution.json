@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/summarize.py"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 2.0211684410460293,
+  "peak_cpu_cores": 0.0,
+  "peak_active_ranks": 0,
+  "peak_sum_rank_rss_bytes": 0,
+  "monitored_argument": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/summarize.py",
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/summarize_refined_1792161475.log"
+}

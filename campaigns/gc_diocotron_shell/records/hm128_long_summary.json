@@ -1,0 +1,91 @@
+{
+  "rows": [
+    {
+      "prefix": "hm128_long_disk_highmode_m128_gaussian_p6_hb0p001_h0p04_si_bdf2_dt0p1_raw_seed",
+      "label": "m128_gaussian",
+      "order": 6,
+      "band_mesh_size": 0.001,
+      "mesh_size": 0.04,
+      "triangles": 358108,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        45.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.18509326204320117,
+      "sharp_reference_gamma": 0.1999249920521975,
+      "fitted_gamma": 0.1842005963703693,
+      "relative_error": -0.004822788593047273,
+      "potential_norm_gamma": 0.18440851868276653,
+      "potential_norm_relative_error": -0.003699450497959355,
+      "r_squared": 0.9999873122612859,
+      "subwindow_gammas": [
+        0.1848565122007066,
+        0.18288856217805366
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "density_minimum": -1.07500158256257,
+      "invariants": {
+        "mass": 7.984852224522918e-13,
+        "energy_from_q_l2": 0.00044369296317325364,
+        "enstrophy": 0.37660121366733135
+      },
+      "wall_time_s": 2664.962508889963,
+      "jsonl": "run_outputs/article/diocotron/hm128_long_disk_highmode_m128_gaussian_p6_hb0p001_h0p04_si_bdf2_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 10027024,
+      "trace_unknowns": 3760687,
+      "median_linear_step_wall_time": 0.5120239704847336,
+      "median_poisson_step_wall_time": 0.20076282846275717,
+      "median_transport_step_wall_time": 0.3077386199729517
+    },
+    {
+      "prefix": "hm128_long_disk_highmode_m128_gaussian_p6_hb0p001_h0p04_si_bdf2_dt0p1_compatible_seed",
+      "label": "m128_gaussian",
+      "order": 6,
+      "band_mesh_size": 0.001,
+      "mesh_size": 0.04,
+      "triangles": 358108,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        45.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.18509326204320117,
+      "sharp_reference_gamma": 0.1999249920521975,
+      "fitted_gamma": 0.18420063685696406,
+      "relative_error": -0.004822569856858303,
+      "potential_norm_gamma": 0.18440855746850143,
+      "potential_norm_relative_error": -0.0036992409509749137,
+      "r_squared": 0.9999873117237398,
+      "subwindow_gammas": [
+        0.18485665737548698,
+        0.18288857544134474
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "density_minimum": -0.9654334212700838,
+      "invariants": {
+        "mass": 7.949024756484676e-13,
+        "energy_from_q_l2": 0.0004526088224748376,
+        "enstrophy": 0.37897377038922553
+      },
+      "wall_time_s": 2685.206624443992,
+      "jsonl": "run_outputs/article/diocotron/hm128_long_disk_highmode_m128_gaussian_p6_hb0p001_h0p04_si_bdf2_dt0p1_compatible_seed.jsonl",
+      "element_unknowns": 10027024,
+      "trace_unknowns": 3760687,
+      "median_linear_step_wall_time": 0.5136448794510216,
+      "median_poisson_step_wall_time": 0.20227716001681983,
+      "median_transport_step_wall_time": 0.30662843701429665
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,61 @@
+{
+  "geometry": "iter",
+  "requested_size": 0.02,
+  "num_cells": 250997,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "1c58c517b1a3bceb0f398a4f6b79ad1c854ba47f0df32e004851fd63a755d1b4",
+  "source_archive_id": "iter_dt080_cg6_20261016-3047fd8f0454",
+  "source_checkpoint_sha256": "3047fd8f045447343ff0807fe42a256d7002f1a6f270f10335de62d70349872f",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 3342,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/iter/contours.npz",
+    "contours_sha256": "d52c63291cf9436857c05e370bbd28221c4cdb113228855c41baec309a209203",
+    "band_size": 0.0075,
+    "buffer": 0.009000000000000001,
+    "grading": 0.3,
+    "distance_samples": 4519,
+    "definition": "distance to sampled outer/inner transition contours"
+  },
+  "corner_refinement": {
+    "size": 3.0000000000000004e-05,
+    "grading": 0.15,
+    "minimum_angle_deviation": 25.0,
+    "points": [
+      [
+        0.0,
+        2.19
+      ],
+      [
+        0.1,
+        0.7
+      ],
+      [
+        1.7,
+        0.01
+      ],
+      [
+        2.66,
+        1.45
+      ],
+      [
+        2.5,
+        1.6
+      ],
+      [
+        4.53,
+        4.36
+      ],
+      [
+        4.5,
+        5.82
+      ],
+      [
+        4.5,
+        6.57
+      ]
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "geometry": "star",
+  "requested_size": 0.003,
+  "num_cells": 2327666,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "cdb8dfcd4789fe92c0a2c023aa95d32bee37b5b6c80c8644e0ae50f4977ae2af",
+  "source_archive_id": "star_dt080_resolved_20261016-a8e6e7066e35",
+  "source_checkpoint_sha256": "a8e6e7066e351e05ae36c44e2d07cd8a1958e8870524fa518a04e3fa5f0d3ebd",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 3826,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/resolved/star/contours.npz",
+    "contours_sha256": "c3c322a663c0c1f07904de283a0ddeb5499a9ee43233c87c614c650ff15fd209",
+    "band_size": 0.0004,
+    "buffer": 0.0035,
+    "grading": 0.3,
+    "distance_samples": 27379,
+    "definition": "distance to sampled outer/inner transition contours"
+  },
+  "corner_refinement": {
+    "size": 2.5e-05,
+    "grading": 0.15,
+    "minimum_angle_deviation": 25.0,
+    "points": []
+  }
+}

@@ -1,0 +1,85 @@
+{
+ "reference": {
+  "courant_max": 166.78926310854055,
+  "explicit_advective_step_ratio": 1501.103367976865,
+  "explicit_diffusive_step_ratio_estimate": 14542.266051581448,
+  "min_edge": 0.0008463467689619892,
+  "diffusion": 0.0003333333333333333,
+  "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/cathnokkt_ref_p4_s0p36/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p4q5_h0p0108_hb0p0054_vanes12_rb1p35_vw0p26_cm0p00108g0p3_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw.jsonl",
+  "order": 4,
+  "dt": 0.05,
+  "triangles": 322189,
+  "density_unknowns": 4832835,
+  "interior_edges": 480215,
+  "trace_unknowns": 2401075,
+  "trace_nonzeros": 59721225,
+  "dg_element_unknowns": 4832835,
+  "dg_element_nonzeros": 288589275,
+  "balance": 1.9632236133411735e-14,
+  "rho_min": -0.007095121980023676,
+  "step_wall": 1.57971713563893
+ },
+ "times": [
+  10.0,
+  20.0
+ ],
+ "pixels": 1600,
+ "runs": [
+  {
+   "courant_max": 38.46080140664036,
+   "explicit_advective_step_ratio": 192.3040070332018,
+   "explicit_diffusive_step_ratio_estimate": 330.5173754536595,
+   "min_edge": 0.0020210159290251868,
+   "diffusion": 0.0003333333333333333,
+   "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/cathnokkt_p2_s0p88/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p2q3_h0p0264_hb0p0132_vanes12_rb1p35_vw0p26_cm0p00264g0p3_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw.jsonl",
+   "order": 2,
+   "dt": 0.05,
+   "triangles": 60233,
+   "density_unknowns": 361398,
+   "interior_edges": 89064,
+   "trace_unknowns": 267192,
+   "trace_nonzeros": 3961818,
+   "dg_element_unknowns": 361398,
+   "dg_element_nonzeros": 8580996,
+   "balance": 1.2303020752838429e-13,
+   "rho_min": -0.007101629370380825,
+   "step_wall": 0.2907443974399939,
+   "current_l2": 0.0004262915355110912,
+   "current_max": 0.0010660121002243844,
+   "charge_l2": 1.0549796663882599e-05,
+   "charge_max": 1.5351536330632476e-05,
+   "density_l2": {
+    "10.0": 7.280552130225316e-05,
+    "20.0": 0.00026801807344329536
+   }
+  },
+  {
+   "courant_max": 20.59167393229805,
+   "explicit_advective_step_ratio": 267.6917611198746,
+   "explicit_diffusive_step_ratio_estimate": 1731.0816509668484,
+   "min_edge": 0.0048079692159815205,
+   "diffusion": 0.0003333333333333333,
+   "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/cathnokkt_p6_s2/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6q7_h0p06_hb0p03_vanes12_rb1p35_vw0p26_cm0p006g0p3_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw.jsonl",
+   "order": 6,
+   "dt": 0.05,
+   "triangles": 14664,
+   "density_unknowns": 410592,
+   "interior_edges": 21404,
+   "trace_unknowns": 149828,
+   "trace_nonzeros": 5130300,
+   "dg_element_unknowns": 410592,
+   "dg_element_nonzeros": 45058048,
+   "balance": 3.187892648241345e-14,
+   "rho_min": -0.007097775478142464,
+   "step_wall": 0.5539779249811545,
+   "current_l2": 0.0008827985187877938,
+   "current_max": 0.0012037681774104412,
+   "charge_l2": 3.7038398307836976e-05,
+   "charge_max": 4.242180022573546e-05,
+   "density_l2": {
+    "10.0": 9.900758404076727e-05,
+    "20.0": 0.00032805597797745813
+   }
+  }
+ ]
+}

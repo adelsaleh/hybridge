@@ -1,0 +1,38 @@
+[
+ {
+  "time": 0.25,
+  "euler_dt_halving": 0.0012346388276019973,
+  "richardson_dt_halving": 6.0061309132291434e-05,
+  "start_difference_dt0p025": 0.0004132160111878253
+ },
+ {
+  "time": 0.5,
+  "euler_dt_halving": 0.0012488645776869579,
+  "richardson_dt_halving": 0.00018601427875297857,
+  "start_difference_dt0p025": 0.00040822033737122784
+ },
+ {
+  "time": 1.0,
+  "euler_dt_halving": 0.001308212970001929,
+  "richardson_dt_halving": 0.0004299030781674422,
+  "start_difference_dt0p025": 0.00039964405463513685
+ },
+ {
+  "time": 2.0,
+  "euler_dt_halving": 0.001542288160783075,
+  "richardson_dt_halving": 0.000874188387393646,
+  "start_difference_dt0p025": 0.0003934633033887943
+ },
+ {
+  "time": 5.0,
+  "euler_dt_halving": 0.0025202488798737937,
+  "richardson_dt_halving": 0.0021396619569101017,
+  "start_difference_dt0p025": 0.0004077734162835801
+ },
+ {
+  "time": 10.0,
+  "euler_dt_halving": 0.003296957315940248,
+  "richardson_dt_halving": 0.003044658360062414,
+  "start_difference_dt0p025": 0.00034638699242159766
+ }
+]

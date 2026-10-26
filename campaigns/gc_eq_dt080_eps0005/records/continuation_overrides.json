@@ -1,0 +1,64 @@
+{
+  "horseshoe": [
+    {
+      "relative_epsilon": 0.075,
+      "quadrature_degree": 32,
+      "label": "eps0p075_q32"
+    },
+    {
+      "relative_epsilon": 0.07,
+      "quadrature_degree": 32,
+      "label": "eps0p07_q32"
+    },
+    {
+      "relative_epsilon": 0.06,
+      "quadrature_degree": 32,
+      "label": "eps0p06_q32"
+    },
+    {
+      "relative_epsilon": 0.05,
+      "quadrature_degree": 32,
+      "label": "eps0p05_q32"
+    },
+    {
+      "relative_epsilon": 0.04,
+      "quadrature_degree": 32,
+      "label": "eps0p04_q32"
+    },
+    {
+      "relative_epsilon": 0.03,
+      "quadrature_degree": 32,
+      "label": "eps0p03_q32"
+    },
+    {
+      "relative_epsilon": 0.02,
+      "quadrature_degree": 32,
+      "label": "eps0p02_q32"
+    },
+    {
+      "relative_epsilon": 0.015,
+      "quadrature_degree": 48,
+      "label": "eps0p015_q48"
+    },
+    {
+      "relative_epsilon": 0.01,
+      "quadrature_degree": 48,
+      "label": "eps0p01_q48"
+    },
+    {
+      "relative_epsilon": 0.0075,
+      "quadrature_degree": 48,
+      "label": "eps0p0075_q48"
+    },
+    {
+      "relative_epsilon": 0.005,
+      "quadrature_degree": 48,
+      "label": "eps0p005_q48"
+    },
+    {
+      "relative_epsilon": 0.005,
+      "quadrature_degree": 64,
+      "label": "eps0p005_q64"
+    }
+  ]
+}

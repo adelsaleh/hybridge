@@ -1,0 +1,20 @@
+{
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/h_scaling.pdf": "7a77bb8e5e0d90ebeeaceb709f5ea80271414a64dab55916487698fcf8b668a7",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/h_scaling.png": "b8036694a3bf0dce08c1939062961983e63ca58dc3528a5434509182df6b7727",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/h_scaling.svg": "852d1d1d68dc6f62058dd381a7e798f20e5962ad099b8aa34234ba81ce41a8ef",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_geometry_fields.pdf": "f4057bc2d9c25e758a5491a601bc2fd640e6a61acfcca020ecfe25c253b6d531",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_geometry_fields.png": "07aeb8ae6183381113366a0dc7d783c64c841486a24a2237216d3086a2cd0b42",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_geometry_fields.svg": "b4a7b542bf02b176141de0dd66f33d48010357703855b709b4f0b4c3374c1fcc",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_solver_comparison.pdf": "8ecc7b10dba078bf45f7e2b9fd514dc50aabc3367d3ed4057e16e026f286ee74",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_solver_comparison.png": "43584f6db0eeaa4753018df701f909baf6b83194ce4a69e2e45e64a4fe91ca73",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/initial_solver_comparison.svg": "3ef91a95398a9066f96eecd566893b6e81147495fafe53628ba43136361ea73b",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_accuracy.pdf": "581878ca047f4548086c5806c6b87ee8687822a2ac3ddfec5328c9ab5297680f",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_accuracy.png": "5d4681747e7bd130009b8d68ce4cb0489d0030df3ac8240193c493fe83569890",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_accuracy.svg": "f08138f9a1325316c3e4d79971c531c86b8aba88776daba4a86ac0919e2a10b9",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_iterations.pdf": "99965ee96b179eb76b8990b5f3bdda4e771469238eaedb045b9e51c99b054ea1",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_iterations.png": "da645c8f0ac07f5737897169ca7421f5a603b96e29f917cad7c926e670fc264f",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_iterations.svg": "3b35cac7c9af8f4de7911ed8dd45707673ab50507e9fa37443ceedcc4e0b6f8f",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_scaling.pdf": "2131ab4de375d86d99da49e28be57400bc7862f6eef998d7ce04fb40a4ebb9e6",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_scaling.png": "d4ccf6aa2ae175661844685b870583a8a8ac97f0ed42ef1dc61ade1372f83ab0",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/p_scaling.svg": "4d10c2351c932c9c9ffd58c944bea671e1874a74e782a11341ba448f10e77e6f"
+}

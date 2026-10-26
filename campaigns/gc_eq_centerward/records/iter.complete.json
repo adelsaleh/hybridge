@@ -1,0 +1,12 @@
+{
+  "name": "iter_centerward_20261015_01",
+  "midpoint": 0.036000000000000004,
+  "distance": null,
+  "mass": 2.4649012644459187,
+  "mean_thickness": 0.10937772417504028,
+  "wall_clearance": 0.26688855782286536,
+  "dual_residual": 8.796130367843384e-16,
+  "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/iter/iter_centerward_20261015_01.npz",
+  "state_id": "cb416394958442db823151558ed1bf65",
+  "archive_id": "iter_centerward_20261015_01-04b1cdaffd04"
+}

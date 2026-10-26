@@ -1,0 +1,37 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_closed_loop_stress_main",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 15449010203,
+  "file_count": 431,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "assemblies.json",
+      "copy": "assemblies.json",
+      "bytes": 6651,
+      "sha256": "cd577cb0809e8881535d70bae540a3e555c44f64e68d6e039ca1ee8600024e80"
+    },
+    {
+      "path": "manifest.json",
+      "copy": "source/manifest.json",
+      "bytes": 33869,
+      "sha256": "eb2b83fc8494f3c2c344fc5515d55945f4266a9bb92ea8ff83c91d49f7d9d956"
+    },
+    {
+      "path": "profiles.json",
+      "copy": "profiles.json",
+      "bytes": 295922,
+      "sha256": "75a3b409abb0a0301fe0de8a61e2961b175864a25b3038d265870f0b3e8c8386"
+    }
+  ],
+  "too_large_or_nontext": [
+    {
+      "path": "summary.json",
+      "bytes": 1242190
+    }
+  ],
+  "inventory_errors": []
+}

@@ -1,0 +1,8 @@
+{
+  "status": "partial",
+  "failures": [
+    "uglypacman: equilibrium refinement"
+  ],
+  "finished": 1792161125.5718374,
+  "guiding_center_evolution_performed": false
+}

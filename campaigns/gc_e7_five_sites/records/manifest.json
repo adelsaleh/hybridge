@@ -1,0 +1,48 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_five_sites_20261019",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "X5_DONE present for the final selection; abandoned exploratory seeds were not all completed.",
+  "total_bytes": 21577739473,
+  "file_count": 270,
+  "subdirectories": 5,
+  "run_attempt_statuses": {
+    "ok": 5
+  },
+  "completion_markers": [
+    "X5_DONE"
+  ],
+  "copied": [
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 5466,
+      "sha256": "3c86936b4ba5e8eda137d975da3df74074618549f5a5b950d4d655badfe72288"
+    },
+    {
+      "path": "X5_DONE",
+      "copy": "X5_DONE",
+      "bytes": 20,
+      "sha256": "95b441cfdc5e20d0d89d2c0c40df57fb3480dd2f83e87dd2083a421d980d04e6"
+    },
+    {
+      "path": "driver.json",
+      "copy": "driver.json",
+      "bytes": 106,
+      "sha256": "f880e1f4e564d5cff10d425c4579027c57f3a90721074b6bdc3989813d8b214d"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 19149,
+      "sha256": "1ca88cf5caf503a74719754d1e5486dd0bdb2e635aa4b20964457a77e4b7652e"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 9906,
+      "sha256": "1d1d79e87deea3453eb9fda8a284a25dfad2f59683144f39b451c870f52b8cbc"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

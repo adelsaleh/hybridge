@@ -29,3 +29,12 @@ Execution (starts solves) wraps the same command in the CUDA 13 launcher with `-
 ```bash
 HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 scripts/gpu/run_cuda13.sh .venv/bin/python -B campaigns/adr_stress/run_closed_loop_stress.py --output run_outputs/solver_studies/adr_closed_loop_stress_main --execute
 ```
+
+## Additional saved output directories
+
+- [adr_closed_loop_stress_main](records/adr_closed_loop_stress_main/DATA.md).
+- [adr_closed_loop_stress_main_v2](records/adr_closed_loop_stress_main_v2/DATA.md).
+- [adr_closed_loop_stress_strong_numba_h150k](records/adr_closed_loop_stress_strong_numba_h150k/DATA.md).
+- [adr_square_bsr_2m_short_20260922](records/adr_square_bsr_2m_short_20260922/DATA.md).
+- [adr_square_bsr_2m_short_mem90_20260922](records/adr_square_bsr_2m_short_mem90_20260922/DATA.md).
+- [adr_square_stress_strong_numba_h150k](records/adr_square_stress_strong_numba_h150k/DATA.md).

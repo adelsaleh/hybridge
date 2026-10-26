@@ -1,0 +1,40 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_supg",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Historical stage; consult the saved completion markers and per-run summaries.",
+  "total_bytes": 22278904,
+  "file_count": 13,
+  "subdirectories": 1,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "all-done"
+  ],
+  "copied": [
+    {
+      "path": "all-done",
+      "copy": "all-done",
+      "bytes": 20,
+      "sha256": "e31ba21c1e8f345519d385e703f590d48c76fba08ee08c12d8a5922353e20cd5"
+    },
+    {
+      "path": "compare_hdg.json",
+      "copy": "compare_hdg.json",
+      "bytes": 2629,
+      "sha256": "0a9974b7a3227c202a2aebb6051bd3a83b09eb2fb3ad546d4056e6a6a4f89995"
+    },
+    {
+      "path": "discharge_supg.csv",
+      "copy": "discharge_supg.csv",
+      "bytes": 219235,
+      "sha256": "6fc951f41d4555a7c01c8f1274fdb61406a0a6b7a72960b34a32b9b31d2f5070"
+    },
+    {
+      "path": "discharge_supg.json",
+      "copy": "discharge_supg.json",
+      "bytes": 634,
+      "sha256": "a527f3ad3b59de84de9f0e131d6916baa8245f35010005d2ce8359cb79e2a8d2"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

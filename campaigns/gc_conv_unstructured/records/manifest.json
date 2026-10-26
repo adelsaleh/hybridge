@@ -1,0 +1,34 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/convergence_unstructured",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "all-done present; completed local baseline, with accurate-error reruns prepared for H100.",
+  "total_bytes": 3207811625,
+  "file_count": 388,
+  "subdirectories": 1,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "all-done"
+  ],
+  "copied": [
+    {
+      "path": "all-done",
+      "copy": "all-done",
+      "bytes": 29,
+      "sha256": "c09463f853642d3cfb876139b97d29ec398c93b9ba4eb12a78728ded408a9f55"
+    },
+    {
+      "path": "poisson_degree.csv",
+      "copy": "poisson_degree.csv",
+      "bytes": 11903,
+      "sha256": "cb638e425cb22b2f38781631e418d02d6c73209c1168f70bb1b086e6c88b68ab"
+    },
+    {
+      "path": "unstructured_lattice.json",
+      "copy": "unstructured_lattice.json",
+      "bytes": 1486,
+      "sha256": "53abf9b5dc7287fa9a18cad0a8487f607044087e0735f3352a16b60e77291072"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

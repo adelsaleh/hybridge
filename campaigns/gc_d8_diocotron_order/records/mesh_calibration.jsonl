@@ -1,0 +1,14 @@
+{"family": "smooth", "s": 0.6, "hb": 0.0048, "h": 0.024, "band": [0.35, 0.6], "radii": [], "triangles": 94446, "edges": 141800, "seconds": 2.0}
+{"family": "smooth", "s": 0.8, "hb": 0.0064, "h": 0.032, "band": [0.35, 0.6], "radii": [], "triangles": 55011, "edges": 82615, "seconds": 1.1}
+{"family": "smooth", "s": 1.0, "hb": 0.008, "h": 0.04, "band": [0.35, 0.6], "radii": [], "triangles": 36334, "edges": 54580, "seconds": 0.7}
+{"family": "smooth", "s": 1.4, "hb": 0.0112, "h": 0.055999999999999994, "band": [0.35, 0.6], "radii": [], "triangles": 19641, "edges": 29518, "seconds": 0.3}
+{"family": "smooth", "s": 2.0, "hb": 0.016, "h": 0.08, "band": [0.35, 0.6], "radii": [], "triangles": 10515, "edges": 15812, "seconds": 0.2}
+{"family": "smooth", "s": 2.8, "hb": 0.0224, "h": 0.11199999999999999, "band": [0.35, 0.6], "radii": [], "triangles": 5859, "edges": 8817, "seconds": 0.1}
+{"family": "smooth", "s": 4.0, "hb": 0.032, "h": 0.16, "band": [0.35, 0.6], "radii": [], "triangles": 3232, "edges": 4872, "seconds": 0.1}
+{"family": "zg", "s": 0.6, "hb": 0.0048, "h": 0.024, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 36658, "edges": 55118, "seconds": 0.7}
+{"family": "zg", "s": 0.8, "hb": 0.0064, "h": 0.032, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 22313, "edges": 33568, "seconds": 0.4}
+{"family": "zg", "s": 1.0, "hb": 0.008, "h": 0.04, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 15458, "edges": 23266, "seconds": 0.3}
+{"family": "zg", "s": 1.4, "hb": 0.0112, "h": 0.055999999999999994, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 8899, "edges": 13405, "seconds": 0.1}
+{"family": "zg", "s": 2.0, "hb": 0.016, "h": 0.08, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 5295, "edges": 7982, "seconds": 0.1}
+{"family": "zg", "s": 2.8, "hb": 0.0224, "h": 0.11199999999999999, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 3289, "edges": 4962, "seconds": 0.1}
+{"family": "zg", "s": 4.0, "hb": 0.032, "h": 0.16, "band": [0.45, 0.5], "radii": [0.45, 0.5], "triangles": 1999, "edges": 3019, "seconds": 0.0}

@@ -1,0 +1,342 @@
+{
+  "source": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_inner_band_20261021/medium_cg6_r0p005/medium_cg6_r0p005_01.npz",
+  "cells": 262932,
+  "degree": 6,
+  "potential_scale": 0.13811925126402796,
+  "levels": {
+    "lower": 0.004875,
+    "middle": 0.00525,
+    "upper": 0.005625000000000001
+  },
+  "vertex_mismatch": 9.859300875714183e-15,
+  "audits": {
+    "1e-10": {
+      "lower": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "middle": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "upper": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      }
+    },
+    "1e-11": {
+      "lower": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "middle": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "upper": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      }
+    },
+    "1e-12": {
+      "lower": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "middle": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "upper": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      }
+    },
+    "1e-13": {
+      "lower": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "middle": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      },
+      "upper": {
+        "status": "OK",
+        "refinements": [
+          {
+            "refinement": 2,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          },
+          {
+            "refinement": 4,
+            "near_level_vertices": 0,
+            "hidden_subtriangles": 0,
+            "components": 1,
+            "closed": true
+          }
+        ]
+      }
+    }
+  },
+  "roundoff": {
+    "lower": {
+      "selected_cells": 12450,
+      "refinements": {
+        "2": {
+          "max_abs_difference": 2.8434896039326862e-18,
+          "sub_vertices": 149400,
+          "smallest_abs_value": 8.829268070178055e-10
+        },
+        "4": {
+          "max_abs_difference": 4.828934832296766e-18,
+          "sub_vertices": 597600,
+          "smallest_abs_value": 1.310298502682051e-10
+        },
+        "5": {
+          "max_abs_difference": 4.548143410281966e-18,
+          "sub_vertices": 933750,
+          "smallest_abs_value": 1.3029140049717402e-10
+        },
+        "7": {
+          "max_abs_difference": 4.6574106604777704e-18,
+          "sub_vertices": 1830150,
+          "smallest_abs_value": 8.199904677128994e-12
+        },
+        "16": {
+          "max_abs_difference": 5.12412581441489e-18,
+          "sub_vertices": 9561600,
+          "smallest_abs_value": 5.655264106434069e-12
+        }
+      }
+    },
+    "middle": {
+      "selected_cells": 3254,
+      "refinements": {
+        "2": {
+          "max_abs_difference": 2.9057465255558773e-18,
+          "sub_vertices": 39048,
+          "smallest_abs_value": 8.951746843907308e-09
+        },
+        "4": {
+          "max_abs_difference": 4.603200551853495e-18,
+          "sub_vertices": 156192,
+          "smallest_abs_value": 9.65900329473838e-10
+        },
+        "5": {
+          "max_abs_difference": 4.433370445929008e-18,
+          "sub_vertices": 244050,
+          "smallest_abs_value": 4.320713753669767e-09
+        },
+        "7": {
+          "max_abs_difference": 4.425323632930092e-18,
+          "sub_vertices": 478338,
+          "smallest_abs_value": 2.1549524183214284e-10
+        },
+        "16": {
+          "max_abs_difference": 4.940319664860707e-18,
+          "sub_vertices": 2499072,
+          "smallest_abs_value": 1.0127423942992643e-10
+        }
+      }
+    },
+    "upper": {
+      "selected_cells": 4071,
+      "refinements": {
+        "2": {
+          "max_abs_difference": 2.9400513599196765e-18,
+          "sub_vertices": 48852,
+          "smallest_abs_value": 4.607089754749252e-11
+        },
+        "4": {
+          "max_abs_difference": 4.538826047862168e-18,
+          "sub_vertices": 195408,
+          "smallest_abs_value": 4.607089725526615e-11
+        },
+        "5": {
+          "max_abs_difference": 4.613788463694174e-18,
+          "sub_vertices": 305325,
+          "smallest_abs_value": 4.607089746067164e-11
+        },
+        "7": {
+          "max_abs_difference": 4.522732421864337e-18,
+          "sub_vertices": 598437,
+          "smallest_abs_value": 4.6070896662766603e-11
+        },
+        "16": {
+          "max_abs_difference": 4.950484060227758e-18,
+          "sub_vertices": 3126528,
+          "smallest_abs_value": 3.6833504898650074e-12
+        }
+      }
+    }
+  }
+}

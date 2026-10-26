@@ -1,0 +1,37 @@
+{
+  "geometry": "uglypacman",
+  "requested_size": 0.0045,
+  "num_cells": 732484,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "c830f173d381acc41cb281ededd8b22203a350e07879b1d96e2dd53b0b46a807",
+  "source_archive_id": "uglypacman_dt080_placement_20261016-19ba0cf9191b",
+  "source_checkpoint_sha256": "19ba0cf9191bf0e217346f4d234e573b39500b78e125be22139cdceaa4f7a7a6",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 4112,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/uglypacman/contours.npz",
+    "contours_sha256": "0bfaacbc86db046a9c9a1c822334bc5cd1257260d44417298655dd937304b286",
+    "band_size": 0.0008,
+    "buffer": 0.0035,
+    "grading": 0.3,
+    "distance_samples": 13693,
+    "definition": "distance to sampled outer/inner transition contours"
+  },
+  "corner_refinement": {
+    "size": 0.0001,
+    "grading": 0.15,
+    "minimum_angle_deviation": 25.0,
+    "points": [
+      [
+        1.08,
+        0.06
+      ],
+      [
+        0.35,
+        -0.1
+      ]
+    ]
+  }
+}

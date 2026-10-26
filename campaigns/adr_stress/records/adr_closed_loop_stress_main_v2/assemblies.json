@@ -1,0 +1,76 @@
+[
+  {
+    "case": "stress_main_trap",
+    "target_triangles": 50000,
+    "p": 6,
+    "status": "passed",
+    "kind": "assembly",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 1128157,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "estimates": {
+      "trace_dofs": 522032,
+      "elements": 49928,
+      "assembly_host_bytes": 25231735424,
+      "assembly_device_bytes": 15943069632,
+      "solver_device_bytes": 3039464960,
+      "cache_disk_bytes": 4056170944
+    },
+    "space_setup_ms": 344.8189169866964,
+    "assembly_samples_ms": [
+      {
+        "host_preparation": 72807.5678430032,
+        "host_to_device": 2131.176683004014,
+        "local_inverse": 209.94049299042672,
+        "condensation": 117.42056196089834,
+        "global_blocks": 305.542625952512,
+        "device_to_host": 717.1780270291492,
+        "rhs_and_boundary": 155.15816595871001,
+        "assembly_total": 76444.06593299937
+      }
+    ],
+    "validation": {},
+    "assembly_median_ms": 76444.06593299937,
+    "arrays": {
+      "system_blocks.npy": 143240848,
+      "local_inverse.npy": 2802361088,
+      "system_rhs.npy": 4092720,
+      "boundary.npy": 700590368,
+      "system_global_faces.npy": 584784,
+      "source_rhs.npy": 33361568,
+      "loc2glob.npy": 1191608,
+      "system_neighbors.npy": 2923408,
+      "element_blocks.npy": 175147688,
+      "system_boundary_trace.npy": 4247896,
+      "system_global_to_local.npy": 606952
+    },
+    "operator_sha256": "760214183c1726d94e053726a94d9af4c0fc6a62dd85427893d8124fb237c5b8",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "neck_width": 0.02,
+      "reaction": 0.001
+    },
+    "velocity_normalization": 65.89683874444368,
+    "mesh_sha256": "3c85accf5b8492638dbe0fa321d5f8a03d128d9369fd511cd3136fd6d9ba2c05",
+    "returncode": 0,
+    "runner_wall_seconds": 79.37230225896928,
+    "runner_started_utc": "2026-09-21T18:26:37+00:00"
+  }
+]

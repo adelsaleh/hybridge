@@ -1,0 +1,18 @@
+{
+  "sections/01_introduction.tex": "29c9f5a800ae4325b8642a2e9d7b5f37b42aa8b9b873487b45045916a4eb6052",
+  "sections/07_equilibria.tex": "ef2dd704d9761dd53bf9174c8c54df90e163e3066348960fd6da5e1afe28325f",
+  "sections/12_discussion.tex": "926022a6e7db862eb28e87f76a751dc88103de0e79d2cf5a2ec9e585ce3d650a",
+  "refs.bib": "15f010b9679e128b60652ff1092c6aa80db8d581b02fa08a43f14e7837e5a39e",
+  "PLAN.md": "a97891728b7de41e14ab40494476f48b44abc6aa6fcad41ead52d65fec74dc37",
+  "main.pdf": "f9e6d20e8dac3ac0afb8a38555e390fd20ca5392333ccbabb869791f7894c35c",
+  "supplementary/equilibria.tex": "b314f8f051bf9e293c5d73a80128b48b0fe9358a17fa84eced8c0681164cfcf1",
+  "supplementary/equilibria.pdf": "f82db1da27103cb788df79854802aa851e673e6700a155e84af50f09fc14c728",
+  "figures/README.md": "3dd455ca1a4dac534e0e27b4c4fd81ac83de0151df2a27feaddc1daf69820248",
+  "supplementary/README.md": "15079fb07ddebbf499491571dbbc8eb3add55cb9cfe5c1b4c13d141346d6c82a",
+  "figures/e7_controls.pdf": "66b75e818004340d6d71cd07d6f708c7e03f00cb86c4f5ff902adeabdc7fed7a",
+  "figures/e7_undercut_setup.pdf": "379d59cf47e49d3356153c3bf6a7667f66d8210697453016ab49762362d828e1",
+  "figures/e7_packet_response.pdf": "678c176f9c6abd56eb12b2fbdaddf2f480e1bf29e3784307685d88482bf2f8b6",
+  "figures/e7_packet_rollup.pdf": "5bd2ee8e77a439b617e4587d56d899aecd45555f22ecb2b9007a7136ad072300",
+  "tables/e7_controls.tex": "6ae6905807fa4ee278c6a8dad0a3b7d863f8b15db23c60fd95e65e36c1b9c64b",
+  "tables/e7_packet_refinement.tex": "62077c1d384d6974bb24338bf2404786c68eace665394e4b1888aec25675dc45"
+}

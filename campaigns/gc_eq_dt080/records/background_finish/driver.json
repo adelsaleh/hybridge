@@ -1,0 +1,7 @@
+{
+  "pid": 2655634,
+  "pgid": 2655634,
+  "started": 1792160590.6650639,
+  "stop": "kill -- -2655634 -2620667",
+  "scope": "Finish DOLFINx refinement, one prepared Ugly Pac-Man retry, saved-field checks and archive verification. No HDG runs."
+}

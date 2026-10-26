@@ -1,0 +1,77 @@
+{
+  "rows": [
+    {
+      "prefix": "smoke_hm_disk_highmode_m64_gaussian_p6_hb0p004_h0p04_si_bdf2_dt0p1_raw_seed",
+      "label": "m64_gaussian",
+      "order": 6,
+      "band_mesh_size": 0.004,
+      "mesh_size": 0.04,
+      "triangles": 54194,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        45.0
+      ],
+      "reference_type": "smooth-radial-nystrom",
+      "reference_gamma": 0.18399945957095395,
+      "fitted_gamma": null,
+      "relative_error": null,
+      "r_squared": null,
+      "subwindow_gammas": [
+        null,
+        null
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "invariants": {
+        "mass": 3.095869092540517e-16,
+        "energy_from_q_l2": 3.131413228586398e-10,
+        "enstrophy": 2.339939698299994e-11
+      },
+      "wall_time_s": 67.52958274795674,
+      "jsonl": "run_outputs/article/diocotron/smoke_hm_disk_highmode_m64_gaussian_p6_hb0p004_h0p04_si_bdf2_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 1517432,
+      "trace_unknowns": 569590
+    },
+    {
+      "prefix": "smoke_hm_disk_highmode_m64_gaussian_p6_hb0p004_h0p04_si_bdf2_dt0p1_compatible_seed",
+      "label": "m64_gaussian",
+      "order": 6,
+      "band_mesh_size": 0.004,
+      "mesh_size": 0.04,
+      "triangles": 54194,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        45.0
+      ],
+      "reference_type": "smooth-radial-nystrom",
+      "reference_gamma": 0.18399945957095395,
+      "fitted_gamma": null,
+      "relative_error": null,
+      "r_squared": null,
+      "subwindow_gammas": [
+        null,
+        null
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "invariants": {
+        "mass": 1.5479345462702584e-16,
+        "energy_from_q_l2": 3.135120566067703e-10,
+        "enstrophy": 2.3407715601068552e-11
+      },
+      "wall_time_s": 57.53144659905229,
+      "jsonl": "run_outputs/article/diocotron/smoke_hm_disk_highmode_m64_gaussian_p6_hb0p004_h0p04_si_bdf2_dt0p1_compatible_seed.jsonl",
+      "element_unknowns": 1517432,
+      "trace_unknowns": 569590
+    }
+  ],
+  "failures": []
+}

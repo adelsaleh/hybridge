@@ -1,0 +1,76 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/convergence_exact_drift",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Aligned marker present; per-run CSVs and check records are retained.",
+  "total_bytes": 249319,
+  "file_count": 78,
+  "subdirectories": 2,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "aligned-done"
+  ],
+  "copied": [
+    {
+      "path": "aligned-done",
+      "copy": "aligned-done",
+      "bytes": 33,
+      "sha256": "32a737fa5c634c2371b175a6e4d99c1be224319f1738a12bbcce9d14ab0fd75e"
+    },
+    {
+      "path": "aligned_exact_drift.csv",
+      "copy": "aligned_exact_drift.csv",
+      "bytes": 2648,
+      "sha256": "1c6588a587b100f551a1d804ff289369d4a265b353b2da358d28536c38984a04"
+    },
+    {
+      "path": "aligned_exact_drift.json",
+      "copy": "aligned_exact_drift.json",
+      "bytes": 5850,
+      "sha256": "91f002cb8812fc605871dcecc2b67be21fccb42f0b3f75178e4134cc74778e70"
+    },
+    {
+      "path": "checks/aligned_dthalf_p2_h0.005.json",
+      "copy": "checks/aligned_dthalf_p2_h0.005.json",
+      "bytes": 523,
+      "sha256": "d7073b627131e6c71bb944bd0e1f3a6ee271fdf732aad35d3178710e127992da"
+    },
+    {
+      "path": "checks/aligned_dthalf_p4_h0.01.json",
+      "copy": "checks/aligned_dthalf_p4_h0.01.json",
+      "bytes": 520,
+      "sha256": "1791b0a9fa4eea742dd51755509c2c18775b8d4c36c88e7af77de9205ed44e05"
+    },
+    {
+      "path": "checks/dthalf_p2_h0.005.json",
+      "copy": "checks/dthalf_p2_h0.005.json",
+      "bytes": 522,
+      "sha256": "86b13a7f18c53c413c0845e7b2fb4ebff49e4f5bfabbbc387821c2b80a436288"
+    },
+    {
+      "path": "checks/dthalf_p4_h0.01.json",
+      "copy": "checks/dthalf_p4_h0.01.json",
+      "bytes": 520,
+      "sha256": "436e86cfeb55e04fa37f66a0b5d6762ddbf0b5d3b65eca8949222910b5eba688"
+    },
+    {
+      "path": "dt_table.json",
+      "copy": "dt_table.json",
+      "bytes": 339,
+      "sha256": "c6112381b852b996dc68c0993fd54606cfe45cb621537a2a305525e65c07920b"
+    },
+    {
+      "path": "misaligned_exact_drift.csv",
+      "copy": "misaligned_exact_drift.csv",
+      "bytes": 2648,
+      "sha256": "b1e928d930fd0c1740125ac8cccc2888c9e43b904891d82256a0e4156abd3a91"
+    },
+    {
+      "path": "misaligned_exact_drift.json",
+      "copy": "misaligned_exact_drift.json",
+      "bytes": 5850,
+      "sha256": "ae1d11a63de634b016e381bd2eab894d81648c236d52e20d7fdcd605fc116be1"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

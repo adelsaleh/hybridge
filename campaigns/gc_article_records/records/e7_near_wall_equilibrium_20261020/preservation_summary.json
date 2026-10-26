@@ -1,0 +1,161 @@
+{
+  "controls": {
+    "control_p6_dt0p025": {
+      "order": 6,
+      "dt": 0.025,
+      "triangles": 127630,
+      "source": {
+        "name": "refined_cg6_q48_01",
+        "midpoint": 0.0007500000000000002,
+        "distance": null,
+        "mass": 0.3493528028970371,
+        "mean_thickness": 0.03638590374545519,
+        "wall_clearance": 0.010109990012483767,
+        "dual_residual": 6.266593889861238e-16,
+        "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+        "state_id": "60cf2d1c4d0c43c49d46c7d60d66b21c",
+        "archive_id": "refined_cg6_q48_01-4a7bf9500531"
+      },
+      "transfer": {
+        "equilibrium_density_projection_time": 4.10455754189752,
+        "equilibrium_poisson_cg_relative_l2": 9.518740036149002e-06,
+        "equilibrium_poisson_wall_time": 0.6341067249886692,
+        "equilibrium_projection_quadrature_check_1d": 28,
+        "equilibrium_projection_quadrature_relative_l2": 1.6315972545070217e-14,
+        "equilibrium_semilinear_l2": 0.00013087515432744535,
+        "equilibrium_semilinear_relative_l2": 0.0002375736258606674,
+        "equilibrium_steady_transport_l2": 0.0410160312186762,
+        "equilibrium_steady_transport_relative_l2": 0.0744551347817726
+      },
+      "rho_departure_t1": 0.0008787779680610594,
+      "rho_departure_t5": 0.001724610129821952,
+      "rho_departure_t10": 0.0022824096639940256,
+      "phi_departure_t1": 5.18417970616728e-06,
+      "phi_departure_t5": 6.580739302008189e-06,
+      "phi_departure_t10": 7.402259401541154e-06,
+      "initial_density_min": -0.05472500585230828,
+      "initial_density_max": 1.0183303308093496,
+      "final_density_min": -0.005144917215470363,
+      "final_density_max": 1.00510028769848,
+      "max_mass_relative_drift": 2.876037715858309e-14,
+      "final_enstrophy_relative_drift": -1.6281753354606242e-05
+    },
+    "control_p5_dt0p025": {
+      "order": 5,
+      "dt": 0.025,
+      "triangles": 127630,
+      "source": {
+        "name": "refined_cg6_q48_01",
+        "midpoint": 0.0007500000000000002,
+        "distance": null,
+        "mass": 0.3493528028970371,
+        "mean_thickness": 0.03638590374545519,
+        "wall_clearance": 0.010109990012483767,
+        "dual_residual": 6.266593889861238e-16,
+        "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+        "state_id": "60cf2d1c4d0c43c49d46c7d60d66b21c",
+        "archive_id": "refined_cg6_q48_01-4a7bf9500531"
+      },
+      "transfer": {
+        "equilibrium_density_projection_time": 4.109955569030717,
+        "equilibrium_poisson_cg_relative_l2": 2.4563632104184386e-05,
+        "equilibrium_poisson_wall_time": 0.47869347501546144,
+        "equilibrium_projection_quadrature_check_1d": 28,
+        "equilibrium_projection_quadrature_relative_l2": 8.360947656677102e-15,
+        "equilibrium_semilinear_l2": 0.00035744568145205913,
+        "equilibrium_semilinear_relative_l2": 0.0006488601813535817,
+        "equilibrium_steady_transport_l2": 0.07130309251977722,
+        "equilibrium_steady_transport_relative_l2": 0.1294343167205366
+      },
+      "rho_departure_t1": 0.0018589643810331766,
+      "rho_departure_t5": 0.0035420176128917813,
+      "rho_departure_t10": 0.004600527237842583,
+      "phi_departure_t1": 1.3959079915785308e-05,
+      "phi_departure_t5": 1.7357232105393814e-05,
+      "phi_departure_t10": 1.8958166101680808e-05,
+      "initial_density_min": -0.05848448896180243,
+      "initial_density_max": 1.0668535245078468,
+      "final_density_min": -0.010112410224241518,
+      "final_density_max": 1.0104688136275808,
+      "max_mass_relative_drift": 2.5264640708368573e-14,
+      "final_enstrophy_relative_drift": -6.015908792771155e-05
+    },
+    "control_p6_dt0p0125": {
+      "order": 6,
+      "dt": 0.0125,
+      "triangles": 127630,
+      "source": {
+        "name": "refined_cg6_q48_01",
+        "midpoint": 0.0007500000000000002,
+        "distance": null,
+        "mass": 0.3493528028970371,
+        "mean_thickness": 0.03638590374545519,
+        "wall_clearance": 0.010109990012483767,
+        "dual_residual": 6.266593889861238e-16,
+        "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+        "state_id": "60cf2d1c4d0c43c49d46c7d60d66b21c",
+        "archive_id": "refined_cg6_q48_01-4a7bf9500531"
+      },
+      "transfer": {
+        "equilibrium_density_projection_time": 4.181311933789402,
+        "equilibrium_poisson_cg_relative_l2": 9.518740036149002e-06,
+        "equilibrium_poisson_wall_time": 0.4544401350431144,
+        "equilibrium_projection_quadrature_check_1d": 28,
+        "equilibrium_projection_quadrature_relative_l2": 1.6315972545070217e-14,
+        "equilibrium_semilinear_l2": 0.00013087515432744535,
+        "equilibrium_semilinear_relative_l2": 0.0002375736258606674,
+        "equilibrium_steady_transport_l2": 0.04101603121867616,
+        "equilibrium_steady_transport_relative_l2": 0.07445513478177253
+      },
+      "rho_departure_t1": 0.000879135526797783,
+      "rho_departure_t5": 0.0017247191743728484,
+      "rho_departure_t10": 0.0022824654676462503,
+      "phi_departure_t1": 5.184526967045503e-06,
+      "phi_departure_t5": 6.580674081344718e-06,
+      "phi_departure_t10": 7.402362246513724e-06,
+      "initial_density_min": -0.05472500585230828,
+      "initial_density_max": 1.0183303308093496,
+      "final_density_min": -0.005132432463083035,
+      "final_density_max": 1.0050935098014036,
+      "max_mass_relative_drift": 6.212877054699441e-14,
+      "final_enstrophy_relative_drift": -1.6281490863021954e-05
+    }
+  },
+  "refinement": {
+    "spatial": [
+      {
+        "time": 1.0,
+        "density_relative_l2": 0.0013832071966727916,
+        "potential_relative_l2": 1.7741447791141483e-05
+      },
+      {
+        "time": 5.0,
+        "density_relative_l2": 0.0024209832413310873,
+        "potential_relative_l2": 1.4285668327744347e-05
+      },
+      {
+        "time": 10.0,
+        "density_relative_l2": 0.0030990969413435335,
+        "potential_relative_l2": 1.2416646070470649e-05
+      }
+    ],
+    "temporal": [
+      {
+        "time": 1.0,
+        "density_relative_l2": 2.2752950257295074e-05,
+        "potential_relative_l2": 6.398177601451315e-08
+      },
+      {
+        "time": 5.0,
+        "density_relative_l2": 2.2827084016642883e-05,
+        "potential_relative_l2": 2.480794342964634e-08
+      },
+      {
+        "time": 10.0,
+        "density_relative_l2": 2.3880105025340175e-05,
+        "potential_relative_l2": 2.269123235629389e-08
+      }
+    ]
+  },
+  "scope": "One unperturbed source, through t=10; no imposed perturbation"
+}

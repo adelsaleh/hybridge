@@ -1,0 +1,7 @@
+{
+  "pid": 2875144,
+  "pgid": 2875144,
+  "started": 1792167771.2051504,
+  "stop": "kill -- -2875144",
+  "scope": "Wait for equilibrium campaign, update Figure 17 and rebuild article; no simulations"
+}

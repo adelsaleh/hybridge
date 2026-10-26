@@ -568,3 +568,20 @@ list and plan without solving:
 .venv/bin/python campaigns/gc_article_convergence/campaign.py run --shard 0/8 --dry-run
 .venv/bin/python campaigns/gc_article_convergence/campaign.py verify-meshes
 ```
+
+### Local campaign records and task lists
+
+The campaign index records partial and completed stages. These commands print plans; they do not start runs.
+
+```bash
+.venv/bin/python campaigns/gc_d8_diocotron_order/launcher.py --plan
+.venv/bin/python campaigns/gc_d8s_smoke/launcher.py --plan
+.venv/bin/python campaigns/gc_e7_band_evolution/launcher.py --plan
+.venv/bin/python campaigns/gc_e7_five_sites/launcher.py --plan
+.venv/bin/python campaigns/gc_e7_lumps/launcher.py --plan
+.venv/bin/python campaigns/gc_poisson_pmg_degrees/launcher.py --plan
+.venv/bin/python campaigns/gc_diocotron_shell/todo_20261015/launcher.py --list
+```
+
+Start/resume/stop commands and output overrides are in each campaign README. The D7 shell stages can
+be syntax-checked with `bash -n`; only production v2 offers `DRY=1` configuration inspection.

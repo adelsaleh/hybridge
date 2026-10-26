@@ -1,0 +1,68 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/diocotron_order_smoke_20261016",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "SMOKE_DONE present; earlier failed and out-of-memory attempts retained.",
+  "total_bytes": 18304597079,
+  "file_count": 8877,
+  "subdirectories": 4,
+  "run_attempt_statuses": {
+    "contaminated": 4,
+    "ok": 116,
+    "oom": 2
+  },
+  "completion_markers": [
+    "SMOKE_DONE"
+  ],
+  "copied": [
+    {
+      "path": "SMOKE_DONE",
+      "copy": "SMOKE_DONE",
+      "bytes": 20,
+      "sha256": "9bf6974d2f810ee3c89d1000f377ee000b07c70fc003993209657e2b63bbfdc7"
+    },
+    {
+      "path": "mesh_levels_smoke.jsonl",
+      "copy": "mesh_levels_smoke.jsonl",
+      "bytes": 6358,
+      "sha256": "bc1d6af7430d35b200deb6cef910ff8bfd4b3c0d9e8aa2e3e0d7f7da39319895"
+    },
+    {
+      "path": "pause_pgids.json",
+      "copy": "pause_pgids.json",
+      "bytes": 10,
+      "sha256": "88e16fb5ea0e1aa032deaaae0aa7765e86083448ea04b6202bb5c605d440f1e4"
+    },
+    {
+      "path": "presets_selected.json",
+      "copy": "presets_selected.json",
+      "bytes": 8484,
+      "sha256": "469ee01e4e66914722e290db93f45b8d9de6e71b67beb3b0975a82ae77873c33"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 30611,
+      "sha256": "6d412b03e15f137b22975347429a11e3855b7d54e5eabdc26eaafd454b28e52a"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 211602,
+      "sha256": "eec4928500ab07af36a9814aba4ab4481900d564bd9643f78351e310d02a5ba6"
+    },
+    {
+      "path": "smoke_report.md",
+      "copy": "smoke_report.md",
+      "bytes": 22592,
+      "sha256": "186343a7dd9132673bd1262cc6c96da2a989dc1faf93cea426afb72f310eb973"
+    },
+    {
+      "path": "smoke_runs.csv",
+      "copy": "smoke_runs.csv",
+      "bytes": 322772,
+      "sha256": "921c0bb91aa2ff4fa0b104805e5ccc8d720616b0a290a2e6634828ba9d7b4c26"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

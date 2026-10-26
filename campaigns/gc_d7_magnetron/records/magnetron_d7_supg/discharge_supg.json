@@ -1,0 +1,28 @@
+{
+  "output_dir": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_supg",
+  "order": 6,
+  "dt": 0.05,
+  "final_time": 40.0,
+  "supg_scale": 1.0,
+  "log_every": 20,
+  "vane_width": 0.26,
+  "hall_parameter": 30.0,
+  "electron_temperature": 0.01,
+  "emission_period": 20.0,
+  "emission_duty": 0.5,
+  "wave_amplitude": 0.05,
+  "wave_speed": 0.25,
+  "hub_edge": 0.025,
+  "emission_top": 0.6,
+  "mesh_size": 0.03,
+  "band_mesh_size": 0.015,
+  "refine_band": [
+    0.55,
+    1.35
+  ],
+  "corner_mesh_size": 0.005,
+  "triangles": 40404,
+  "dofs": 731256,
+  "diffusion": 0.0003333333333333333,
+  "wall_time_s": 5732.949278437998
+}

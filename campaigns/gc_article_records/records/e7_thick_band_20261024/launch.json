@@ -1,0 +1,10 @@
+{
+  "pid": 1227890,
+  "pgid": 1227888,
+  "stop": "kill -- -1227888",
+  "started_utc": "2026-10-25T06:56:39.054007+00:00",
+  "delta": 0.10395627204636801,
+  "midpoint": 0.05916748125131995,
+  "start": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_thick_band_20261024/thick_21/thick_21_01.npz",
+  "purpose": "thick stable band source (lane S)"
+}

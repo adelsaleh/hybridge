@@ -1,0 +1,180 @@
+[
+  {
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/source_cg6/undercut_star_cg6_01.npz",
+    "window": {
+      "threshold_width_delta": 0.003,
+      "epsilon": 0.00024,
+      "kind": "logistic",
+      "smoothing_mode": "relative_to_delta",
+      "relative_epsilon": 0.08,
+      "midpoint": 0.009000000000000001
+    },
+    "mean_thickness": 0.06946325061341269,
+    "wall_gap": {
+      "weighted_mean": 0.10649644147216991,
+      "min": 0.07421557115166066,
+      "max": 0.18031518287330497
+    },
+    "triangles": 32880,
+    "contour_visibility_kernel": {
+      "1024": {
+        "outer": {
+          "visibility_kernel_signed_radius": 0.5432736469483285,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            0.00014819884569767654,
+            8.551917527772235e-05
+          ],
+          "feasibility_residual": 1.1102230246251565e-16
+        },
+        "middle": {
+          "visibility_kernel_signed_radius": 0.5219536839640355,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            0.00032213800850424003,
+            6.195519627369701e-05
+          ],
+          "feasibility_residual": 2.220446049250313e-16
+        },
+        "inner": {
+          "visibility_kernel_signed_radius": 0.48272917887212075,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            0.0001451114218797978,
+            0.00010448153558165687
+          ],
+          "feasibility_residual": 2.7755575615628914e-16
+        }
+      },
+      "4096": {
+        "outer": {
+          "visibility_kernel_signed_radius": 0.5426358688343624,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            -1.808752134794289e-05,
+            -4.652588807527496e-05
+          ],
+          "feasibility_residual": 0.0
+        },
+        "middle": {
+          "visibility_kernel_signed_radius": 0.5197310873551991,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            0.0002635887057447304,
+            0.0008263013935680554
+          ],
+          "feasibility_residual": 0.0
+        },
+        "inner": {
+          "visibility_kernel_signed_radius": 0.48055007817568524,
+          "non_star_shaped": false,
+          "visibility_kernel_center": [
+            6.527856478512642e-05,
+            -0.0003885874529767178
+          ],
+          "feasibility_residual": 0.0
+        }
+      }
+    },
+    "edge_transition_10_to_90": {},
+    "wall_density": 2.6809938766101533e-14
+  },
+  {
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+    "window": {
+      "threshold_width_delta": 0.0007500000000000002,
+      "epsilon": 1.5000000000000005e-05,
+      "kind": "logistic",
+      "smoothing_mode": "relative_to_delta",
+      "relative_epsilon": 0.02,
+      "midpoint": 0.0007500000000000002
+    },
+    "mean_thickness": 0.03638590374545519,
+    "wall_gap": {
+      "weighted_mean": 0.010109990012483767,
+      "min": 0.0048902899507163745,
+      "max": 0.021005518912665055
+    },
+    "triangles": 127630,
+    "contour_visibility_kernel": {
+      "1024": {
+        "outer": {
+          "visibility_kernel_signed_radius": -0.2549057403986587,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            1.2842801302040982e-06,
+            -1.2972913963327916e-05
+          ],
+          "feasibility_residual": 1.1102230246251565e-16
+        },
+        "middle": {
+          "visibility_kernel_signed_radius": -0.26522740264004896,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            3.228687754231802e-05,
+            -0.00010943059695772353
+          ],
+          "feasibility_residual": 1.7486012637846216e-14
+        },
+        "inner": {
+          "visibility_kernel_signed_radius": -0.28734019791391563,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            -4.901625067457368e-05,
+            3.0504389917288457e-05
+          ],
+          "feasibility_residual": 3.3306690738754696e-16
+        }
+      },
+      "4096": {
+        "outer": {
+          "visibility_kernel_signed_radius": -0.2549832870461794,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            -4.426953176780874e-06,
+            2.0438151700634152e-06
+          ],
+          "feasibility_residual": 5.551115123125783e-17
+        },
+        "middle": {
+          "visibility_kernel_signed_radius": -0.26571036089302996,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            0.0001809480972774583,
+            -0.0001586571380713025
+          ],
+          "feasibility_residual": 0.0
+        },
+        "inner": {
+          "visibility_kernel_signed_radius": -0.2881227825120033,
+          "non_star_shaped": true,
+          "visibility_kernel_center": [
+            -0.00010780818413880053,
+            0.00016625916381331627
+          ],
+          "feasibility_residual": 0.0
+        }
+      }
+    },
+    "edge_transition_10_to_90": {
+      "transects": 384,
+      "valid_transects": 384,
+      "refinement_max_relative_difference": 0.0033499835433550285,
+      "width": {
+        "inner": {
+          "min": 0.0155868487808371,
+          "mean": 0.017824524918488325,
+          "max": 0.02307833251967427,
+          "mean_over_d": 0.489874459163728
+        },
+        "outer": {
+          "min": 0.0011862549872059761,
+          "mean": 0.0017515062777446126,
+          "max": 0.0026808611311073417,
+          "mean_over_d": 0.04813694583478323
+        }
+      }
+    },
+    "wall_density": 1.3887943864771146e-11
+  }
+]

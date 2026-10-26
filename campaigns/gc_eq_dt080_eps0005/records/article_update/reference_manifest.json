@@ -1,0 +1,30 @@
+[
+  {
+    "path": "main.pdf",
+    "sha256": "51c19d54f7162080aef977fea2da7b5914529f21e4c5614d1349c73a4db08b03"
+  },
+  {
+    "path": "sections/07_equilibria.tex",
+    "sha256": "1f592c2bf5f1b56c89393e60d98283c74ca1ca00764eaf3dd42c6ef060fd71e2"
+  },
+  {
+    "path": "figures/equilibrium_dt080_p6.pdf",
+    "sha256": "80a74f0db57eb5ee286c45aa5cae98098490d4c8e0696a45e694b65fe67cfe75"
+  },
+  {
+    "path": "figures/equilibrium_dt080_p6.png",
+    "sha256": "9311cf40390f91d57b44bd3bdc68b5c943174b904d1eb862070ac0361395983e"
+  },
+  {
+    "path": "figures/equilibrium_dt080_p6.sources.json",
+    "sha256": "ca266c6f72a613fbe0d0616ad8ebef2e132f85943df44d39df19c0774c5c25a2"
+  },
+  {
+    "path": "tables/equilibrium_dt080_p6_sources.tex",
+    "sha256": "3548e35c927f1ddac6cf1cec9acd0f80f8978bc2a8d2df43434187ef5203b40a"
+  },
+  {
+    "path": "run_outputs/equilibrium_dt080_20261016/article_selection.json",
+    "sha256": "2fddd60592222f3e9d26541d1c4c2eccf372f871e3aeaf2e44981364e71b3bd4"
+  }
+]

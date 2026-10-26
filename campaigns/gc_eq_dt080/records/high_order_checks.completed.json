@@ -1,0 +1,8 @@
+{
+  "status": "partial",
+  "failures": [
+    "iter: distance sampling check failed"
+  ],
+  "finished": 1792161719.9287004,
+  "guiding_center_evolution_performed": false
+}

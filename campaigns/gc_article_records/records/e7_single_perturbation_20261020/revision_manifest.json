@@ -1,0 +1,116 @@
+{
+  "frozen_utc": "2026-10-20T10:42:15.497528+00:00",
+  "assets": [
+    {
+      "source": "figures/e7_activity.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_activity.pdf",
+      "sha256": "7f21c6b1e0e84692cd776198db4f39fe16d11fd360abee069cddb575e940f28e"
+    },
+    {
+      "source": "figures/e7_horseshoe_seed.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_horseshoe_seed.pdf",
+      "sha256": "8da1782541b9d29c059b0336d0adb22c9de00dc7940dc281b831b00001bb93c5"
+    },
+    {
+      "source": "figures/e7_iter_lumps.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_iter_lumps.pdf",
+      "sha256": "d08d85e8e82778e324f39cf2ef4f290a52a4698e574a2509c71597fee5efb255"
+    },
+    {
+      "source": "figures/e7_iter_seed.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_iter_seed.pdf",
+      "sha256": "70891924249a1df5070a9d79fc86b523c5567ae60b56be42533620dbb3854b1e"
+    },
+    {
+      "source": "figures/e7_preservation.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_preservation.pdf",
+      "sha256": "97325562d4254844b4ffceb48f6d8a656f7c26f19d17a436fd2e488a209606d7"
+    },
+    {
+      "source": "figures/e7_star_control.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_star_control.pdf",
+      "sha256": "e72a2e3aca7ecf05cb70d940f2e0d27cc489f8cdab7d360615a4613900379266"
+    },
+    {
+      "source": "figures/e7_star_five_sinuous.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_star_five_sinuous.pdf",
+      "sha256": "6a13da9b5255b67749d28beac9f2f0eaca67c63ead3e09fa19a4b7dcd4aa7bc2"
+    },
+    {
+      "source": "figures/e7_star_five_varicose.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_star_five_varicose.pdf",
+      "sha256": "f65cc519a182fc3d707d8463c7d92406f2b12da8e0631bb64f57b8a59b553fd0"
+    },
+    {
+      "source": "figures/e7_star_seed.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_star_seed.pdf",
+      "sha256": "1776e570347463cdd353ea0f96c59b05212d0d53960512f7a4ad96d8334bf9a2"
+    },
+    {
+      "source": "figures/e7_uglypacman_lumps.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_uglypacman_lumps.pdf",
+      "sha256": "6e93db9c3b41d970101e991b9fd100cb42e731c386ab471fa9b6ba991778cefa"
+    },
+    {
+      "source": "figures/e7_uglypacman_seed.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_uglypacman_seed.pdf",
+      "sha256": "026b5f91ffbc5feff06d94f39959413b8b9d3266c0de3d89d7936ba207d8cfb6"
+    },
+    {
+      "source": "figures/e7_vortex_tracks.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_vortex_tracks.pdf",
+      "sha256": "165e20a9943a08c27351c8bb02789824280e13ac096f530b5ef03f666099b554"
+    },
+    {
+      "source": "tables/e7_conservation.tex",
+      "frozen": "tables/e7_exploratory_20261020/e7_conservation.tex",
+      "sha256": "c6f38c464f435092a3df4c287e5271d68f1b1169c5c3757e8c91dd11dcfcbf27"
+    },
+    {
+      "source": "tables/e7_preservation.tex",
+      "frozen": "tables/e7_exploratory_20261020/e7_preservation.tex",
+      "sha256": "cb9ee5ce00d42e41c6de74a575e8fcf6972522023d633c6cb1f57c2c7c06869e"
+    },
+    {
+      "source": "tables/e7_rates.tex",
+      "frozen": "tables/e7_exploratory_20261020/e7_rates.tex",
+      "sha256": "0c2532198a82913d81baa45aff48a1ba9d0a0401aa15ba8460bd1a5fe4df63aa"
+    },
+    {
+      "source": "tables/e7_search.tex",
+      "frozen": "tables/e7_exploratory_20261020/e7_search.tex",
+      "sha256": "1716dcbaf1246c6d20cf823fb50f92b1e08c4845ff0a5bd747633a991f8906ec",
+      "previous_sha256": "d40fc5955e0164729793bba22247aa3f6e2f79290df9812ad79ee7c77b3a934d",
+      "updated_utc": "2026-10-20T13:45:43.956259+00:00",
+      "note": "lump runs horseshoe5p6 of run_outputs/e7_lumps_20261020, postprocessed 2026-10-20T15:45"
+    },
+    {
+      "source": "figures/e7_horseshoe_lumps.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_horseshoe_lumps.pdf",
+      "sha256": "ce1f70ca3a388d95232bc703777d01fe60706037e0eed5905fa99d5382db34b1",
+      "added_utc": "2026-10-20T10:46:23.412914+00:00",
+      "note": "horseshoe lump run of run_outputs/e7_lumps_20261020, postprocessed 2026-10-20 12:45"
+    },
+    {
+      "source": "figures/e7_uglypacman_lumps_p6.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_uglypacman_lumps_p6.pdf",
+      "sha256": "6950e8da6881dd12df668abd38238d906e8ababd92c8f4ac0674e75744c853bc",
+      "added_utc": "2026-10-20T12:16:02.912275+00:00",
+      "note": "lump runs pacman5p6 of run_outputs/e7_lumps_20261020, postprocessed 2026-10-20T14:16"
+    },
+    {
+      "source": "figures/e7_iter_lumps_p6.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_iter_lumps_p6.pdf",
+      "sha256": "51884916c02cc5f531d4176d77a55d2134d450ff90c420fff5b06880db3f4021",
+      "added_utc": "2026-10-20T13:05:22.222033+00:00",
+      "note": "lump runs iter7p6 of run_outputs/e7_lumps_20261020, postprocessed 2026-10-20T15:05"
+    },
+    {
+      "source": "figures/e7_horseshoe_lumps_p6.pdf",
+      "frozen": "figures/e7_exploratory_20261020/e7_horseshoe_lumps_p6.pdf",
+      "sha256": "c60a1dbc529964373ef311bc6d16eea8cb063bbc71a90fc7c9192c2deef6eca3",
+      "added_utc": "2026-10-20T13:45:43.956259+00:00",
+      "note": "lump runs horseshoe5p6 of run_outputs/e7_lumps_20261020, postprocessed 2026-10-20T15:45"
+    }
+  ]
+}

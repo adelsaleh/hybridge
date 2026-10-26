@@ -1,0 +1,9 @@
+{
+  "samples": 513,
+  "maximum_potential_difference": 9.71445146547012e-17,
+  "relative_mass_difference": 8.647391288017683e-14,
+  "mean_thickness_difference": 6.938893903907228e-17,
+  "wall_clearance_difference": 2.7755575615628914e-17,
+  "source_backend": "serial PyPardiso",
+  "new_backend": "MUMPS, 2 MPI ranks"
+}

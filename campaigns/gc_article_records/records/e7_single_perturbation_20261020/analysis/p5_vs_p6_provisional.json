@@ -1,0 +1,69 @@
+{
+  "profile_response": {
+    "1": 0.002681251976755131,
+    "5": 0.0020700251300989816,
+    "10": 0.0022019480084358024,
+    "15": 0.0013076360715036893,
+    "20": 0.0012265374301971914,
+    "25": 0.0010864385994874405,
+    "30": 0.0006908846877503539,
+    "35": 0.0005252831637201455,
+    "40": 0.0009086333280449789
+  },
+  "whole_domain": [
+    {
+      "time": 1.0,
+      "density_relative_l2": 0.00038096631103386007,
+      "potential_relative_l2": 7.488355089077743e-06,
+      "potential_response_relative_l2": 0.0026128428768397716
+    },
+    {
+      "time": 5.0,
+      "density_relative_l2": 0.0006767826494527615,
+      "potential_relative_l2": 7.286790856220031e-06,
+      "potential_response_relative_l2": 0.0016778404906223527
+    },
+    {
+      "time": 10.0,
+      "density_relative_l2": 0.0009170039975666904,
+      "potential_relative_l2": 6.841478910435938e-06,
+      "potential_response_relative_l2": 0.0017897031548006848
+    },
+    {
+      "time": 15.0,
+      "density_relative_l2": 0.0011017312790091566,
+      "potential_relative_l2": 6.296385328720069e-06,
+      "potential_response_relative_l2": 0.0011342578777689262
+    },
+    {
+      "time": 20.0,
+      "density_relative_l2": 0.0012865770533719565,
+      "potential_relative_l2": 6.909977043863122e-06,
+      "potential_response_relative_l2": 0.0011656925195330148
+    },
+    {
+      "time": 25.0,
+      "density_relative_l2": 0.001424925640588529,
+      "potential_relative_l2": 8.642892007151206e-06,
+      "potential_response_relative_l2": 0.0009420951035819866
+    },
+    {
+      "time": 30.0,
+      "density_relative_l2": 0.0018188976432698058,
+      "potential_relative_l2": 1.0450264561892779e-05,
+      "potential_response_relative_l2": 0.000589873565113412
+    },
+    {
+      "time": 35.0,
+      "density_relative_l2": 0.001872964104441318,
+      "potential_relative_l2": 1.5214158796533784e-05,
+      "potential_response_relative_l2": 0.0005058278263013439
+    },
+    {
+      "time": 40.0,
+      "density_relative_l2": 0.004141645678820475,
+      "potential_relative_l2": 5.0332380353791084e-05,
+      "potential_response_relative_l2": 0.0011227566648686132
+    }
+  ]
+}

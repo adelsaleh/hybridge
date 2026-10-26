@@ -1,0 +1,7 @@
+{
+  "status": "stopped_by_launcher_owner",
+  "child_pid": 1264636,
+  "reason": "Newton algebraic residual stalled near 6.8e-4 after more than 33 iterations; reduce the delta and midpoint increments.",
+  "interpretation": "Failed initializer step, not evidence that the requested equilibrium does not exist.",
+  "preserved": ["thin_150.log", "thin_150_launch.json", "thin_150_finished.json", "inputs/thin_150.json"]
+}

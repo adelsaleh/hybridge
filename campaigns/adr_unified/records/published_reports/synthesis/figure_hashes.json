@@ -1,0 +1,23 @@
+{
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_h_crossover.pdf": "bbfcbd0950fb6e2b7896b63569560f212a36ab0cb093aaab3fdbc0e804f522a0",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_h_crossover.png": "2c3c49425d15f07b98662f73fdc141cfe21ba680ebff7071ec80b9c1f40086a6",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_h_crossover.svg": "816537657d5c4699c73c97ab587cf158fc711f30f8ed2f35767c51cd910a01d3",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_p_crossover.pdf": "d00acfb354cb4e02f1060386f5875532ee12c993023e4fac7d92fa1866efbe17",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_p_crossover.png": "a444d8f818afb61557ad97d68add4daad8d040984fe6c6403c94cd23345eaf25",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/focused_p_crossover.svg": "348ac5b9070db8f1be88dd74d2362d8a57ef63858efb8056bae98dabfd6a8507",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/oscillatory_local_advantage.pdf": "7925574b790b6bf8454de59ff769d5701aa1dee560875add5c0666fe7a914e02",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/oscillatory_local_advantage.png": "11da957816ceda2e372257b305496de7c698e558f4f3c5dcca55d8e5aeb05685",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/oscillatory_local_advantage.svg": "9029c482fef45638a7938a47593e911421992b32cfb0a66ba978e47d53218efd",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/smooth_anisotropic.pdf": "10f1caf9a7e6632812446fa320bd3c28abb2739e3d80d42042792b9f93924474",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/smooth_anisotropic.png": "76ec0414e76eb224c0b74d9a85112b89d744b9bc087e412ff857c47c5fe1cf63",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/smooth_anisotropic.svg": "d525c5d14416510ed50f00c76aa59fa0f8c0ecbd96bad160955db36ff26c6f91",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_advantage_map.pdf": "e9230808312f1ba419ebe0d6420b9aa6fdd7d5414e53fd6bb9c8161d2b076b37",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_advantage_map.png": "a2d489f1afec120d14e4bf93fd20398aa7a0f1985e742361b5056c837148def9",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_advantage_map.svg": "ad619b8ab712986b242f5725e4a8b7ce942c4b0c33fe3690fac785aecffb3471",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_degree_comparison.pdf": "80cbeee68103380542b33949638a0931e37adfdc12e00ed987caff8143ab6456",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_degree_comparison.png": "655e1a0cae8ac7d75e6e570f55ff3351079a2ff2f12bfce452bdead74a73684e",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_degree_comparison.svg": "3d87bc53bdb316be7320d6b404cec70d2d0325589935b8a23f91a292d75ba5c8",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_mesh_comparison.pdf": "ad7ae54d0ebd60a071e245a5fe13dde5c4cea2eb0e1e5b1639ddca244e612dd1",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_mesh_comparison.png": "957091c7529a34f8fae61f155b237a44ed35448715c9f2ca47cfe277d199bf4f",
+  "run_outputs/solver_studies/adr_scaling_2026_09_17/figures/synthesis/solver_mesh_comparison.svg": "0fd6bdd569df35e4e43d7358dd2330e33dee470d00160b8bfdaa527415fc9a1e"
+}

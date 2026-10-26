@@ -1,0 +1,153 @@
+{
+  "method": "1024 uniform-arclength samples per saved contour; exact saved CG6 polynomial values and analytic gradients; local normal Newton projection to threshold (not PDE solve)",
+  "results": {
+    "star": {
+      "case": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/star/eps0p005_q64",
+      "n_samples_each": 1024,
+      "delta": 0.001,
+      "state_id": "9db5600775d94fcd927b2ffa1b70e3dc",
+      "curves": {
+        "outer": {
+          "level": 0.006537337431375795,
+          "gradient_min": 0.04089863059371155,
+          "gradient_mean": 0.04384443927590481,
+          "initial_potential_residual_over_delta_min": -2.105969461319024e-06,
+          "initial_potential_residual_over_delta_mean": 5.34522265759118e-06,
+          "initial_potential_residual_over_delta_max": 1.4178201605818952e-05,
+          "first_normal_correction_abs_max": 3.0678088257675757e-07,
+          "projected_shift_mean": 1.22606318793855e-07,
+          "projected_shift_max": 3.0678022563707854e-07,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -1.2209722919218325e-07,
+          "final_residual_over_delta_max": 4.336808689942018e-15,
+          "projection_iterations": 3
+        },
+        "inner": {
+          "level": 0.007537337431375796,
+          "gradient_min": 0.0025547417245188942,
+          "gradient_mean": 0.0026176404586991616,
+          "initial_potential_residual_over_delta_min": 2.253483163960901e-08,
+          "initial_potential_residual_over_delta_mean": 8.1081834628456e-06,
+          "initial_potential_residual_over_delta_max": 2.6394938929842626e-05,
+          "first_normal_correction_abs_max": 1.0029637669280357e-05,
+          "projected_shift_mean": 3.09456035786117e-06,
+          "projected_shift_max": 1.002009539769959e-05,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -3.09456035786117e-06,
+          "final_residual_over_delta_max": 3.469446951953614e-15,
+          "projection_iterations": 3
+        }
+      },
+      "locator_max_nearest_cell_candidates": 8
+    },
+    "uglypacman": {
+      "case": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/uglypacman/eps0p005_q64",
+      "n_samples_each": 1024,
+      "delta": 0.001,
+      "state_id": "ef1b3784239646e0b62cab0e9bee54e6",
+      "curves": {
+        "outer": {
+          "level": 0.005859180215280679,
+          "gradient_min": 0.03864576745698458,
+          "gradient_mean": 0.04384664750369299,
+          "initial_potential_residual_over_delta_min": -6.515765467972334e-06,
+          "initial_potential_residual_over_delta_mean": 5.434083316193221e-06,
+          "initial_potential_residual_over_delta_max": 1.7726827692375602e-05,
+          "first_normal_correction_abs_max": 3.688835318485477e-07,
+          "projected_shift_mean": 1.246431898859133e-07,
+          "projected_shift_max": 3.688825319772551e-07,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -1.2410073973455164e-07,
+          "final_residual_over_delta_max": 5.204170427930421e-15,
+          "projection_iterations": 3
+        },
+        "inner": {
+          "level": 0.006859180215280678,
+          "gradient_min": 0.002492300231752086,
+          "gradient_mean": 0.0026170801425477747,
+          "initial_potential_residual_over_delta_min": 1.4550122304918256e-07,
+          "initial_potential_residual_over_delta_mean": 7.96964478145075e-06,
+          "initial_potential_residual_over_delta_max": 2.4171521834440157e-05,
+          "first_normal_correction_abs_max": 9.198886149823538e-06,
+          "projected_shift_mean": 3.041148793249528e-06,
+          "projected_shift_max": 9.190858264052029e-06,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -3.041148793249528e-06,
+          "final_residual_over_delta_max": 3.469446951953614e-15,
+          "projection_iterations": 3
+        }
+      },
+      "locator_max_nearest_cell_candidates": 8
+    },
+    "iter": {
+      "case": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/iter/eps0p005_q64",
+      "n_samples_each": 1024,
+      "delta": 0.008,
+      "state_id": "73be0c63612e4898a2c7c4ff5b1f8725",
+      "curves": {
+        "outer": {
+          "level": 0.062354347623124876,
+          "gradient_min": 0.1174049450184956,
+          "gradient_mean": 0.12427287784743557,
+          "initial_potential_residual_over_delta_min": 2.402999778328141e-07,
+          "initial_potential_residual_over_delta_mean": 6.027779029047829e-06,
+          "initial_potential_residual_over_delta_max": 1.4687798573741195e-05,
+          "first_normal_correction_abs_max": 9.374506135849961e-07,
+          "projected_shift_mean": 3.8821473930087414e-07,
+          "projected_shift_max": 9.374486918645782e-07,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -3.882147393008741e-07,
+          "final_residual_over_delta_max": 1.3877787807814457e-14,
+          "projection_iterations": 3
+        },
+        "inner": {
+          "level": 0.07035434762312488,
+          "gradient_min": 0.007269854620550268,
+          "gradient_mean": 0.0074076254320874346,
+          "initial_potential_residual_over_delta_min": 2.9244994273480707e-07,
+          "initial_potential_residual_over_delta_mean": 8.437388033652926e-06,
+          "initial_potential_residual_over_delta_max": 2.870646011697564e-05,
+          "first_normal_correction_abs_max": 3.1055005411941864e-05,
+          "projected_shift_mean": 9.108520191612065e-06,
+          "projected_shift_max": 3.1022728814226155e-05,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -9.108520191612064e-06,
+          "final_residual_over_delta_max": 6.938893903907228e-15,
+          "projection_iterations": 3
+        }
+      },
+      "locator_max_nearest_cell_candidates": 8
+    },
+    "horseshoe": {
+      "case": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/horseshoe/eps0p005_q64",
+      "n_samples_each": 1024,
+      "delta": 0.001,
+      "state_id": "e8595b10df6a44749ed2d91cc3cbd41f",
+      "curves": {
+        "outer": {
+          "level": 0.0065633296616919665,
+          "gradient_min": 0.03885991767143183,
+          "gradient_mean": 0.04397893293268659,
+          "initial_potential_residual_over_delta_min": -1.5755922009794143e-06,
+          "initial_potential_residual_over_delta_mean": 5.4217968581077525e-06,
+          "initial_potential_residual_over_delta_max": 1.8294629886526914e-05,
+          "first_normal_correction_abs_max": 3.999868293704539e-07,
+          "projected_shift_mean": 1.2372887482049207e-07,
+          "projected_shift_max": 3.9998570036452814e-07,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -1.23486567486939e-07,
+          "final_residual_over_delta_max": 5.204170427930421e-15,
+          "projection_iterations": 3
+        },
+        "inner": {
+          "level": 0.007563329661691966,
+          "gradient_min": 0.002496150308853023,
+          "gradient_mean": 0.002618400436719171,
+          "initial_potential_residual_over_delta_min": 4.809266700156467e-08,
+          "initial_potential_residual_over_delta_mean": 8.360710817452636e-06,
+          "initial_potential_residual_over_delta_max": 3.1066097983152574e-05,
+          "first_normal_correction_abs_max": 1.188446627407576e-05,
+          "projected_shift_mean": 3.1883936605990104e-06,
+          "projected_shift_max": 1.1871086631550654e-05,
+          "projected_signed_shift_mean_in_increasing_phi_direction": -3.1883936605990104e-06,
+          "final_residual_over_delta_max": 2.6020852139652106e-15,
+          "projection_iterations": 3
+        }
+      },
+      "locator_max_nearest_cell_candidates": 8
+    }
+  }
+}

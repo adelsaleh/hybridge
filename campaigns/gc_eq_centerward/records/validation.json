@@ -1,0 +1,29 @@
+{
+  "accepted_equilibria": 4,
+  "mean_clearance_increased_all": true,
+  "minimum_clearance_increased_all": true,
+  "maximum_relative_width_change_percent": 0.9954839189941111,
+  "mean_clearance_factors": {
+    "star": 1.861616912055763,
+    "uglypacman": 1.9408509921143895,
+    "iter": 1.764481103493944,
+    "horseshoe": 1.8406598039414181
+  },
+  "runner_tests_passed": 19,
+  "archive_verification": {
+    "entries": 22,
+    "unique_objects": 87,
+    "verified": true
+  },
+  "completion": {
+    "status": "complete",
+    "finished": 1792057811.9408395,
+    "geometries": [
+      "star",
+      "uglypacman",
+      "iter",
+      "horseshoe"
+    ]
+  },
+  "guiding_center_time_integration_performed": false
+}

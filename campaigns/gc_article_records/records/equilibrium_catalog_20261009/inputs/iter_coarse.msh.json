@@ -1,0 +1,23 @@
+{
+  "area": 30.73216574264496,
+  "cells": 20555,
+  "domain_diameter": 10.688090048393518,
+  "edges": 31044,
+  "format": "hdgfem_canonical_gmsh_v1",
+  "geometry": "iter",
+  "geometry_degree": 1,
+  "geometry_parameters": {
+    "source": "projects/diocotron/freefem/msh/iter.geo"
+  },
+  "geometry_source": "projects/diocotron/freefem/msh/iter.geo",
+  "gmsh_algorithm": 6,
+  "gmsh_version": "4.15.2",
+  "h_max": 0.08175688096021168,
+  "mesh_sha256": "f07fdcf48ce970285ff3c1804ddb4dd1ef7695f2a776650dc968d56b3afe06d6",
+  "msh_file_version": 2.2,
+  "requested_size": 0.06,
+  "source_hash": "7fbe9a776230a39d862e1bd575543a46bf554456fcfa4d7d5d1fdd7d6ec35c4a",
+  "statistics_geometry": "corner_triangles",
+  "title": "ITER wall",
+  "vertices": 10490
+}

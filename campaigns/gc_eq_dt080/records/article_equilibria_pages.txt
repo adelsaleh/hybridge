@@ -1,0 +1,200 @@
+7. Preservation of equilibria in general geometry
+
+   An unperturbed equilibrium provides a reference for separating numerical drift from the response to an imposed
+diocotron perturbation. On a disk, radial symmetry supplies such states directly: a radial density generates a radial
+potential, and the electric drift follows circles. For a noncircular wall, a prescribed radial density generally loses this
+property. We instead construct localized states satisfying 𝜌★ = 𝐹 (𝜙★) and the self-consistent Poisson equation (6).
+Their density is constant along the potential contours, so transport leaves them stationary in the continuous model.
+We present four degree-six source equilibria and define the diagnostics for their subsequent transfer to HDG and
+unperturbed evolution. HDG preservation tests of this family remain to be performed.
+
+7.1. Localized degree-six source equilibria
+    The source states solve
+                                  −Δ𝜙★ = 𝑊 𝜀 (𝜙★; 𝑚, 𝛿)     in Ω,       𝜙★ = 0     on 𝜕Ω.                             (36)
+Here 𝑊 𝜀 is the difference of two logistic functions centered at 𝑚 ± 𝛿/2, with smoothing 𝜀 = 0.08 𝛿. The midpoint 𝑚
+and width 𝛿 are specified in potential values; the physical band follows from the solution. The companion manuscript in
+preparation [24] develops torsion-based constructions of these localized equilibria. Here we fix 𝛿 and 𝜀, and adjust 𝑚
+by continuation to prescribe the band location.
+     The domains are a five-lobed star, Ugly Pac-Man with a 305◦ re-entrant tip, an ITER wall, and a horseshoe. Star,
+Ugly Pac-Man and horseshoe use 𝛿 = 0.001 and 𝜀 = 8 · 10−5 ; ITER uses 𝛿 = 0.008 and 𝜀 = 6.4 · 10−4 . We compute
+the potential with continuous P6 elements (CG6) in DOLFINx, using Newton solves initialized from archived equilibria.
+The affine meshes are graded near the band transitions and sharp corners, and contain 215246–264268 triangles. The
+solves use MUMPS on eight MPI ranks; the nonlinear forms use quadrature degree 32.
+     To compare placement across geometries, let 𝜓𝑇 solve −Δ𝜓𝑇 = 1 with zero wall data. Along a trajectory of
+its recovered gradient, let 𝑠 denote arclength from the torsion center and 𝐿 the total center-to-wall arclength. The
+normalized coordinate is 𝜁𝑇 = 𝑠/𝐿. We measure the location of the middle contour 𝜙★ = 𝑚 by
+                                                 Í
+                                                    𝑤 𝑖 𝜁𝑇 (𝑥 𝑖 )
+                                          𝐷𝑇 = 𝑖 Í                ,  𝜙★ (𝑥𝑖 ) = 𝑚,                                (37)
+                                                       𝑖 𝑤𝑖
+
+where the weights 𝑤 𝑖 are fixed by the boundary arclength intervals of the trajectory seeds. On a disk, 𝜁𝑇 = 𝑟/𝑅. We
+therefore target 𝐷 𝑇 = 0.8, matching the normalized centerline location of the mode-128 ring in Section 6.4. The
+localized window widths are set independently of that disk profile.
+     Figure 17 shows the resulting densities, evaluated by applying 𝑊 𝜀 to the complete saved CG6 potential. All four
+solves reach |𝐷 𝑇 − 0.8| < 8 · 10−8 with 256 boundary seeds. Increasing this number to 1024 changes 𝐷 𝑇 by 5.2 · 10−9 ,
+2.1 · 10−5 and 3.3 · 10−5 on star, Ugly Pac-Man and horseshoe, respectively. For ITER, the 1024-trajectory construction
+fails its trajectory-separation check, so convergence of this placement diagnostic under finer boundary sampling remains
+unverified.
+     For each source solve, we record the normalized discrete residual
+                                                                       ! 1/2
+                                                      RT 𝐾 −1 RCG
+                                               𝑒 CG = ∫CG CG                   ,                                      (38)
+                                                       Ω
+                                                         |∇𝜓𝑇 ,ℎ | 2
+
+where RCG is the assembled nonlinear residual on the free CG6 degrees of freedom and 𝐾CG is the Dirichlet stiffness
+matrix on that space. The normalizing field 𝜓𝑇 ,ℎ is a continuous degree-four torsion approximation. This stiffness-dual
+residual is below 6.4 · 10−15 in all four cases. It measures algebraic convergence of the discrete equations and does not
+estimate spatial error. Table 11 also reports the relative density difference from a coarser CG6 solve at the same target
+placement, with 𝛿 and 𝜀 fixed. These mesh comparisons use the complete potentials and nonlinear windows at fine-cell
+quadrature points.
+
+
+
+
+                                                            31
+                               Star: DT = 0.800000                                                   Ugly Pac-Man: DT = 0.800000
+                          264,268 triangles, CG6 potential                                          215,246 triangles, CG6 potential
+                                                                                  1.00
+
+
+           1.0                                                                    0.75
+
+
+                                                                                  0.50
+
+           0.5                                                                                                                                       1.0
+                                                                                  0.25
+
+
+                                                                                  0.00
+      y
+
+
+
+
+                                                                             y
+           0.0
+
+                                                                                 −0.25                                                               0.8
+
+          −0.5                                                                   −0.50
+
+                                                                                 −0.75
+          −1.0                                                                   −1.00                                                               0.6
+                 −1.0      −0.5          0.0        0.5                1.0                  −0.75 −0.50 −0.25 0.00     0.25   0.50     0.75   1.00
+
+
+
+
+                                                                                                                                                       ρ = Wε(ϕ)
+                                          x                                                                        x
+                                               ITER: DT = 0.800000                                     Horseshoe: DT = 0.800000
+                                          250,997 triangles, CG6 potential                           257,368 triangles, CG6 potential
+                                         10
+                                                                                      1.0                                                            0.4
+
+
+
+                                          8
+
+                                                                                      0.5
+
+                                                                                                                                                     0.2
+                                          6
+
+                                                                                      0.0
+                                     y
+
+
+
+
+                                                                                 y
+
+
+
+
+                                          4
+
+                                                                                                                                                     0.0
+                                                                                     −0.5
+                                          2
+
+
+
+                                                                                     −1.0
+                                          0
+
+                                               0          2              4                  −1.0      −0.5         0.0          0.5            1.0
+                                                              x                                                     x
+
+
+Figure 17: Localized source equilibria on star, Ugly Pac-Man, ITER and horseshoe, with continuous P6 potentials and target torsion-flow placement
+𝐷𝑇 = 0.8. The common color scale shows 𝜌★ = 𝑊𝜀 ( 𝜙CG ; 𝑚, 𝛿 ). Titles give the source triangle counts and the placement measured with 256
+boundary seeds. These are DOLFINx equilibrium fields prepared for subsequent HDG preservation tests.
+
+
+Table 11: Degree-six source equilibria in Fig. 17. 𝑁𝐾 is the number of source triangles; 𝑚 is the window midpoint. The residual 𝑒CG is defined
+in (38). Δ𝜌 is the relative 𝐿 2 density difference from the coarser CG6 solve, normalized by the finer density norm; it is a refinement comparison, not
+an absolute error bound.
+                              Domain                              𝑁𝐾                           𝑚               𝑒 CG                    Δ𝜌
+                              Star                   264 268             0.007 012 771 274          4.51 × 10 −15        1.43 × 10 −8
+                              Ugly Pac-Man           215 246             0.006 330 386 502          5.10 × 10 −15        5.96 × 10 −5
+                              ITER                   250 997              0.066 198 969 48          4.34 × 10 −15        2.22 × 10 −4
+                              Horseshoe              257 368             0.007 024 001 294          6.35 × 10 −15        1.42 × 10 −8
+
+
+
+
+                                                                                      32
+7.2. Planned transfer to HDG and preservation diagnostics
+    The source potential 𝜙CG is stored as a complete cellwise degree-six polynomial. For transfer, we will evaluate this
+polynomial at the HDG quadrature points, apply the nonlinear window, and form the 𝐿 2 projection
+                                                     𝜌 0ℎ = Πℎ 𝑊 𝜀 (𝜙CG ; 𝑚, 𝛿).
+The order matters: interpolating window values from the CG nodes would give a different density. The target HDG
+meshes will retain every segment of the source polygonal wall while allowing a different interior triangulation.
+    After an HDG Poisson solve for 𝜙0ℎ and the electric drift u0ℎ , projection, the Poisson discretization and the transport
+fluxes can each disturb stationarity. A small source residual 𝑒 CG therefore does not imply that the imported state is an
+HDG equilibrium. We will distinguish three initial diagnostics, with all norms taken in 𝐿 2 (Ω):
+                                                        ∥𝜙0ℎ − Πℎ 𝜙CG ∥
+                                                𝑒𝜙 =                      ,
+                                                             ∥Πℎ 𝜙CG ∥
+                                                        ∥ 𝜌 0ℎ − Πℎ 𝑊 𝜀 (𝜙0ℎ ; 𝑚, 𝛿) ∥
+                                                𝑠ℎ =                                         ,
+                                                                         ∥ 𝜌 0ℎ ∥
+                                                        ∥𝐹ℎ (𝜌 0ℎ ; u0ℎ ) ∥
+                                                𝑟ℎ =                           .
+                                                              ∥ 𝜌 0ℎ ∥
+The potential mismatch 𝑒 𝜙 compares the HDG Poisson solution with the projected source potential. The semilinear
+defect 𝑠 ℎ measures how well the imported density satisfies the window relation with the HDG potential. The discrete
+transport residual rate 𝑟 ℎ measures the initial tendency of the semidiscrete method to change that density and has units
+of inverse time. Here 𝐹ℎ is the mass-inverted conservative HDG transport right-hand side, including the upwind trace
+solve and the zero-flux wall condition. Its 𝐿 2 norm is the dual mass norm of the assembled transport residual, including
+facet contributions.
+    During evolution, departure from the imported state will be measured by
+                                              ∥ 𝜌 ℎ (𝑡) − 𝜌 0ℎ ∥                         ∥𝜙 ℎ (𝑡) − 𝜙0ℎ ∥
+                                  𝑑 𝜌 (𝑡) =                        ,         𝑑 𝜙 (𝑡) =                      .
+                                                   ∥ 𝜌 0ℎ ∥                                      ∥𝜙0ℎ ∥
+These diagnostics quantify preservation over the reported interval and must be assessed with separate spatial, temporal
+and quadrature refinements.
+   [E7 pending: Transfer and unperturbed HDG evolution of this CG6 family, comparisons of velocity constructions
+and KKT positivity preservation, and long-time controls remain to be carried out.]
+
+8. A diocotron benchmark in general geometry
+    We are not aware of a published diocotron or Euler benchmark on domains with re-entrant corners. In this section
+we propose one, built on the equilibria of Section 7. The design follows three rules: the perturbation and the observable
+are defined from published data only; the reported growth rate is independent of the perturbation shape; and the
+reference value comes with an uncertainty obtained from several resolutions, time integrators and an independent
+CG-SUPG code.
+
+8.1. Perturbation
+     Let 𝑥 𝑐 be the maximum point of 𝜙★ (published), 𝜃 𝑐 the polar angle about 𝑥 𝑐 , and 𝑤 a smooth radial bump about
+𝑥 𝑐 that vanishes near 𝑥 𝑐 and away from the band. We perturb the equilibrium by an infinitesimal area-preserving
+displacement generated by
+               𝜒(𝑥) = 𝑤(|𝑥 − 𝑥 𝑐 |) sin(𝑚𝜃 𝑐 ),          𝜌0 = 𝜌★ + 𝜀 ∇⊥ 𝜒 · ∇𝜌★ = 𝜌★ + 𝜀 𝑊 𝜀′ (𝜙★) ∇⊥ 𝜒 · ∇𝜙★ .
+This perturbation has exactly zero mass and leaves all Casimirs unchanged to first order. On the disk it reduces
+to the classical displacement of the ring edges. As a secondary choice we also use the multiplicative perturbation
+𝜌★ (1 + 𝜀 cos 𝑚𝜃 𝑐 ), which is closer to the disk tests of Section 6.
+                                                                       33
+

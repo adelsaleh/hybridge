@@ -1,0 +1,33 @@
+{
+  "rows": [
+    {
+      "prefix": "d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p2q3_h0p0135_hb0p00675_vanes12_rb1p35_vw0p26_tr0p04_emsmooth_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw_kktdense",
+      "label": "N6_a0.05_w0.25",
+      "wave_mode": 6,
+      "wave_amplitude": 0.05,
+      "wave_speed": 0.25,
+      "order": 2,
+      "scheme": "si-bdf2",
+      "dt": 0.05,
+      "velocity": "raw",
+      "triangles": 197388,
+      "final_time": 20.00000000000015,
+      "anode_current_late_mean": 0.008082563706946716,
+      "anode_current_late_std": 0.003927391356871956,
+      "anode_current_max": 0.019205076152606818,
+      "cathode_flux_max_abs": 0.24761955225441057,
+      "charge_final": 0.567027787370332,
+      "charge_late_mean": 0.614339488074598,
+      "charge_balance_relative_defect_max": 7.933067176707624e-13,
+      "rho_min": -1.498475652859388e-19,
+      "transport_iterations_mean": 74.29,
+      "transport_iterations_max": 121.0,
+      "poisson_iterations_mean": 7.7025,
+      "poisson_iterations_max": 9.0,
+      "median_linear_step_wall_time": 0.5042781680822372,
+      "wall_time_s": 303.1975487000309,
+      "jsonl": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/both_p2_s0p45/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p2q3_h0p0135_hb0p00675_vanes12_rb1p35_vw0p26_tr0p04_emsmooth_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw_kktdense.jsonl"
+    }
+  ],
+  "failures": []
+}

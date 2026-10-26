@@ -1,0 +1,74 @@
+{
+  "previous": {
+    "1024": {
+      "outer": {
+        "visibility_kernel_signed_radius": 0.5432736469483285,
+        "non_star_shaped": false,
+        "feasibility_residual": 1.1102230246251565e-16
+      },
+      "middle": {
+        "visibility_kernel_signed_radius": 0.5219536839640355,
+        "non_star_shaped": false,
+        "feasibility_residual": 2.220446049250313e-16
+      },
+      "inner": {
+        "visibility_kernel_signed_radius": 0.48272917887212075,
+        "non_star_shaped": false,
+        "feasibility_residual": 2.7755575615628914e-16
+      }
+    },
+    "4096": {
+      "outer": {
+        "visibility_kernel_signed_radius": 0.5426358688343624,
+        "non_star_shaped": false,
+        "feasibility_residual": 0.0
+      },
+      "middle": {
+        "visibility_kernel_signed_radius": 0.5197310873551991,
+        "non_star_shaped": false,
+        "feasibility_residual": 0.0
+      },
+      "inner": {
+        "visibility_kernel_signed_radius": 0.48055007817568524,
+        "non_star_shaped": false,
+        "feasibility_residual": 0.0
+      }
+    }
+  },
+  "near_wall_pilot": {
+    "1024": {
+      "outer": {
+        "visibility_kernel_signed_radius": -0.25474629500488416,
+        "non_star_shaped": true,
+        "feasibility_residual": 1.6653345369377348e-16
+      },
+      "middle": {
+        "visibility_kernel_signed_radius": -0.26438217256919155,
+        "non_star_shaped": true,
+        "feasibility_residual": 5.551115123125783e-17
+      },
+      "inner": {
+        "visibility_kernel_signed_radius": -0.27970237525869845,
+        "non_star_shaped": true,
+        "feasibility_residual": 0.0
+      }
+    },
+    "4096": {
+      "outer": {
+        "visibility_kernel_signed_radius": -0.25558836667271784,
+        "non_star_shaped": true,
+        "feasibility_residual": 1.1102230246251565e-16
+      },
+      "middle": {
+        "visibility_kernel_signed_radius": -0.2659603403131115,
+        "non_star_shaped": true,
+        "feasibility_residual": 5.551115123125783e-17
+      },
+      "inner": {
+        "visibility_kernel_signed_radius": -0.2815053908348679,
+        "non_star_shaped": true,
+        "feasibility_residual": 2.220446049250313e-16
+      }
+    }
+  }
+}

@@ -23,3 +23,7 @@ Inventory (read-only) and the tuned run (starts CPU factorizations; no CUDA wrap
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -B campaigns/adr_pardiso/run_adr_pardiso_campaign.py --autotune-threads --threads 1 2 4 6 8 12 16 24 --tuning-repeats 3 --repeats 5
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -u -B campaigns/adr_pardiso/run_adr_pardiso_campaign.py --output run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22 --autotune-threads --threads 1 2 4 6 8 12 16 24 --tuning-repeats 3 --warmup 1 --repeats 5 --execute
 ```
+
+## Additional saved output directories
+
+- [pardiso_tuned_2026_09_22](records/pardiso_tuned_2026_09_22/DATA.md).

@@ -1,0 +1,12 @@
+{
+  "pid": 2754424,
+  "pgid": 2754424,
+  "stop": "kill -- -2754424",
+  "started_utc": "2026-10-21T09:37:01.718910+00:00",
+  "delta": 0.00075,
+  "midpoint": 0.00525,
+  "purpose": "resolved inner-band source; no evolution",
+  "status": "failed",
+  "error": "RuntimeError: big_cg5_r0p005 failed on every attempt; see logs/",
+  "finished_utc": "2026-10-21T11:10:15.244952+00:00"
+}

@@ -1,0 +1,26 @@
+{
+  "area": 3.2044109018821296,
+  "cells": 463589,
+  "domain_diameter": 3.1994898556667284,
+  "edges": 696340,
+  "format": "hdgfem_canonical_gmsh_v1",
+  "geometry": "smooth_star",
+  "geometry_degree": 1,
+  "geometry_parameters": {
+    "amplitude": 0.2,
+    "boundary_points": 200,
+    "mode": 5,
+    "radius": 1.0
+  },
+  "geometry_source": null,
+  "gmsh_algorithm": 6,
+  "gmsh_version": "4.15.2",
+  "h_max": 0.005515138675617719,
+  "mesh_sha256": "a3eafb46c0e01087cb0cd038756403fdb95892f553e7c13195befd028a19ce82",
+  "msh_file_version": 2.2,
+  "requested_size": 0.004,
+  "source_hash": "030047ee30f28db7609d04494adb02be1f7408ce117f7194124a273f7aa5eba1",
+  "statistics_geometry": "corner_triangles",
+  "title": "Smooth sinusoidal star",
+  "vertices": 232752
+}

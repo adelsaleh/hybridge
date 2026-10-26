@@ -1,0 +1,355 @@
+{
+  "pid": 575273,
+  "pgid": 575273,
+  "stop": "kill -- -575273",
+  "started_utc": "2026-10-22T18:36:28.359864+00:00",
+  "delta": 0.0010184015252064915,
+  "midpoint": 0.0022355725019368444,
+  "start": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria/objects/29bf40587d944b824603b8e49f59e54358f703fca823eddac9a278de3579c1dd.npz",
+  "purpose": "resolved mid-band source; no evolution",
+  "status": "completed",
+  "selected": {
+    "name": "big_cg6_q48_01",
+    "midpoint": 0.0022355725019368444,
+    "distance": null,
+    "mass": 0.3752516837062025,
+    "mean_thickness": 0.04392325452615692,
+    "wall_clearance": 0.04032031222784421,
+    "dual_residual": 2.2427140564581216e-15,
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_mid_band_20261022/big_cg6_q48/big_cg6_q48_01.npz",
+    "state_id": "78890db445d743a785508af98649aab3",
+    "archive_id": "big_cg6_q48_01-b3632a1f2cb6",
+    "ranks": 1
+  },
+  "checks": {
+    "mesh": {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 738272,
+      "fine_cells": 539990,
+      "coarse_midpoint": 0.0022355725019368444,
+      "fine_midpoint": 0.0022355725019368444,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 9.982956660195268e-10,
+        "coarse_l2_norm": 0.004086345860127607,
+        "fine_l2_norm": 0.004086345883225579,
+        "relative_l2_difference": 2.4430033446691906e-07
+      },
+      "density": {
+        "l2_difference": 9.179789254789871e-07,
+        "coarse_l2_norm": 0.5928994087598082,
+        "fine_l2_norm": 0.592899402856977,
+        "relative_l2_difference": 1.548287822614704e-06
+      },
+      "gradient": {
+        "l2_difference": 1.3400034348375508e-05,
+        "coarse_l2_norm": 0.030011245210353744,
+        "fine_l2_norm": 0.03001124312397958,
+        "relative_l2_difference": 0.000446500476272128
+      }
+    },
+    "degree": {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 539990,
+      "fine_cells": 539990,
+      "coarse_midpoint": 0.0022355725019368444,
+      "fine_midpoint": 0.0022355725019368444,
+      "coarse_degree": 5,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 5.535766866471606e-09,
+        "coarse_l2_norm": 0.004086345552140281,
+        "fine_l2_norm": 0.004086345883225579,
+        "relative_l2_difference": 1.354698555791836e-06
+      },
+      "density": {
+        "l2_difference": 1.104216815724986e-05,
+        "coarse_l2_norm": 0.5928994858349216,
+        "fine_l2_norm": 0.592899402856977,
+        "relative_l2_difference": 1.8624016323918484e-05
+      },
+      "gradient": {
+        "l2_difference": 3.195804512617788e-05,
+        "coarse_l2_norm": 0.030011247264485078,
+        "fine_l2_norm": 0.03001124312397958,
+        "relative_l2_difference": 0.0010648690890329288
+      }
+    },
+    "quadrature": {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 539990,
+      "fine_cells": 539990,
+      "coarse_midpoint": 0.0022355725019368444,
+      "fine_midpoint": 0.0022355725019368444,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 2.9206105382177016e-18,
+        "coarse_l2_norm": 0.004086345883225579,
+        "fine_l2_norm": 0.004086345883225579,
+        "relative_l2_difference": 7.14724260177482e-16
+      },
+      "density": {
+        "l2_difference": 1.950158716597769e-14,
+        "coarse_l2_norm": 0.5928994028569773,
+        "fine_l2_norm": 0.592899402856977,
+        "relative_l2_difference": 3.289189881454812e-14
+      },
+      "gradient": {
+        "l2_difference": 5.721418694892755e-15,
+        "coarse_l2_norm": 0.03001124312397958,
+        "fine_l2_norm": 0.030011243123979577,
+        "relative_l2_difference": 1.9064250925084901e-13
+      }
+    }
+  },
+  "meshes": {
+    "mesh_medium": {
+      "num_cells": 738272,
+      "outer_size": 0.00075,
+      "inner_size": 0.002,
+      "cell_statistics": {
+        "gap (outside the outer contour)": {
+          "cells": 310985,
+          "longest_edge_median": 0.0007543007874998512,
+          "longest_edge_min": 0.0005517746506814253,
+          "longest_edge_max": 0.017316964167093274
+        },
+        "gap, nearer the wall than the outer contour": {
+          "cells": 11318,
+          "longest_edge_median": 0.006204677613116233,
+          "longest_edge_min": 0.0019320401179693046,
+          "longest_edge_max": 0.017316964167093274
+        },
+        "outer contour (within the buffer)": {
+          "cells": 421165,
+          "longest_edge_median": 0.000750004765214575,
+          "longest_edge_min": 0.0005517746506814253,
+          "longest_edge_max": 0.001178859628909905
+        },
+        "band (between the contours, outside the buffers)": {
+          "cells": 112884,
+          "longest_edge_median": 0.0016749959968860913,
+          "longest_edge_min": 0.0005883117826714324,
+          "longest_edge_max": 0.007225949420755607
+        },
+        "inner contour (within the buffer)": {
+          "cells": 56938,
+          "longest_edge_median": 0.0020094622913932273,
+          "longest_edge_min": 0.001442130190506722,
+          "longest_edge_max": 0.00301550529491519
+        },
+        "interior (inside the inner contour)": {
+          "cells": 75693,
+          "longest_edge_median": 0.002767868735148122,
+          "longest_edge_min": 0.0013104692206978375,
+          "longest_edge_max": 0.020193192417487595
+        },
+        "interior, farther than 4 buffers from the inner contour": {
+          "cells": 20595,
+          "longest_edge_median": 0.015000000000000102,
+          "longest_edge_min": 0.004671954407983905,
+          "longest_edge_max": 0.020193192417487595
+        }
+      }
+    },
+    "mesh_big": {
+      "num_cells": 539990,
+      "outer_size": 0.0005,
+      "inner_size": 0.0015,
+      "cell_statistics": {
+        "gap (outside the outer contour)": {
+          "cells": 223678,
+          "longest_edge_median": 0.000551414210810248,
+          "longest_edge_min": 0.0003660990074123765,
+          "longest_edge_max": 0.019881854933886008
+        },
+        "gap, nearer the wall than the outer contour": {
+          "cells": 6160,
+          "longest_edge_median": 0.008678910118040707,
+          "longest_edge_min": 0.002286318188270817,
+          "longest_edge_max": 0.019881854933886008
+        },
+        "outer contour (within the buffer)": {
+          "cells": 236759,
+          "longest_edge_median": 0.0005009591611225403,
+          "longest_edge_min": 0.0003688509000240067,
+          "longest_edge_max": 0.0008289502988493107
+        },
+        "band (between the contours, outside the buffers)": {
+          "cells": 127539,
+          "longest_edge_median": 0.0013281177843448232,
+          "longest_edge_min": 0.0003686696633728547,
+          "longest_edge_max": 0.012959737423639373
+        },
+        "inner contour (within the buffer)": {
+          "cells": 24137,
+          "longest_edge_median": 0.0015765890805674418,
+          "longest_edge_min": 0.0009730830926368639,
+          "longest_edge_max": 0.002473326815511441
+        },
+        "interior (inside the inner contour)": {
+          "cells": 58465,
+          "longest_edge_median": 0.003206602697397066,
+          "longest_edge_min": 0.0009730830926368639,
+          "longest_edge_max": 0.020468011955596974
+        },
+        "interior, farther than 4 buffers from the inner contour": {
+          "cells": 27210,
+          "longest_edge_median": 0.014999999999999994,
+          "longest_edge_min": 0.0024446535328743295,
+          "longest_edge_max": 0.020468011955596974
+        }
+      }
+    },
+    "mesh_hdg_a": {
+      "num_cells": 160982,
+      "outer_size": 0.0015,
+      "inner_size": 0.003,
+      "cell_statistics": {
+        "gap (outside the outer contour)": {
+          "cells": 57492,
+          "longest_edge_median": 0.0018149699022603919,
+          "longest_edge_min": 0.0011123283497472488,
+          "longest_edge_max": 0.019593642866536504
+        },
+        "gap, nearer the wall than the outer contour": {
+          "cells": 5619,
+          "longest_edge_median": 0.008541993750454743,
+          "longest_edge_min": 0.0022555231968173508,
+          "longest_edge_max": 0.019593642866536504
+        },
+        "outer contour (within the buffer)": {
+          "cells": 52269,
+          "longest_edge_median": 0.0015066481332293162,
+          "longest_edge_min": 0.0011123283497472488,
+          "longest_edge_max": 0.002448354988506175
+        },
+        "band (between the contours, outside the buffers)": {
+          "cells": 36873,
+          "longest_edge_median": 0.0036201876102699058,
+          "longest_edge_min": 0.0011506180502669188,
+          "longest_edge_max": 0.014817132007747001
+        },
+        "inner contour (within the buffer)": {
+          "cells": 12173,
+          "longest_edge_median": 0.003150364339849353,
+          "longest_edge_min": 0.0021444622807883424,
+          "longest_edge_max": 0.005012145287874931
+        },
+        "interior (inside the inner contour)": {
+          "cells": 34452,
+          "longest_edge_median": 0.013948483410963046,
+          "longest_edge_min": 0.0021444622807883424,
+          "longest_edge_max": 0.020479753539553374
+        },
+        "interior, farther than 4 buffers from the inner contour": {
+          "cells": 19841,
+          "longest_edge_median": 0.015000000000000391,
+          "longest_edge_min": 0.005644044895238426,
+          "longest_edge_max": 0.020479753539553374
+        }
+      }
+    },
+    "mesh_hdg_b": {
+      "num_cells": 285528,
+      "outer_size": 0.001,
+      "inner_size": 0.002,
+      "cell_statistics": {
+        "gap (outside the outer contour)": {
+          "cells": 104897,
+          "longest_edge_median": 0.0010888411707929589,
+          "longest_edge_min": 0.0007403204137156482,
+          "longest_edge_max": 0.020179993711132528
+        },
+        "gap, nearer the wall than the outer contour": {
+          "cells": 5727,
+          "longest_edge_median": 0.008974958595538913,
+          "longest_edge_min": 0.002263935785304152,
+          "longest_edge_max": 0.020179993711132528
+        },
+        "outer contour (within the buffer)": {
+          "cells": 118488,
+          "longest_edge_median": 0.001002233745725245,
+          "longest_edge_min": 0.0006994323745510188,
+          "longest_edge_max": 0.0016874726940398733
+        },
+        "band (between the contours, outside the buffers)": {
+          "cells": 58095,
+          "longest_edge_median": 0.0025015250794613764,
+          "longest_edge_min": 0.0007180430672870001,
+          "longest_edge_max": 0.0138316536220116
+        },
+        "inner contour (within the buffer)": {
+          "cells": 27842,
+          "longest_edge_median": 0.0020141686180088145,
+          "longest_edge_min": 0.0014545631815972423,
+          "longest_edge_max": 0.0032709873275562082
+        },
+        "interior (inside the inner contour)": {
+          "cells": 49424,
+          "longest_edge_median": 0.004177739284837695,
+          "longest_edge_min": 0.0014545631815972423,
+          "longest_edge_max": 0.020583979833752652
+        },
+        "interior, farther than 4 buffers from the inner contour": {
+          "cells": 20347,
+          "longest_edge_median": 0.015000000000000475,
+          "longest_edge_min": 0.005273554985941025,
+          "longest_edge_max": 0.020583979833752652
+        }
+      }
+    },
+    "mesh_hdg_c": {
+      "num_cells": 442242,
+      "outer_size": 0.00075,
+      "inner_size": 0.0015,
+      "cell_statistics": {
+        "gap (outside the outer contour)": {
+          "cells": 165651,
+          "longest_edge_median": 0.0007792583034099325,
+          "longest_edge_min": 0.0005430405896430379,
+          "longest_edge_max": 0.020098201617159188
+        },
+        "gap, nearer the wall than the outer contour": {
+          "cells": 5853,
+          "longest_edge_median": 0.008592522446752657,
+          "longest_edge_min": 0.002258676526325008,
+          "longest_edge_max": 0.020098201617159188
+        },
+        "outer contour (within the buffer)": {
+          "cells": 210843,
+          "longest_edge_median": 0.0007504731097788299,
+          "longest_edge_min": 0.0005430405896430379,
+          "longest_edge_max": 0.001293325984403313
+        },
+        "band (between the contours, outside the buffers)": {
+          "cells": 79310,
+          "longest_edge_median": 0.001921478953146543,
+          "longest_edge_min": 0.0005674170694953003,
+          "longest_edge_max": 0.013747292737499656
+        },
+        "inner contour (within the buffer)": {
+          "cells": 49884,
+          "longest_edge_median": 0.0015064718335755416,
+          "longest_edge_min": 0.0010965278666393735,
+          "longest_edge_max": 0.0027726198188463566
+        },
+        "interior (inside the inner contour)": {
+          "cells": 67135,
+          "longest_edge_median": 0.002249864630464002,
+          "longest_edge_min": 0.0011447684038509258,
+          "longest_edge_max": 0.019770251594367166
+        },
+        "interior, farther than 4 buffers from the inner contour": {
+          "cells": 20642,
+          "longest_edge_median": 0.0150000000000003,
+          "longest_edge_min": 0.004172193212856574,
+          "longest_edge_max": 0.019770251594367166
+        }
+      }
+    }
+  },
+  "finished_utc": "2026-10-22T19:45:33.105916+00:00"
+}

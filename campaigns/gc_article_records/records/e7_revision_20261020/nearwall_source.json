@@ -1,0 +1,58 @@
+{
+  "thickness": 0.03638590374545519,
+  "transects": 1100,
+  "corners": 30,
+  "transects_near_corners": 467,
+  "outer_wall_gap_over_d": {
+    "min": 0.13454724841086912,
+    "mean": 0.27331723807389097
+  },
+  "circulation_period": 333.81368212208974,
+  "band_length": 9.0000306303644,
+  "inner_width_over_d": {
+    "min": 0.42838288579283157,
+    "mean": 0.489176786474308,
+    "max": 0.6220593808799874
+  },
+  "outer_width_over_d": {
+    "min": 0.032587444723363564,
+    "mean": 0.04814165873204272,
+    "max": 0.07366019905573712
+  },
+  "inner_width_over_cell_base": {
+    "min": 4.155183061424448,
+    "mean": 5.731357716488342,
+    "near_corners_min": 4.2698430256896325
+  },
+  "inner_cell_base": {
+    "mean": 0.003117955933968752,
+    "max": 0.0041011141133249
+  },
+  "outer_width_over_cell_base": {
+    "min": 0.4083160622538049,
+    "mean": 0.5688904461892631,
+    "near_corners_min": 0.4083160622538049
+  },
+  "outer_cell_base": {
+    "mean": 0.0030895514312859755,
+    "max": 0.004078359080188099
+  },
+  "inner_width_over_cell_fine": {
+    "min": 8.448631299779947,
+    "mean": 11.626156965009253,
+    "near_corners_min": 8.448631299779947
+  },
+  "inner_cell_fine": {
+    "mean": 0.0015342259215698807,
+    "max": 0.001980118681047748
+  },
+  "outer_width_over_cell_fine": {
+    "min": 0.7221400274682398,
+    "mean": 1.1546544436758255,
+    "near_corners_min": 0.7221400274682398
+  },
+  "outer_cell_fine": {
+    "mean": 0.0015187484103440624,
+    "max": 0.0018757234162315414
+  }
+}

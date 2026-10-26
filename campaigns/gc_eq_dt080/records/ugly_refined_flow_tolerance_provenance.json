@@ -1,0 +1,7 @@
+{
+  "saved_fields": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman_raytol1e13_attempt_1792160181/branch/audit_mesh.npz",
+  "sha256": "832eaee6a06b9a631b26fccedf46c24e9c42261959e5cef4743b96ab2bf48df7",
+  "diagnostic": "ugly_refined_flow_tolerance.json",
+  "pde_solve_performed": false,
+  "threads": 4
+}

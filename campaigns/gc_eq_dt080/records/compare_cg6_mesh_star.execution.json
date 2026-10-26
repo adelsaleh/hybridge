@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "-m",
+    "projects.diocotron.studies.equilibrium_catalog.check_refinement",
+    "--coarse",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/star/star_dt080_cg6_20261016.npz",
+    "--fine",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/star_dt080_cg6_refined_20261016.npz",
+    "--quadrature",
+    "8",
+    "12",
+    "--output",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/refinement.json"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 160.7287074730266,
+  "peak_cpu_cores": 1.0059424646896478,
+  "peak_active_ranks": 1,
+  "peak_sum_rank_rss_bytes": 1655144448,
+  "monitored_argument": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/refinement.json",
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/compare_cg6_mesh_star_1792160083.log"
+}

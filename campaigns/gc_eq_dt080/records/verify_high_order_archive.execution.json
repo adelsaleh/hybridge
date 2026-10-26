@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "-m",
+    "projects.diocotron.dolfinx.equilibrium_archive",
+    "--archive",
+    "/home/adelsaleh/src/gc-hdg-article/equilibria",
+    "verify"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 40.38286074902862,
+  "peak_cpu_cores": 0.0,
+  "peak_active_ranks": 0,
+  "peak_sum_rank_rss_bytes": 0,
+  "monitored_argument": "verify",
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/verify_high_order_archive_1792161679.log"
+}

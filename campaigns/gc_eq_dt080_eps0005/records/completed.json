@@ -1,0 +1,13 @@
+{
+  "status": "complete",
+  "failures": [],
+  "finished": 1792244322.6089306,
+  "target_relative_epsilon": 0.005,
+  "accepted_geometries": [
+    "horseshoe",
+    "iter",
+    "star",
+    "uglypacman"
+  ],
+  "guiding_center_evolution_performed": false
+}

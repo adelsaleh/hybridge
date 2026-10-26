@@ -1,0 +1,137 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 32764017941,
+  "file_count": 406,
+  "subdirectories": 13,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "EXTENSION_B_DONE",
+    "EXTENSION_C_DONE"
+  ],
+  "copied": [
+    {
+      "path": "EXTENSION_B_DONE",
+      "copy": "EXTENSION_B_DONE",
+      "bytes": 375,
+      "sha256": "8a39e420b10092df1c551bc258efe4d9e3da35de38efab10ea654bf6894eeb5c"
+    },
+    {
+      "path": "EXTENSION_C_DONE",
+      "copy": "EXTENSION_C_DONE",
+      "bytes": 305,
+      "sha256": "3e1f3b8152aa05422c1fabbcd40c5189ba76792b9596336bd0d1aa91f752fcac"
+    },
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 8936,
+      "sha256": "2a342be563353f6cc00373c002754f6c86cbc079db974eea51699aa419229b73"
+    },
+    {
+      "path": "continuation_launch.json",
+      "copy": "continuation_launch.json",
+      "bytes": 268,
+      "sha256": "c9570d04f5a15446021a7b08ddc38f78e15118913a88c7a90cb0150a99af60f1"
+    },
+    {
+      "path": "extension_a_launch.json",
+      "copy": "extension_a_launch.json",
+      "bytes": 232,
+      "sha256": "c0985809954c456d2466b60f08440db2087f4cc1869713cf6f8b07375199aad6"
+    },
+    {
+      "path": "extension_a_partial.json",
+      "copy": "extension_a_partial.json",
+      "bytes": 399,
+      "sha256": "dfcba975b77a5699e14f41a74caa7948ca2122b313bae1815d6f88a4ee93e585"
+    },
+    {
+      "path": "extension_b_launch.json",
+      "copy": "extension_b_launch.json",
+      "bytes": 221,
+      "sha256": "b966ab8839cc2c4d18eaa1d01850ad7c41d64b14ffd1a6f8aa566ed61d99bb58"
+    },
+    {
+      "path": "extension_c_launch.json",
+      "copy": "extension_c_launch.json",
+      "bytes": 186,
+      "sha256": "73be725416c11ebf9a02ba1237bc3379d28a6fa97b6b6358ae27db5cb9d1bcf1"
+    },
+    {
+      "path": "extension_runs_a.jsonl",
+      "copy": "extension_runs_a.jsonl",
+      "bytes": 6187,
+      "sha256": "65e6f0f87cd92c7241896408231c39c53f6db0eebdd79151a89d78ea4aaeaaa7"
+    },
+    {
+      "path": "extension_runs_b.jsonl",
+      "copy": "extension_runs_b.jsonl",
+      "bytes": 6183,
+      "sha256": "cbdd3c65f817529ced6aab981210d267d07af7df4ccac8000289bb6decb90528"
+    },
+    {
+      "path": "extension_runs_c.jsonl",
+      "copy": "extension_runs_c.jsonl",
+      "bytes": 1837,
+      "sha256": "3df7e8c14bdb139bc87b3904714dbf1e2ad93d03c233a7df71cd373fd1ebc4d7"
+    },
+    {
+      "path": "inward_launch.json",
+      "copy": "inward_launch.json",
+      "bytes": 268,
+      "sha256": "dca753d11fca98814f93824330828f1dfcb6c1c9ccb3a327b554f07f82503df0"
+    },
+    {
+      "path": "longtime_analysis.json",
+      "copy": "longtime_analysis.json",
+      "bytes": 26551,
+      "sha256": "60bd315bd28e021beef8b9629e96492c572113d5a741af0f883e17567b64aca5"
+    },
+    {
+      "path": "placement_analysis.json",
+      "copy": "placement_analysis.json",
+      "bytes": 21677,
+      "sha256": "30189596f741a1772bdd02fe0fd07bfe0977bcfd9cc5295019899e5d7dc1b146"
+    },
+    {
+      "path": "placement_launch.json",
+      "copy": "placement_launch.json",
+      "bytes": 123,
+      "sha256": "6fc6ab14b227c2c52626cc1e6fc4db27d5e9b832c8883464ac5e4667b9a5c422"
+    },
+    {
+      "path": "placement_partial.json",
+      "copy": "placement_partial.json",
+      "bytes": 339,
+      "sha256": "c5c2c6ddad6b2ef18541fba9eaa6509859805fe64185d697674d532117a130a9"
+    },
+    {
+      "path": "placement_runs.jsonl",
+      "copy": "placement_runs.jsonl",
+      "bytes": 9332,
+      "sha256": "2828f3e9a2a8967b9d36d354f498d95661b78ea0e7e329d8a1af8351323c99e1"
+    },
+    {
+      "path": "placements.json",
+      "copy": "placements.json",
+      "bytes": 3592,
+      "sha256": "3654e84b363fc2f6ea92a1583566775e51530d09fac72554ac62ec07690e0681"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 55745,
+      "sha256": "7fe0f30c2480c72bf229c382b8cc2f1314da770b926f0609803f2c66f4252462"
+    },
+    {
+      "path": "selected_new.json",
+      "copy": "selected_new.json",
+      "bytes": 132,
+      "sha256": "0fffaac4a6387c08ccd69906fb1ef4d6405df3c1747c97dd7dd6452c83dbcdb0"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

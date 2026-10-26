@@ -1,0 +1,2777 @@
+{
+  "pairs": {
+    "mesh: b vs c": [
+      {
+        "time": 0.0,
+        "E_density": 0.017220011165319384,
+        "E_potential": 0.005559654088229187
+      },
+      {
+        "time": 5.0,
+        "E_density": 0.09491651019484855,
+        "E_potential": 0.0008187995698544936
+      },
+      {
+        "time": 10.0,
+        "E_density": 0.10473917704557931,
+        "E_potential": 0.0004290243868752306
+      },
+      {
+        "time": 15.0,
+        "E_density": 0.09720773191032064,
+        "E_potential": 0.0003728413203555888
+      },
+      {
+        "time": 20.0,
+        "E_density": 0.07079965483572152,
+        "E_potential": 0.00028106937123927424
+      },
+      {
+        "time": 25.0,
+        "E_density": 0.04647717981703071,
+        "E_potential": 0.00019453041799928633
+      },
+      {
+        "time": 30.0,
+        "E_density": 0.032907615268240625,
+        "E_potential": 0.0001011145655414313
+      },
+      {
+        "time": 35.0,
+        "E_density": 0.022225623314389282,
+        "E_potential": 0.00011570705190500133
+      },
+      {
+        "time": 40.0,
+        "E_density": 0.015628967112578288,
+        "E_potential": 0.0008352500114352492
+      },
+      {
+        "time": 45.0,
+        "E_density": 0.015387388615181696,
+        "E_potential": 0.0017778616310859445
+      },
+      {
+        "time": 50.0,
+        "E_density": 0.015699731622162285,
+        "E_potential": 0.002254104187469013
+      },
+      {
+        "time": 55.0,
+        "E_density": 0.025769285544329848,
+        "E_potential": 0.0046374407753229955
+      },
+      {
+        "time": 60.0,
+        "E_density": 0.033875256665556935,
+        "E_potential": 0.004775147333268548
+      },
+      {
+        "time": 65.0,
+        "E_density": 0.031565967763244225,
+        "E_potential": 0.003649598035425331
+      },
+      {
+        "time": 70.0,
+        "E_density": 0.03461112214493888,
+        "E_potential": 0.0030704754186832734
+      },
+      {
+        "time": 75.0,
+        "E_density": 0.044554832087861325,
+        "E_potential": 0.004510519277254807
+      },
+      {
+        "time": 80.0,
+        "E_density": 0.059790630178295306,
+        "E_potential": 0.006134535876252363
+      },
+      {
+        "time": 85.0,
+        "E_density": 0.0882054049066843,
+        "E_potential": 0.0083176242583823
+      },
+      {
+        "time": 90.0,
+        "E_density": 0.0977573398913768,
+        "E_potential": 0.009163504520888885
+      },
+      {
+        "time": 95.0,
+        "E_density": 0.11018231799494545,
+        "E_potential": 0.013462386766123526
+      },
+      {
+        "time": 100.0,
+        "E_density": 0.13134362382864617,
+        "E_potential": 0.014961175963806079
+      }
+    ],
+    "degree on c: 5 vs 6": [
+      {
+        "time": 0.0,
+        "E_density": 0.009076657833682722,
+        "E_potential": 0.003824628046497534
+      },
+      {
+        "time": 5.0,
+        "E_density": 0.07242708284228454,
+        "E_potential": 0.0007208896766028545
+      },
+      {
+        "time": 10.0,
+        "E_density": 0.07947101942380971,
+        "E_potential": 0.00044718456873920774
+      },
+      {
+        "time": 15.0,
+        "E_density": 0.07647277034803093,
+        "E_potential": 0.0003754041257246196
+      },
+      {
+        "time": 20.0,
+        "E_density": 0.055633496762528066,
+        "E_potential": 0.00028122166137425783
+      },
+      {
+        "time": 25.0,
+        "E_density": 0.03756146090134404,
+        "E_potential": 0.00019893173545607368
+      },
+      {
+        "time": 30.0,
+        "E_density": 0.02721087529592762,
+        "E_potential": 0.00013336567709338232
+      },
+      {
+        "time": 35.0,
+        "E_density": 0.020075449108270214,
+        "E_potential": 0.00020744070298688578
+      },
+      {
+        "time": 40.0,
+        "E_density": 0.0231336546365521,
+        "E_potential": 0.0009916042353097863
+      },
+      {
+        "time": 45.0,
+        "E_density": 0.030610502346120182,
+        "E_potential": 0.0022945207829959237
+      },
+      {
+        "time": 50.0,
+        "E_density": 0.03823516071947257,
+        "E_potential": 0.003254557965401653
+      },
+      {
+        "time": 55.0,
+        "E_density": 0.06438756426822508,
+        "E_potential": 0.007650659081506005
+      },
+      {
+        "time": 60.0,
+        "E_density": 0.11018582740221118,
+        "E_potential": 0.010536189950275198
+      },
+      {
+        "time": 65.0,
+        "E_density": 0.16663107971100008,
+        "E_potential": 0.017609679712058176
+      },
+      {
+        "time": 70.0,
+        "E_density": 0.25158410916114166,
+        "E_potential": 0.031483901761558235
+      },
+      {
+        "time": 75.0,
+        "E_density": 0.3931915588542583,
+        "E_potential": 0.06987831008520698
+      },
+      {
+        "time": 80.0,
+        "E_density": 0.5235913772129365,
+        "E_potential": 0.08405285791144498
+      },
+      {
+        "time": 85.0,
+        "E_density": 0.5927190312250853,
+        "E_potential": 0.10791189082753141
+      },
+      {
+        "time": 90.0,
+        "E_density": 0.6253977544174633,
+        "E_potential": 0.13299428243840097
+      },
+      {
+        "time": 95.0,
+        "E_density": 0.6478594575507233,
+        "E_potential": 0.21740030185485473
+      },
+      {
+        "time": 100.0,
+        "E_density": 0.7183904410162673,
+        "E_potential": 0.2502268493171006
+      }
+    ],
+    "degree on b: 5 vs 6": [
+      {
+        "time": 0.0,
+        "E_density": 0.027220649319893278,
+        "E_potential": 0.012658314736595462
+      },
+      {
+        "time": 5.0,
+        "E_density": 0.12111423806563049,
+        "E_potential": 0.0016887142453073623
+      },
+      {
+        "time": 10.0,
+        "E_density": 0.13152335154646919,
+        "E_potential": 0.0008924650812464632
+      },
+      {
+        "time": 15.0,
+        "E_density": 0.13007199714322493,
+        "E_potential": 0.0007832229194609092
+      },
+      {
+        "time": 20.0,
+        "E_density": 0.10757159016414791,
+        "E_potential": 0.0006368544359181837
+      },
+      {
+        "time": 25.0,
+        "E_density": 0.06998842436167575,
+        "E_potential": 0.0004518886720851224
+      },
+      {
+        "time": 30.0,
+        "E_density": 0.048581080571317235,
+        "E_potential": 0.00025349262454664055
+      },
+      {
+        "time": 35.0,
+        "E_density": 0.03401554772166714,
+        "E_potential": 0.00026761139830785307
+      },
+      {
+        "time": 40.0,
+        "E_density": 0.029281598805107403,
+        "E_potential": 0.0011667313425704389
+      },
+      {
+        "time": 45.0,
+        "E_density": 0.03299364189230567,
+        "E_potential": 0.0026381468354220983
+      },
+      {
+        "time": 50.0,
+        "E_density": 0.040117250801355545,
+        "E_potential": 0.0035844952166060023
+      },
+      {
+        "time": 55.0,
+        "E_density": 0.0641129552366497,
+        "E_potential": 0.00807698886665966
+      },
+      {
+        "time": 60.0,
+        "E_density": 0.11065434147459675,
+        "E_potential": 0.010445200501929645
+      },
+      {
+        "time": 65.0,
+        "E_density": 0.16864814246598003,
+        "E_potential": 0.017978958504327267
+      },
+      {
+        "time": 70.0,
+        "E_density": 0.25466014020023797,
+        "E_potential": 0.03231651832498953
+      },
+      {
+        "time": 75.0,
+        "E_density": 0.39856995560533987,
+        "E_potential": 0.07165424794921199
+      },
+      {
+        "time": 80.0,
+        "E_density": 0.5284540207067622,
+        "E_potential": 0.0853483915337141
+      },
+      {
+        "time": 85.0,
+        "E_density": 0.5950366618179205,
+        "E_potential": 0.10940264632308992
+      },
+      {
+        "time": 90.0,
+        "E_density": 0.6294622052839511,
+        "E_potential": 0.13612281386173167
+      },
+      {
+        "time": 95.0,
+        "E_density": 0.6544816103161799,
+        "E_potential": 0.2231564732598606
+      },
+      {
+        "time": 100.0,
+        "E_density": 0.7252631245341379,
+        "E_potential": 0.254435030861566
+      }
+    ],
+    "time on b: 0.05 vs 0.025": [
+      {
+        "time": 0.0,
+        "E_density": 0.0,
+        "E_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "E_density": 0.00564009938312525,
+        "E_potential": 0.001632040199885293
+      },
+      {
+        "time": 10.0,
+        "E_density": 0.0059733412759742045,
+        "E_potential": 0.0018896119568939183
+      },
+      {
+        "time": 15.0,
+        "E_density": 0.00513040532525649,
+        "E_potential": 0.0021739402379159036
+      },
+      {
+        "time": 20.0,
+        "E_density": 0.004501528562746503,
+        "E_potential": 0.002539586610634369
+      },
+      {
+        "time": 25.0,
+        "E_density": 0.005084898770608993,
+        "E_potential": 0.0031893202841785325
+      },
+      {
+        "time": 30.0,
+        "E_density": 0.00896534128795134,
+        "E_potential": 0.0037611819999530233
+      },
+      {
+        "time": 35.0,
+        "E_density": 0.025509756362245506,
+        "E_potential": 0.0042800827986506544
+      },
+      {
+        "time": 40.0,
+        "E_density": 0.048217771546679486,
+        "E_potential": 0.0046996173438105865
+      },
+      {
+        "time": 45.0,
+        "E_density": 0.0580779208190664,
+        "E_potential": 0.00482277885305809
+      },
+      {
+        "time": 50.0,
+        "E_density": 0.07993318017672278,
+        "E_potential": 0.004491775701069843
+      },
+      {
+        "time": 55.0,
+        "E_density": 0.10996385453768905,
+        "E_potential": 0.004539533632558627
+      },
+      {
+        "time": 60.0,
+        "E_density": 0.13621570917146028,
+        "E_potential": 0.005658927448344855
+      },
+      {
+        "time": 65.0,
+        "E_density": 0.1315651321779714,
+        "E_potential": 0.00868952628224589
+      },
+      {
+        "time": 70.0,
+        "E_density": 0.13968324003418503,
+        "E_potential": 0.008156548774669063
+      },
+      {
+        "time": 75.0,
+        "E_density": 0.16421439916575128,
+        "E_potential": 0.01076870855030438
+      },
+      {
+        "time": 80.0,
+        "E_density": 0.20433705015064357,
+        "E_potential": 0.013080863795883307
+      },
+      {
+        "time": 85.0,
+        "E_density": 0.2703158691642835,
+        "E_potential": 0.017427759765883784
+      },
+      {
+        "time": 90.0,
+        "E_density": 0.32666774819359357,
+        "E_potential": 0.020662738509852795
+      },
+      {
+        "time": 95.0,
+        "E_density": 0.3384537425879989,
+        "E_potential": 0.025366154589623276
+      },
+      {
+        "time": 100.0,
+        "E_density": 0.36585759637706106,
+        "E_potential": 0.030915868393532435
+      }
+    ],
+    "time on b: 0.025 vs 0.0125": [
+      {
+        "time": 0.0,
+        "E_density": 0.0,
+        "E_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "E_density": 0.0019335304329200812,
+        "E_potential": 0.0004123935549152573
+      },
+      {
+        "time": 10.0,
+        "E_density": 0.001800748079491949,
+        "E_potential": 0.00047587670642103416
+      },
+      {
+        "time": 15.0,
+        "E_density": 0.0014570156622521443,
+        "E_potential": 0.0005464424581093435
+      },
+      {
+        "time": 20.0,
+        "E_density": 0.0012468891832912014,
+        "E_potential": 0.0006404383540421888
+      },
+      {
+        "time": 25.0,
+        "E_density": 0.0013328152206583596,
+        "E_potential": 0.0008015535070444447
+      },
+      {
+        "time": 30.0,
+        "E_density": 0.002299641000775057,
+        "E_potential": 0.0009455561845680662
+      },
+      {
+        "time": 35.0,
+        "E_density": 0.007706851390229633,
+        "E_potential": 0.0010758845351159507
+      },
+      {
+        "time": 40.0,
+        "E_density": 0.02374550481673252,
+        "E_potential": 0.0011946149813427192
+      },
+      {
+        "time": 45.0,
+        "E_density": 0.033289808480461744,
+        "E_potential": 0.0012806268099245452
+      },
+      {
+        "time": 50.0,
+        "E_density": 0.053444120532140496,
+        "E_potential": 0.00148619204087415
+      },
+      {
+        "time": 55.0,
+        "E_density": 0.06937391349736664,
+        "E_potential": 0.0019404594100163807
+      },
+      {
+        "time": 60.0,
+        "E_density": 0.09129094516215798,
+        "E_potential": 0.002755985010858618
+      },
+      {
+        "time": 65.0,
+        "E_density": 0.09045393852400438,
+        "E_potential": 0.003211961241775028
+      },
+      {
+        "time": 70.0,
+        "E_density": 0.09017616441311725,
+        "E_potential": 0.0031988477269127287
+      },
+      {
+        "time": 75.0,
+        "E_density": 0.10511253885146467,
+        "E_potential": 0.004956524485445294
+      },
+      {
+        "time": 80.0,
+        "E_density": 0.1360505496153949,
+        "E_potential": 0.004745418146631494
+      },
+      {
+        "time": 85.0,
+        "E_density": 0.18549617483553393,
+        "E_potential": 0.006469966648971705
+      },
+      {
+        "time": 90.0,
+        "E_density": 0.2381523307119594,
+        "E_potential": 0.00836197962712768
+      },
+      {
+        "time": 95.0,
+        "E_density": 0.2510659168145264,
+        "E_potential": 0.010871214369053217
+      },
+      {
+        "time": 100.0,
+        "E_density": 0.2730863240283903,
+        "E_potential": 0.01428681561047613
+      }
+    ]
+  },
+  "linear": {
+    "c_p6_dt0p025": [
+      {
+        "time": 0.0,
+        "D_density": 0.13195589670155083,
+        "linear_density": 219.886257308346,
+        "nonlinear_density": 219.2414571741721,
+        "D_potential": 0.0022108032496540413,
+        "linear_potential": 0.022289270402567993,
+        "nonlinear_potential": 0.022285109367987565,
+        "D_large_density": 0.25606909442559445,
+        "nonlinear_large_density": 217.38701396432117,
+        "D_large_potential": 0.004346219148417864,
+        "nonlinear_large_potential": 0.022280978176338652,
+        "D_small_density": 0.06647645876588203,
+        "nonlinear_small_density": 219.72381382673296,
+        "D_small_potential": 0.0011091893420446999,
+        "nonlinear_small_potential": 0.022287186490640706
+      },
+      {
+        "time": 5.0,
+        "D_density": 0.1608155074702228,
+        "linear_density": 304.35961960904837,
+        "nonlinear_density": 302.42258061471625,
+        "D_potential": 0.0018214456254415036,
+        "linear_potential": 0.04234484390139468,
+        "nonlinear_potential": 0.04235257665518055,
+        "D_large_density": 0.30333961300976137,
+        "nonlinear_large_density": 298.9709108596272,
+        "D_large_potential": 0.0036247273250266283,
+        "nonlinear_large_potential": 0.042360124430129695,
+        "D_small_density": 0.08851425883510114,
+        "nonlinear_small_density": 303.3143242219124,
+        "D_small_potential": 0.0009301509961831115,
+        "nonlinear_small_potential": 0.0423487885579081
+      },
+      {
+        "time": 10.0,
+        "D_density": 0.251212442897027,
+        "linear_density": 547.1685817979355,
+        "nonlinear_density": 538.9048749174209,
+        "D_potential": 0.002578003763133143,
+        "linear_potential": 0.08432424722211596,
+        "nonlinear_potential": 0.08436271561749456,
+        "D_large_density": 0.45653041625696833,
+        "nonlinear_large_density": 524.2913733576821,
+        "D_large_potential": 0.005165083115537404,
+        "nonlinear_large_potential": 0.08440132334847962,
+        "D_small_density": 0.13871430312621125,
+        "nonlinear_small_density": 542.8816577371962,
+        "D_small_potential": 0.0012954975820712257,
+        "nonlinear_small_potential": 0.08434340125154902
+      },
+      {
+        "time": 15.0,
+        "D_density": 0.39757799151042367,
+        "linear_density": 1033.1961797120396,
+        "nonlinear_density": 999.285483569646,
+        "D_potential": 0.005261501401126758,
+        "linear_potential": 0.1511035066270414,
+        "nonlinear_potential": 0.15118260733818792,
+        "D_large_density": 0.6501754747788699,
+        "nonlinear_large_density": 935.3600100120369,
+        "D_large_potential": 0.010597491888555372,
+        "nonlinear_large_potential": 0.1512618167005625,
+        "D_small_density": 0.21653868527448775,
+        "nonlinear_small_density": 1019.9334343189477,
+        "D_small_potential": 0.002606670573735823,
+        "nonlinear_small_potential": 0.1511428321450517
+      },
+      {
+        "time": 20.0,
+        "D_density": 0.6008755171918515,
+        "linear_density": 1955.8110728540391,
+        "nonlinear_density": 1801.6608507840222,
+        "D_potential": 0.010553429227143694,
+        "linear_potential": 0.27309919015615275,
+        "nonlinear_potential": 0.273125556790286,
+        "D_large_density": 0.8142314961547258,
+        "nonlinear_large_density": 1581.5773202207386,
+        "D_large_potential": 0.02125791953364943,
+        "nonlinear_large_potential": 0.2731442760179945,
+        "D_small_density": 0.35262032748115957,
+        "nonlinear_small_density": 1902.2167669398505,
+        "D_small_potential": 0.0052177256666802035,
+        "nonlinear_small_potential": 0.273113800555991
+      },
+      {
+        "time": 25.0,
+        "D_density": 0.7834237577816089,
+        "linear_density": 3736.8021011419255,
+        "nonlinear_density": 3101.055780338295,
+        "D_potential": 0.020017096939570805,
+        "linear_potential": 0.5204295282066972,
+        "nonlinear_potential": 0.5204018771363008,
+        "D_large_density": 0.9030728453907898,
+        "nonlinear_large_density": 2566.9509196665904,
+        "D_large_potential": 0.04024196787173476,
+        "nonlinear_large_potential": 0.5203166244588021,
+        "D_small_density": 0.5557319320075047,
+        "nonlinear_small_density": 3483.233697235292,
+        "D_small_potential": 0.009899753379015974,
+        "nonlinear_small_potential": 0.5204234619091588
+      },
+      {
+        "time": 30.0,
+        "D_density": 0.8915078145040937,
+        "linear_density": 7304.13073808136,
+        "nonlinear_density": 5142.107623029974,
+        "D_potential": 0.03400915257317898,
+        "linear_potential": 1.1134038892715086,
+        "nonlinear_potential": 1.1160953896253192,
+        "D_large_density": 0.9479808425102023,
+        "nonlinear_large_density": 4093.333888348184,
+        "D_large_potential": 0.06845515571038374,
+        "nonlinear_large_potential": 1.1183979752386202,
+        "D_small_density": 0.7567935884157616,
+        "nonlinear_small_density": 6176.464497236709,
+        "D_small_potential": 0.01680983909990464,
+        "nonlinear_small_potential": 1.1147979458747344
+      },
+      {
+        "time": 35.0,
+        "D_density": 0.9444538614375574,
+        "linear_density": 15065.120224798913,
+        "nonlinear_density": 8409.223403722854,
+        "D_potential": 0.05975866180405811,
+        "linear_potential": 2.510886525564605,
+        "nonlinear_potential": 2.506669218784902,
+        "D_large_density": 0.9727696549349426,
+        "nonlinear_large_density": 6546.482935181867,
+        "D_large_potential": 0.11998736140529666,
+        "nonlinear_large_potential": 2.4994174961371085,
+        "D_small_density": 0.8865605913601302,
+        "nonlinear_small_density": 10574.101856112353,
+        "D_small_potential": 0.029572111030124023,
+        "nonlinear_small_potential": 2.509125521063309
+      },
+      {
+        "time": 40.0,
+        "D_density": 0.9716195542926037,
+        "linear_density": 33343.533809131164,
+        "nonlinear_density": 13825.484279817863,
+        "D_potential": 0.11343531056647536,
+        "linear_potential": 6.056888263815854,
+        "nonlinear_potential": 6.0110446035982585,
+        "D_large_density": 0.9877502543252693,
+        "nonlinear_large_density": 10525.626013628575,
+        "D_large_potential": 0.226298513439616,
+        "nonlinear_large_potential": 5.93392206485411,
+        "D_small_density": 0.944271148693301,
+        "nonlinear_small_density": 17796.948824475636,
+        "D_small_potential": 0.05639506268097776,
+        "nonlinear_small_potential": 6.037438503981726
+      },
+      {
+        "time": 45.0,
+        "D_density": 0.9868465739239406,
+        "linear_density": 77143.18907215403,
+        "nonlinear_density": 22680.32100875631,
+        "D_potential": 0.23563631664769183,
+        "linear_potential": 14.8602956518171,
+        "nonlinear_potential": 14.663759693873764,
+        "D_large_density": 0.9963868241678454,
+        "nonlinear_large_density": 16278.60328791781,
+        "D_large_potential": 0.4362602732327921,
+        "nonlinear_large_potential": 13.658131636860263,
+        "D_small_density": 0.9704977590878541,
+        "nonlinear_small_density": 29873.492726756016,
+        "D_small_potential": 0.11813959821118084,
+        "nonlinear_small_potential": 14.836049804710926
+      },
+      {
+        "time": 50.0,
+        "D_density": 0.9946015272761745,
+        "linear_density": 183944.5000024288,
+        "nonlinear_density": 33901.3255196335,
+        "D_potential": 0.4572041650761814,
+        "linear_potential": 36.126574036284026,
+        "nonlinear_potential": 30.19129043113783,
+        "D_large_density": 0.9969724813980992,
+        "nonlinear_large_density": 19708.014349512257,
+        "D_large_potential": 0.6964274696265208,
+        "nonlinear_large_potential": 20.121537880983613,
+        "D_small_density": 0.9856055970564793,
+        "nonlinear_small_density": 49775.80196159324,
+        "D_small_potential": 0.2516767456456599,
+        "nonlinear_small_potential": 34.79370741066853
+      },
+      {
+        "time": 55.0,
+        "D_density": 0.995832675184575,
+        "linear_density": 451012.2777366171,
+        "nonlinear_density": 41123.12931153396,
+        "D_potential": 0.7038407024472559,
+        "linear_potential": 89.64576972901298,
+        "nonlinear_potential": 42.93249047626072,
+        "D_large_density": 0.9977036542518761,
+        "nonlinear_large_density": 21262.763228649586,
+        "D_large_potential": 0.8642415533160909,
+        "nonlinear_large_potential": 23.692406750583,
+        "D_small_density": 0.9930363490473751,
+        "nonlinear_small_density": 72218.1986577931,
+        "D_small_potential": 0.48508782260792394,
+        "nonlinear_small_potential": 70.23493361193333
+      },
+      {
+        "time": 60.0,
+        "D_density": 0.9972539533021492,
+        "linear_density": 1096178.5217490715,
+        "nonlinear_density": 43242.15320975208,
+        "D_potential": 0.8795073581295776,
+        "linear_potential": 219.03936625618027,
+        "nonlinear_potential": 47.24366320464293,
+        "D_large_density": 0.9987864972423423,
+        "nonlinear_large_density": 23128.89252463653,
+        "D_large_potential": 0.9509985890115903,
+        "nonlinear_large_potential": 27.30747657560454,
+        "D_small_density": 0.9960929027311061,
+        "nonlinear_small_density": 83337.55696155819,
+        "D_small_potential": 0.7614971091750742,
+        "nonlinear_small_potential": 87.77655921151771
+      },
+      {
+        "time": 65.0,
+        "D_density": 0.9987438228639287,
+        "linear_density": 2619799.1416865145,
+        "nonlinear_density": 47253.13312132955,
+        "D_potential": 0.9552679706478916,
+        "linear_potential": 512.7813066991655,
+        "nonlinear_potential": 52.65629120227603,
+        "D_large_density": 0.9995305208619899,
+        "nonlinear_large_density": 24456.49368506435,
+        "D_large_potential": 0.9920277787757686,
+        "nonlinear_large_potential": 32.2847826741641,
+        "D_small_density": 0.9973112345628964,
+        "nonlinear_small_density": 88277.43912637234,
+        "D_small_potential": 0.9034474433510844,
+        "nonlinear_small_potential": 91.88002187072735
+      },
+      {
+        "time": 70.0,
+        "D_density": 0.9994906441913366,
+        "linear_density": 6212905.762169039,
+        "nonlinear_density": 50484.99376552202,
+        "D_potential": 0.9807188643359396,
+        "linear_potential": 1198.8353897797,
+        "nonlinear_potential": 65.47926597312144,
+        "D_large_density": 0.999792689133986,
+        "nonlinear_large_density": 27084.411369825106,
+        "D_large_potential": 0.9984526440579283,
+        "nonlinear_large_potential": 41.068158916097445,
+        "D_small_density": 0.9987925306844431,
+        "nonlinear_small_density": 100410.10751548002,
+        "D_small_potential": 0.9511691445440833,
+        "nonlinear_small_potential": 115.47414221178796
+      },
+      {
+        "time": 75.0,
+        "D_density": 0.9997968450431297,
+        "linear_density": 14411788.78662128,
+        "nonlinear_density": 54421.55692270964,
+        "D_potential": 0.9967853207598645,
+        "linear_potential": 2743.3452002406743,
+        "nonlinear_potential": 76.69875732649884,
+        "D_large_density": 0.9998907787313899,
+        "nonlinear_large_density": 29095.943464850097,
+        "D_large_potential": 1.000047327755114,
+        "nonlinear_large_potential": 49.64362537423404,
+        "D_small_density": 0.9994737550473503,
+        "nonlinear_small_density": 109615.34675099637,
+        "D_small_potential": 0.9842355429111892,
+        "nonlinear_small_potential": 137.08934238883802
+      },
+      {
+        "time": 80.0,
+        "D_density": 0.9999225092340166,
+        "linear_density": 32353093.92286053,
+        "nonlinear_density": 61736.875927538335,
+        "D_potential": 1.0006413766780473,
+        "linear_potential": 5889.685671369467,
+        "nonlinear_potential": 94.06737422904018,
+        "D_large_density": 0.9999562676636071,
+        "nonlinear_large_density": 32865.44525229123,
+        "D_large_potential": 0.9993173433182937,
+        "nonlinear_large_potential": 61.26567708242053,
+        "D_small_density": 0.9998532097068612,
+        "nonlinear_small_density": 120435.15264861264,
+        "D_small_potential": 0.9952725407755464,
+        "nonlinear_small_potential": 168.3329048101838
+      },
+      {
+        "time": 85.0,
+        "D_density": 0.999965302728939,
+        "linear_density": 70630819.45457575,
+        "nonlinear_density": 64828.06635095043,
+        "D_potential": 0.9993033098717491,
+        "linear_potential": 12292.747904259108,
+        "nonlinear_potential": 98.36487402172231,
+        "D_large_density": 0.9999828910936861,
+        "nonlinear_large_density": 34018.129469284446,
+        "D_large_potential": 0.9979302068662294,
+        "nonlinear_large_potential": 76.26289520612248,
+        "D_small_density": 0.9999659495495702,
+        "nonlinear_small_density": 122904.27478890629,
+        "D_small_potential": 0.9992922341434088,
+        "nonlinear_small_potential": 173.6165460446705
+      },
+      {
+        "time": 90.0,
+        "D_density": 0.9999808621929271,
+        "linear_density": 151601185.99906066,
+        "nonlinear_density": 66331.57330006131,
+        "D_potential": 0.9985177139995222,
+        "linear_potential": 25987.031617396176,
+        "nonlinear_potential": 105.41083599775993,
+        "D_large_density": 0.9999935819103383,
+        "nonlinear_large_density": 35783.799375036884,
+        "D_large_potential": 0.9990699434148699,
+        "nonlinear_large_potential": 73.30327523219553,
+        "D_small_density": 0.9999872483050641,
+        "nonlinear_small_density": 125998.70640025538,
+        "D_small_potential": 0.9988111316818361,
+        "nonlinear_small_potential": 211.61425876944912
+      },
+      {
+        "time": 95.0,
+        "D_density": 0.9999943653526163,
+        "linear_density": 318989273.5742115,
+        "nonlinear_density": 69896.5673099535,
+        "D_potential": 0.9995332083658129,
+        "linear_potential": 53635.10647763653,
+        "nonlinear_potential": 102.22624850295213,
+        "D_large_density": 0.999998189309938,
+        "nonlinear_large_density": 36697.74651183805,
+        "D_large_potential": 0.9999736923984359,
+        "nonlinear_large_potential": 62.21854357715637,
+        "D_small_density": 0.9999925333147547,
+        "nonlinear_small_density": 125426.24519582027,
+        "D_small_potential": 1.0001296050314377,
+        "nonlinear_small_potential": 227.01981647520077
+      },
+      {
+        "time": 100.0,
+        "D_density": 0.9999984214956796,
+        "linear_density": 659480025.694558,
+        "nonlinear_density": 71359.11672552835,
+        "D_potential": 0.9998632834340694,
+        "linear_potential": 104972.93177891507,
+        "nonlinear_potential": 125.62234021751557,
+        "D_large_density": 0.9999998882490483,
+        "nonlinear_large_density": 36368.93933932597,
+        "D_large_potential": 0.9999939579617805,
+        "nonlinear_large_potential": 72.41892558989552,
+        "D_small_density": 0.9999993571062041,
+        "nonlinear_small_density": 125782.82420394866,
+        "D_small_potential": 0.9996125525421637,
+        "nonlinear_small_potential": 220.8231684010734
+      }
+    ],
+    "c_p5_dt0p025": [
+      {
+        "time": 0.0,
+        "D_density": 0.13184990214564507,
+        "linear_density": 219.87557965561032,
+        "nonlinear_density": 219.23242580578437,
+        "D_potential": 0.002749878481486318,
+        "linear_potential": 0.0222894390133815,
+        "nonlinear_potential": 0.022285266696603682
+      },
+      {
+        "time": 5.0,
+        "D_density": 0.16561317257376754,
+        "linear_density": 303.1354424006095,
+        "nonlinear_density": 299.843811531394,
+        "D_potential": 0.0019233219435482976,
+        "linear_potential": 0.04234487477292453,
+        "nonlinear_potential": 0.0423526289884685
+      },
+      {
+        "time": 10.0,
+        "D_density": 0.25723427519738573,
+        "linear_density": 546.70392956656,
+        "nonlinear_density": 533.6257456547152,
+        "D_potential": 0.0026635077823897856,
+        "linear_potential": 0.08432426096310688,
+        "nonlinear_potential": 0.08436267245614185
+      },
+      {
+        "time": 15.0,
+        "D_density": 0.3912727545161876,
+        "linear_density": 1031.4696224088061,
+        "nonlinear_density": 990.2739679291478,
+        "D_potential": 0.005309995134729294,
+        "linear_potential": 0.15110347289951423,
+        "nonlinear_potential": 0.15118241377124295
+      },
+      {
+        "time": 20.0,
+        "D_density": 0.5903776110996034,
+        "linear_density": 1951.9225241783076,
+        "nonlinear_density": 1791.9606605801523,
+        "D_potential": 0.010564079063218455,
+        "linear_potential": 0.273099101200486,
+        "nonlinear_potential": 0.2731256424697839
+      },
+      {
+        "time": 25.0,
+        "D_density": 0.7794436935428708,
+        "linear_density": 3727.8861860945067,
+        "nonlinear_density": 3093.782252286204,
+        "D_potential": 0.01998948770363608,
+        "linear_potential": 0.5204292162582785,
+        "nonlinear_potential": 0.5204017494262752
+      },
+      {
+        "time": 30.0,
+        "D_density": 0.8890897701904709,
+        "linear_density": 7281.108970507219,
+        "nonlinear_density": 5136.183164304434,
+        "D_potential": 0.03394200790886615,
+        "linear_potential": 1.1134034055472433,
+        "nonlinear_potential": 1.1160952856359365
+      },
+      {
+        "time": 35.0,
+        "D_density": 0.9426660274678322,
+        "linear_density": 15010.94793310005,
+        "nonlinear_density": 8404.648236488374,
+        "D_potential": 0.05963291081086991,
+        "linear_potential": 2.5108866225718205,
+        "nonlinear_potential": 2.506674081078934
+      },
+      {
+        "time": 40.0,
+        "D_density": 0.9701916112653252,
+        "linear_density": 33207.6924083628,
+        "nonlinear_density": 13818.7812667449,
+        "D_potential": 0.11320309038929335,
+        "linear_potential": 6.056889111312968,
+        "nonlinear_potential": 6.011136727105458
+      },
+      {
+        "time": 45.0,
+        "D_density": 0.9857718970283792,
+        "linear_density": 76781.16951312068,
+        "nonlinear_density": 22667.3799001362,
+        "D_potential": 0.23522146313091422,
+        "linear_potential": 14.860302979075374,
+        "nonlinear_potential": 14.663735380154609
+      },
+      {
+        "time": 50.0,
+        "D_density": 0.9939139783219566,
+        "linear_density": 183105.97761357,
+        "nonlinear_density": 33891.25723473325,
+        "D_potential": 0.45657362805973056,
+        "linear_potential": 36.12660824057211,
+        "nonlinear_potential": 30.200901556865926
+      },
+      {
+        "time": 55.0,
+        "D_density": 0.9955623050483241,
+        "linear_density": 449085.5254520564,
+        "nonlinear_density": 41090.9373977487,
+        "D_potential": 0.7030969368488078,
+        "linear_potential": 89.64585632657364,
+        "nonlinear_potential": 42.961777392981745
+      },
+      {
+        "time": 60.0,
+        "D_density": 0.997170829188863,
+        "linear_density": 1091405.8960318416,
+        "nonlinear_density": 43202.31170807055,
+        "D_potential": 0.8787801219292533,
+        "linear_potential": 219.03960884287162,
+        "nonlinear_potential": 47.36369359773113
+      },
+      {
+        "time": 65.0,
+        "D_density": 0.9986963713795839,
+        "linear_density": 2608953.294869402,
+        "nonlinear_density": 47229.82197909079,
+        "D_potential": 0.954410349489227,
+        "linear_potential": 512.7820320890453,
+        "nonlinear_potential": 52.857548778592474
+      },
+      {
+        "time": 70.0,
+        "D_density": 0.9994763951214091,
+        "linear_density": 6189446.106663147,
+        "nonlinear_density": 50555.06818185854,
+        "D_potential": 0.9797894926166717,
+        "linear_potential": 1198.8367747676098,
+        "nonlinear_potential": 65.73817498213299
+      },
+      {
+        "time": 75.0,
+        "D_density": 0.9997923307202574,
+        "linear_density": 14359892.371006154,
+        "nonlinear_density": 54866.04643079609,
+        "D_potential": 0.9956523052876496,
+        "linear_potential": 2743.347750956027,
+        "nonlinear_potential": 77.69317701401152
+      },
+      {
+        "time": 80.0,
+        "D_density": 0.9999272464890635,
+        "linear_density": 32243116.77832479,
+        "nonlinear_density": 61991.16546064103,
+        "D_potential": 1.0005013857950746,
+        "linear_potential": 5889.693748016414,
+        "nonlinear_potential": 94.83883027509489
+      },
+      {
+        "time": 85.0,
+        "D_density": 0.9999663796133024,
+        "linear_density": 70421870.65496734,
+        "nonlinear_density": 63202.634548692055,
+        "D_potential": 0.999314644667938,
+        "linear_potential": 12292.765016921616,
+        "nonlinear_potential": 97.07811181071548
+      },
+      {
+        "time": 90.0,
+        "D_density": 0.9999796125571591,
+        "linear_density": 151195755.05189314,
+        "nonlinear_density": 64887.47246119777,
+        "D_potential": 0.9985442059391492,
+        "linear_potential": 25987.050160932722,
+        "nonlinear_potential": 102.9353480552063
+      },
+      {
+        "time": 95.0,
+        "D_density": 0.9999944722889981,
+        "linear_density": 318101968.16579586,
+        "nonlinear_density": 68543.993468648,
+        "D_potential": 0.9995111072131836,
+        "linear_potential": 53635.15820594621,
+        "nonlinear_potential": 99.77844347883754
+      },
+      {
+        "time": 100.0,
+        "D_density": 0.999998319580954,
+        "linear_density": 657674017.6617068,
+        "nonlinear_density": 68820.56401623574,
+        "D_potential": 0.9998465110334341,
+        "linear_potential": 104973.08889426937,
+        "nonlinear_potential": 125.08339953411593
+      }
+    ],
+    "b_p6_dt0p025": [
+      {
+        "time": 0.0,
+        "D_density": 0.131604865412285,
+        "linear_density": 219.85220996360317,
+        "nonlinear_density": 219.2122409542955,
+        "D_potential": 0.0033874140155949026,
+        "linear_potential": 0.022289592814723414,
+        "nonlinear_potential": 0.022285426303595864
+      },
+      {
+        "time": 5.0,
+        "D_density": 0.17409745756993938,
+        "linear_density": 303.0217635907701,
+        "nonlinear_density": 299.095878531849,
+        "D_potential": 0.0020287978962360343,
+        "linear_potential": 0.04234487593988177,
+        "nonlinear_potential": 0.042352589590528504
+      },
+      {
+        "time": 10.0,
+        "D_density": 0.2656267163423179,
+        "linear_density": 546.997433133479,
+        "nonlinear_density": 531.9431540497162,
+        "D_potential": 0.0027368939771524776,
+        "linear_potential": 0.08432428827894774,
+        "nonlinear_potential": 0.08436271943927136
+      },
+      {
+        "time": 15.0,
+        "D_density": 0.3929606800268127,
+        "linear_density": 1031.3903734106862,
+        "nonlinear_density": 987.9822626494857,
+        "D_potential": 0.005355674883397792,
+        "linear_potential": 0.15110358232362905,
+        "nonlinear_potential": 0.15118260809583078
+      },
+      {
+        "time": 20.0,
+        "D_density": 0.5890171659932614,
+        "linear_density": 1950.8205461223886,
+        "nonlinear_density": 1789.6450382696562,
+        "D_potential": 0.010613830711788588,
+        "linear_potential": 0.27309933884163407,
+        "nonlinear_potential": 0.2731255737017154
+      },
+      {
+        "time": 25.0,
+        "D_density": 0.7800184654149184,
+        "linear_density": 3724.8057853819414,
+        "nonlinear_density": 3092.405695286468,
+        "D_potential": 0.020043929771698762,
+        "linear_potential": 0.5204297547689676,
+        "nonlinear_potential": 0.5204018900245485
+      },
+      {
+        "time": 30.0,
+        "D_density": 0.8901204820565075,
+        "linear_density": 7271.888071001574,
+        "nonlinear_density": 5135.174237707811,
+        "D_potential": 0.03402080263130492,
+        "linear_potential": 1.1134043213721008,
+        "nonlinear_potential": 1.1160954941540986
+      },
+      {
+        "time": 35.0,
+        "D_density": 0.9439012622908777,
+        "linear_density": 14989.657838859013,
+        "nonlinear_density": 8403.848048836178,
+        "D_potential": 0.05976221822703042,
+        "linear_potential": 2.5108877452691223,
+        "nonlinear_potential": 2.5066694326545034
+      },
+      {
+        "time": 40.0,
+        "D_density": 0.9713995595113116,
+        "linear_density": 33154.43333630954,
+        "nonlinear_density": 13821.326656567646,
+        "D_potential": 0.11342964197171511,
+        "linear_potential": 6.056890584909623,
+        "nonlinear_potential": 6.011049162554508
+      },
+      {
+        "time": 45.0,
+        "D_density": 0.986760053154132,
+        "linear_density": 76634.20942278353,
+        "nonlinear_density": 22675.875628022288,
+        "D_potential": 0.23562217503567529,
+        "linear_potential": 14.860300827815056,
+        "nonlinear_potential": 14.663766233467015
+      },
+      {
+        "time": 50.0,
+        "D_density": 0.9945826090211098,
+        "linear_density": 182746.1835373996,
+        "nonlinear_density": 33895.864313855214,
+        "D_potential": 0.45718222195150543,
+        "linear_potential": 36.126588858689445,
+        "nonlinear_potential": 30.191698493610364
+      },
+      {
+        "time": 55.0,
+        "D_density": 0.9957584789399601,
+        "linear_density": 448202.00083364686,
+        "nonlinear_density": 41126.94965317146,
+        "D_potential": 0.7038083399016557,
+        "linear_potential": 89.64580392910113,
+        "nonlinear_potential": 42.93354207207485
+      },
+      {
+        "time": 60.0,
+        "D_density": 0.9972138392561529,
+        "linear_density": 1089024.4708031274,
+        "nonlinear_density": 43235.654149694674,
+        "D_potential": 0.8794771435115444,
+        "linear_potential": 219.0394466608321,
+        "nonlinear_potential": 47.25055706481227
+      },
+      {
+        "time": 65.0,
+        "D_density": 0.9987243931910867,
+        "linear_density": 2602899.3776771836,
+        "nonlinear_density": 47248.88512035424,
+        "D_potential": 0.955239790725045,
+        "linear_potential": 512.7814918882065,
+        "nonlinear_potential": 52.66294055252214
+      },
+      {
+        "time": 70.0,
+        "D_density": 0.9994843297583592,
+        "linear_density": 6177021.980175274,
+        "nonlinear_density": 50472.8655152319,
+        "D_potential": 0.9806831182880954,
+        "linear_potential": 1198.835725014985,
+        "nonlinear_potential": 65.4854318261089
+      },
+      {
+        "time": 75.0,
+        "D_density": 0.999795213298712,
+        "linear_density": 14336800.956642848,
+        "nonlinear_density": 54424.2270422514,
+        "D_potential": 0.9967331239622959,
+        "linear_potential": 2743.3459925492343,
+        "nonlinear_potential": 76.74531865934193
+      },
+      {
+        "time": 80.0,
+        "D_density": 0.9999221897613456,
+        "linear_density": 32195035.281078313,
+        "nonlinear_density": 61742.216466052385,
+        "D_potential": 1.0006358611044963,
+        "linear_potential": 5889.687905366373,
+        "nonlinear_potential": 94.13328081739317
+      },
+      {
+        "time": 85.0,
+        "D_density": 0.9999649624595183,
+        "linear_density": 70307906.23278312,
+        "nonlinear_density": 64776.527134106625,
+        "D_potential": 0.999305412623252,
+        "linear_potential": 12292.752074503263,
+        "nonlinear_potential": 98.2997879547096
+      },
+      {
+        "time": 90.0,
+        "D_density": 0.999980776602409,
+        "linear_density": 150973725.93692678,
+        "nonlinear_density": 66263.20688629434,
+        "D_potential": 0.9985208580247221,
+        "linear_potential": 25987.039016168725,
+        "nonlinear_potential": 105.27340560268561
+      },
+      {
+        "time": 95.0,
+        "D_density": 0.9999943637287183,
+        "linear_density": 317750366.4934461,
+        "nonlinear_density": 69822.78749673982,
+        "D_potential": 0.9995313167030188,
+        "linear_potential": 53635.12856025917,
+        "nonlinear_potential": 102.09422160798817
+      },
+      {
+        "time": 100.0,
+        "D_density": 0.9999983885595379,
+        "linear_density": 656813863.154193,
+        "nonlinear_density": 71253.00176841751,
+        "D_potential": 0.9998618129311848,
+        "linear_potential": 104972.98608097079,
+        "nonlinear_potential": 125.67026429911665
+      }
+    ],
+    "b_p6_dt0p05": [
+      {
+        "time": 0.0,
+        "D_density": 0.131604865412285,
+        "linear_density": 219.85220996360317,
+        "nonlinear_density": 219.2122409542955,
+        "D_potential": 0.0033874140155949026,
+        "linear_potential": 0.022289592814723414,
+        "nonlinear_potential": 0.022285426303595864
+      },
+      {
+        "time": 5.0,
+        "D_density": 0.17398579980886472,
+        "linear_density": 302.68564210533754,
+        "nonlinear_density": 298.7701369242069,
+        "D_potential": 0.0020258617626000112,
+        "linear_potential": 0.04231167621939951,
+        "nonlinear_potential": 0.042319349962256725
+      },
+      {
+        "time": 10.0,
+        "D_density": 0.2655784973922934,
+        "linear_density": 546.4891974226986,
+        "nonlinear_density": 531.4649074494254,
+        "D_potential": 0.0027348855558220453,
+        "linear_potential": 0.08427604790298841,
+        "nonlinear_potential": 0.084314526933209
+      },
+      {
+        "time": 15.0,
+        "D_density": 0.392921130837123,
+        "linear_density": 1030.5117164260828,
+        "nonlinear_density": 987.1382477095677,
+        "D_potential": 0.005356417944364091,
+        "linear_potential": 0.150999511129749,
+        "nonlinear_potential": 0.1510783687585991
+      },
+      {
+        "time": 20.0,
+        "D_density": 0.5889294581567991,
+        "linear_density": 1948.9923932898826,
+        "nonlinear_density": 1788.0075789224466,
+        "D_potential": 0.010615897748455977,
+        "linear_potential": 0.27286242123769494,
+        "nonlinear_potential": 0.2728881037756652
+      },
+      {
+        "time": 25.0,
+        "D_density": 0.7797706230341821,
+        "linear_density": 3720.2708380783024,
+        "nonlinear_density": 3088.684280022441,
+        "D_potential": 0.02005345138123854,
+        "linear_potential": 0.5196213206365693,
+        "nonlinear_potential": 0.5195929331833712
+      },
+      {
+        "time": 30.0,
+        "D_density": 0.8897355386399034,
+        "linear_density": 7259.534829704778,
+        "nonlinear_density": 5127.027842862773,
+        "D_potential": 0.03403065994340675,
+        "linear_potential": 1.110722700438328,
+        "nonlinear_potential": 1.113390386026484
+      },
+      {
+        "time": 35.0,
+        "D_density": 0.9434541846418617,
+        "linear_density": 14954.761068765793,
+        "nonlinear_density": 8383.550467567818,
+        "D_potential": 0.059726994885654736,
+        "linear_potential": 2.5032890919368054,
+        "nonlinear_potential": 2.4990634508823337
+      },
+      {
+        "time": 40.0,
+        "D_density": 0.9709725398312379,
+        "linear_density": 33056.15674534881,
+        "nonlinear_density": 13772.165606187817,
+        "D_potential": 0.11322013697033487,
+        "linear_potential": 6.03639417417137,
+        "nonlinear_potential": 5.990342753008424
+      },
+      {
+        "time": 45.0,
+        "D_density": 0.9864915992892307,
+        "linear_density": 76370.38910200233,
+        "nonlinear_density": 22580.0636041331,
+        "D_potential": 0.23480064996212832,
+        "linear_potential": 14.806577186274273,
+        "nonlinear_potential": 14.610958569781674
+      },
+      {
+        "time": 50.0,
+        "D_density": 0.9944430873176274,
+        "linear_density": 182076.32647877405,
+        "nonlinear_density": 33735.8810618787,
+        "D_potential": 0.455875746598973,
+        "linear_potential": 35.993300496608214,
+        "nonlinear_potential": 30.1090451925223
+      },
+      {
+        "time": 55.0,
+        "D_density": 0.9956875786714149,
+        "linear_density": 446504.36299915385,
+        "nonlinear_density": 40864.914230671515,
+        "D_potential": 0.7027002277700749,
+        "linear_potential": 89.31419202782169,
+        "nonlinear_potential": 42.908978392875795
+      },
+      {
+        "time": 60.0,
+        "D_density": 0.9971974460010234,
+        "linear_density": 1084790.2443159271,
+        "nonlinear_density": 42779.94789744958,
+        "D_potential": 0.8790101455793378,
+        "linear_potential": 218.2159261037308,
+        "nonlinear_potential": 47.21162526350482
+      },
+      {
+        "time": 65.0,
+        "D_density": 0.998707931596096,
+        "linear_density": 2592986.3283812655,
+        "nonlinear_density": 46792.989290039324,
+        "D_potential": 0.9549880603638156,
+        "linear_potential": 510.9391347251386,
+        "nonlinear_potential": 52.59497796062943
+      },
+      {
+        "time": 70.0,
+        "D_density": 0.9994873976410207,
+        "linear_density": 6154833.723558892,
+        "nonlinear_density": 50103.555399014935,
+        "D_potential": 0.9805767546942359,
+        "linear_potential": 1194.9953763541594,
+        "nonlinear_potential": 65.4769893890403
+      },
+      {
+        "time": 75.0,
+        "D_density": 0.9997995774800628,
+        "linear_density": 14287898.447276525,
+        "nonlinear_density": 53737.10373933863,
+        "D_potential": 0.9967044895646744,
+        "linear_potential": 2735.048738251341,
+        "nonlinear_potential": 76.69607375481776
+      },
+      {
+        "time": 80.0,
+        "D_density": 0.9999206025543234,
+        "linear_density": 32090461.368351698,
+        "nonlinear_density": 60551.742007110704,
+        "D_potential": 1.0006843697713352,
+        "linear_potential": 5872.839689975415,
+        "nonlinear_potential": 94.1899195823302
+      },
+      {
+        "time": 85.0,
+        "D_density": 0.9999643867195496,
+        "linear_density": 70094851.84881997,
+        "nonlinear_density": 63034.89177679651,
+        "D_potential": 0.9993182499700972,
+        "linear_potential": 12263.373321958972,
+        "nonlinear_potential": 98.29101922349798
+      },
+      {
+        "time": 90.0,
+        "D_density": 0.9999803354021041,
+        "linear_density": 150544226.55005684,
+        "nonlinear_density": 64067.37528025693,
+        "D_potential": 0.9985072224313706,
+        "linear_potential": 25929.697958356443,
+        "nonlinear_potential": 105.19485710592578
+      },
+      {
+        "time": 95.0,
+        "D_density": 0.9999940011351962,
+        "linear_density": 316855871.72531575,
+        "nonlinear_density": 67524.0837308832,
+        "D_potential": 0.9995223783716655,
+        "linear_potential": 53492.25770061322,
+        "nonlinear_potential": 101.63394571163062
+      },
+      {
+        "time": 100.0,
+        "D_density": 0.9999983870077896,
+        "linear_density": 654874799.1409544,
+        "nonlinear_density": 68940.80935577584,
+        "D_potential": 0.9998651168538956,
+        "linear_potential": 104648.78530163028,
+        "nonlinear_potential": 124.91688575431706
+      }
+    ],
+    "b_p5_dt0p025": [
+      {
+        "time": 0.0,
+        "D_density": 0.13098180172708718,
+        "linear_density": 219.76884332734016,
+        "nonlinear_density": 219.13101174254606,
+        "D_potential": 0.005465390441674738,
+        "linear_potential": 0.022290864510461063,
+        "nonlinear_potential": 0.022286576843341108
+      },
+      {
+        "time": 5.0,
+        "D_density": 0.19824469003756495,
+        "linear_density": 300.1506189820507,
+        "nonlinear_density": 292.9824321409302,
+        "D_potential": 0.0026982645856861967,
+        "linear_potential": 0.04234501097730561,
+        "nonlinear_potential": 0.04235267054852239
+      },
+      {
+        "time": 10.0,
+        "D_density": 0.2911897293449871,
+        "linear_density": 545.214991332916,
+        "nonlinear_density": 519.4276367215522,
+        "D_potential": 0.0033401211682904113,
+        "linear_potential": 0.08432448628693805,
+        "nonlinear_potential": 0.08436269047959026
+      },
+      {
+        "time": 15.0,
+        "D_density": 0.3930522578757672,
+        "linear_density": 1025.94271351361,
+        "nonlinear_density": 965.868299328268,
+        "D_potential": 0.0057016703336029775,
+        "linear_potential": 0.15110391483090496,
+        "nonlinear_potential": 0.15118243430327932
+      },
+      {
+        "time": 20.0,
+        "D_density": 0.5682540194164839,
+        "linear_density": 1938.1463212936085,
+        "nonlinear_density": 1760.3582585432828,
+        "D_potential": 0.010780007948177014,
+        "linear_potential": 0.2730998587000987,
+        "nonlinear_potential": 0.27312569768759176
+      },
+      {
+        "time": 25.0,
+        "D_density": 0.7686492912923993,
+        "linear_density": 3696.843552381395,
+        "nonlinear_density": 3069.567433282736,
+        "D_potential": 0.02010478906683704,
+        "linear_potential": 0.5204302465599452,
+        "nonlinear_potential": 0.5204018061019589
+      },
+      {
+        "time": 30.0,
+        "D_density": 0.8849912463448195,
+        "linear_density": 7202.870069552913,
+        "nonlinear_density": 5117.253109935761,
+        "D_potential": 0.033999607053120794,
+        "linear_potential": 1.1134049451875538,
+        "nonlinear_potential": 1.1160955088241664
+      },
+      {
+        "time": 35.0,
+        "D_density": 0.9412609214644434,
+        "linear_density": 14825.18858640179,
+        "nonlinear_density": 8390.630863962431,
+        "D_potential": 0.0596595965225097,
+        "linear_potential": 2.5108895939441913,
+        "nonlinear_potential": 2.5066743867412047
+      },
+      {
+        "time": 40.0,
+        "D_density": 0.9696122313036036,
+        "linear_density": 32751.466445374066,
+        "nonlinear_density": 13808.813094558585,
+        "D_potential": 0.11319785854269286,
+        "linear_potential": 6.056888182795732,
+        "nonlinear_potential": 6.011143746462959
+      },
+      {
+        "time": 45.0,
+        "D_density": 0.9855753495904334,
+        "linear_density": 75592.50820855945,
+        "nonlinear_density": 22659.245995937108,
+        "D_potential": 0.23520514637151485,
+        "linear_potential": 14.860295779059355,
+        "nonlinear_potential": 14.663746084785151
+      },
+      {
+        "time": 50.0,
+        "D_density": 0.9938733343128883,
+        "linear_density": 180187.65881302356,
+        "nonlinear_density": 33880.18323353512,
+        "D_potential": 0.4565423518238289,
+        "linear_potential": 36.12660753708633,
+        "nonlinear_potential": 30.201512555080345
+      },
+      {
+        "time": 55.0,
+        "D_density": 0.9953979971283711,
+        "linear_density": 442099.27245190775,
+        "nonlinear_density": 41092.50754145808,
+        "D_potential": 0.7030528891599719,
+        "linear_potential": 89.64580385179286,
+        "nonlinear_potential": 42.963677198669906
+      },
+      {
+        "time": 60.0,
+        "D_density": 0.9970773973925123,
+        "linear_density": 1074274.7727684558,
+        "nonlinear_density": 43188.06366776008,
+        "D_potential": 0.8787433301083444,
+        "linear_potential": 219.03937469976282,
+        "nonlinear_potential": 47.37067352890838
+      },
+      {
+        "time": 65.0,
+        "D_density": 0.9986523305315516,
+        "linear_density": 2568272.9406157793,
+        "nonlinear_density": 47221.41518751123,
+        "D_potential": 0.9543518317255009,
+        "linear_potential": 512.781200219133,
+        "nonlinear_potential": 52.87180550015128
+      },
+      {
+        "time": 70.0,
+        "D_density": 0.9994595088738758,
+        "linear_density": 6100605.034089167,
+        "nonlinear_density": 50545.43046930741,
+        "D_potential": 0.9797159648767481,
+        "linear_potential": 1198.8329143403694,
+        "nonlinear_potential": 65.77090574881254
+      },
+      {
+        "time": 75.0,
+        "D_density": 0.9997874824041135,
+        "linear_density": 14174003.879563339,
+        "nonlinear_density": 54913.755286468775,
+        "D_potential": 0.9955687059253177,
+        "linear_potential": 2743.3379081847615,
+        "nonlinear_potential": 77.80235002506734
+      },
+      {
+        "time": 80.0,
+        "D_density": 0.9999260719253225,
+        "linear_density": 31848678.727335338,
+        "nonlinear_density": 62008.552862956676,
+        "D_potential": 1.0004963213877143,
+        "linear_potential": 5889.675266398634,
+        "nonlinear_potential": 94.92386083170405
+      },
+      {
+        "time": 85.0,
+        "D_density": 0.9999657316299719,
+        "linear_density": 69594576.2761757,
+        "nonlinear_density": 63129.760179247256,
+        "D_potential": 0.9993208811653492,
+        "linear_potential": 12292.711679151109,
+        "nonlinear_potential": 96.99832369088115
+      },
+      {
+        "time": 90.0,
+        "D_density": 0.9999792064654278,
+        "linear_density": 149558662.19105422,
+        "nonlinear_density": 64750.46101141132,
+        "D_potential": 0.9985517599656926,
+        "linear_potential": 25986.911420836357,
+        "nonlinear_potential": 102.7528672867052
+      },
+      {
+        "time": 95.0,
+        "D_density": 0.9999943857754081,
+        "linear_density": 314863318.88483447,
+        "nonlinear_density": 68434.79308714927,
+        "D_potential": 0.999509472837939,
+        "linear_potential": 53634.94302709406,
+        "nonlinear_potential": 99.57726730489051
+      },
+      {
+        "time": 100.0,
+        "D_density": 0.9999982261585847,
+        "linear_density": 650764157.1566974,
+        "nonlinear_density": 68600.78971584525,
+        "D_potential": 0.9998459172765689,
+        "linear_potential": 104972.73939370022,
+        "nonlinear_potential": 124.82719652290359
+      }
+    ]
+  },
+  "amplitude": {
+    "c_p6_dt0p025_large": [
+      {
+        "time": 0.0,
+        "A_density": 0.12990237749089675,
+        "A_potential": 0.0021884807453764307
+      },
+      {
+        "time": 5.0,
+        "A_density": 0.1519493165951758,
+        "A_potential": 0.0018113357144022046
+      },
+      {
+        "time": 10.0,
+        "A_density": 0.2330165478926385,
+        "A_potential": 0.0025936444605500985
+      },
+      {
+        "time": 15.0,
+        "A_density": 0.35313436655528824,
+        "A_potential": 0.0053414361444182115
+      },
+      {
+        "time": 20.0,
+        "A_density": 0.479618902575113,
+        "A_potential": 0.01071576015697461
+      },
+      {
+        "time": 25.0,
+        "A_density": 0.5619692133779107,
+        "A_potential": 0.020271735603372178
+      },
+      {
+        "time": 30.0,
+        "A_density": 0.6062534819550895,
+        "A_potential": 0.034532730292881945
+      },
+      {
+        "time": 35.0,
+        "A_density": 0.6281911480436686,
+        "A_potential": 0.06104469712785195
+      },
+      {
+        "time": 40.0,
+        "A_density": 0.647303319422298,
+        "A_potential": 0.11728006272930486
+      },
+      {
+        "time": 45.0,
+        "A_density": 0.6800059483565507,
+        "A_potential": 0.23864739393419285
+      },
+      {
+        "time": 50.0,
+        "A_density": 0.6890743722078763,
+        "A_potential": 0.4447800655092187
+      },
+      {
+        "time": 55.0,
+        "A_density": 0.6825565875591459,
+        "A_potential": 0.5103597586515722
+      },
+      {
+        "time": 60.0,
+        "A_density": 0.6839564591310118,
+        "A_potential": 0.5278983145737955
+      },
+      {
+        "time": 65.0,
+        "A_density": 0.6887881483207716,
+        "A_potential": 0.5752448138354563
+      },
+      {
+        "time": 70.0,
+        "A_density": 0.7235198493922532,
+        "A_potential": 0.5977239360507237
+      },
+      {
+        "time": 75.0,
+        "A_density": 0.7487005430768042,
+        "A_potential": 0.6409537215034081
+      },
+      {
+        "time": 80.0,
+        "A_density": 0.7420515242555213,
+        "A_potential": 0.6657862696581162
+      },
+      {
+        "time": 85.0,
+        "A_density": 0.7828224953470012,
+        "A_potential": 0.8043892879083299
+      },
+      {
+        "time": 90.0,
+        "A_density": 0.8015156780952146,
+        "A_potential": 0.7216193012395582
+      },
+      {
+        "time": 95.0,
+        "A_density": 0.7941447863024973,
+        "A_potential": 0.6562268084385413
+      },
+      {
+        "time": 100.0,
+        "A_density": 0.7914547270067235,
+        "A_potential": 0.5426758360817876
+      }
+    ],
+    "c_p6_dt0p025_small": [
+      {
+        "time": 0.0,
+        "A_density": 0.06639523210723827,
+        "A_potential": 0.0011109861546472499
+      },
+      {
+        "time": 5.0,
+        "A_density": 0.07776183735955196,
+        "A_potential": 0.0009052791636516587
+      },
+      {
+        "time": 10.0,
+        "A_density": 0.12290858371009707,
+        "A_potential": 0.00129479053897075
+      },
+      {
+        "time": 15.0,
+        "A_density": 0.20528365638354645,
+        "A_potential": 0.0026621296931946528
+      },
+      {
+        "time": 20.0,
+        "A_density": 0.3391769921217384,
+        "A_potential": 0.005342448783102562
+      },
+      {
+        "time": 25.0,
+        "A_density": 0.5121645112827032,
+        "A_potential": 0.01012878767807444
+      },
+      {
+        "time": 30.0,
+        "A_density": 0.6661704898606103,
+        "A_potential": 0.017187947562672248
+      },
+      {
+        "time": 35.0,
+        "A_density": 0.762687615763812,
+        "A_potential": 0.030356817208891097
+      },
+      {
+        "time": 40.0,
+        "A_density": 0.8087628354806213,
+        "A_potential": 0.058072936440251015
+      },
+      {
+        "time": 45.0,
+        "A_density": 0.8534572540826993,
+        "A_potential": 0.12454115018269124
+      },
+      {
+        "time": 50.0,
+        "A_density": 0.9977544628265346,
+        "A_potential": 0.3180657456999694
+      },
+      {
+        "time": 55.0,
+        "A_density": 1.1822954924639113,
+        "A_potential": 0.7435773232534443
+      },
+      {
+        "time": 60.0,
+        "A_density": 1.315558466097947,
+        "A_potential": 0.9314672915388941
+      },
+      {
+        "time": 65.0,
+        "A_density": 1.2399527507234458,
+        "A_potential": 0.8524142005748384
+      },
+      {
+        "time": 70.0,
+        "A_density": 1.3648070977824596,
+        "A_potential": 0.8922975246821057
+      },
+      {
+        "time": 75.0,
+        "A_density": 1.45623997616856,
+        "A_potential": 1.0391706482203902
+      },
+      {
+        "time": 80.0,
+        "A_density": 1.439348972878574,
+        "A_potential": 1.106554334277505
+      },
+      {
+        "time": 85.0,
+        "A_density": 1.45052329666101,
+        "A_potential": 1.2006665671163896
+      },
+      {
+        "time": 90.0,
+        "A_density": 1.5703098850499475,
+        "A_potential": 1.44339434087283
+      },
+      {
+        "time": 95.0,
+        "A_density": 1.5003346376083662,
+        "A_potential": 1.9605471009835516
+      },
+      {
+        "time": 100.0,
+        "A_density": 1.5345066744901688,
+        "A_potential": 1.6885271315987986
+      }
+    ]
+  },
+  "control": {
+    "c_p6_dt0p025": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 0.23169031691176606,
+        "control_drift_density": 0.0007152149225702562,
+        "drift_over_response_potential": 0.028599844636588406,
+        "control_drift_potential": 1.5531871022952812e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.16969975793626427,
+        "control_drift_density": 0.0009334859886264692,
+        "drift_over_response_potential": 0.036357976891064035,
+        "control_drift_potential": 3.933059575017579e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.10836759223718187,
+        "control_drift_density": 0.0011053593044140222,
+        "drift_over_response_potential": 0.03813398527633396,
+        "control_drift_potential": 7.3925503304383414e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.07241583288735139,
+        "control_drift_density": 0.0013317448939656608,
+        "drift_over_response_potential": 0.042189531463295904,
+        "control_drift_potential": 1.477567419894426e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.05884629135835038,
+        "control_drift_density": 0.0018627009863387597,
+        "drift_over_response_potential": 0.05191276264933524,
+        "control_drift_potential": 3.46412265078402e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.06582739964311325,
+        "control_drift_density": 0.0034551135946545445,
+        "drift_over_response_potential": 0.05669911386108463,
+        "control_drift_potential": 8.114426859076774e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.08708454210905951,
+        "control_drift_density": 0.007475004038187621,
+        "drift_over_response_potential": 0.058407903757714374,
+        "control_drift_potential": 0.00018773658441888566
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.11663264553998387,
+        "control_drift_density": 0.016459435942823175,
+        "drift_over_response_potential": 0.05060440800509368,
+        "control_drift_potential": 0.0003900484564688635
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.14766860060429501,
+        "control_drift_density": 0.03418627839756687,
+        "drift_over_response_potential": 0.043717909389822264,
+        "control_drift_potential": 0.0008220249226266276
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.18565647541921268,
+        "control_drift_density": 0.06424528339087583,
+        "drift_over_response_potential": 0.04217393619540672,
+        "control_drift_potential": 0.0016326988131005057
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.26344375967847566,
+        "control_drift_density": 0.11058304379138748,
+        "drift_over_response_potential": 0.05461767944383101,
+        "control_drift_potential": 0.0030067657244719492
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.4113257242020988,
+        "control_drift_density": 0.18155476464333994,
+        "drift_over_response_potential": 0.09536194815151287,
+        "control_drift_potential": 0.005776954459059837
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.5984754311182537,
+        "control_drift_density": 0.2886631886240031,
+        "drift_over_response_potential": 0.17853074687905462,
+        "control_drift_potential": 0.012054343223347103
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 0.8878152424378338,
+        "control_drift_density": 0.457508716314105,
+        "drift_over_response_potential": 0.32055128288755763,
+        "control_drift_potential": 0.026914206860384805
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.2955093249559768,
+        "control_drift_density": 0.7196576960879483,
+        "drift_over_response_potential": 0.6627923793203295,
+        "control_drift_potential": 0.0651847641195996
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.5562171027581682,
+        "control_drift_density": 0.9806844783186349,
+        "drift_over_response_potential": 0.9512288572131474,
+        "control_drift_potential": 0.11473721463755224
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.4710162630352026,
+        "control_drift_density": 0.9734082231155964,
+        "drift_over_response_potential": 1.0370725088741022,
+        "control_drift_potential": 0.13080653044877927
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.4806786244771997,
+        "control_drift_density": 1.002525836433708,
+        "drift_over_response_potential": 1.019924781169182,
+        "control_drift_potential": 0.13785853724384137
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.404273663013924,
+        "control_drift_density": 1.0018946719582613,
+        "drift_over_response_potential": 1.140771973212387,
+        "control_drift_potential": 0.1495345439505307
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.3590478054348984,
+        "control_drift_density": 0.9899167389470399,
+        "drift_over_response_potential": 1.0214520626570285,
+        "control_drift_potential": 0.16453759072767812
+      }
+    ],
+    "c_p5_dt0p025": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 0.5448239519923698,
+        "control_drift_density": 0.0016674996568007128,
+        "drift_over_response_potential": 0.03556218200818521,
+        "control_drift_potential": 1.9312958452306455e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.3905899798476437,
+        "control_drift_density": 0.0021275135933997236,
+        "drift_over_response_potential": 0.04413042283678959,
+        "control_drift_potential": 4.773846491395651e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.24252903963415884,
+        "control_drift_density": 0.0024515095015880638,
+        "drift_over_response_potential": 0.046115788074381485,
+        "control_drift_potential": 8.939864611406019e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.15115175224326075,
+        "control_drift_density": 0.002764751666996613,
+        "drift_over_response_potential": 0.05099009594054227,
+        "control_drift_potential": 1.785781572039313e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.10407407587284458,
+        "control_drift_density": 0.0032865994498587655,
+        "drift_over_response_potential": 0.06273565697286618,
+        "control_drift_potential": 4.186327785741987e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.09249834865373446,
+        "control_drift_density": 0.0048494105576460615,
+        "drift_over_response_potential": 0.06851385747250116,
+        "control_drift_potential": 9.805273806919013e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.10839721581265298,
+        "control_drift_density": 0.009299340290014111,
+        "drift_over_response_potential": 0.0705663570237749,
+        "control_drift_potential": 0.00022681699905396276
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.1399584579644147,
+        "control_drift_density": 0.019741646118250855,
+        "drift_over_response_potential": 0.06113450348409718,
+        "control_drift_potential": 0.00047121925439985523
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.17412868914829874,
+        "control_drift_density": 0.040288966339303345,
+        "drift_over_response_potential": 0.05282146697075232,
+        "control_drift_potential": 0.0009931963279460727
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.21463165771827758,
+        "control_drift_density": 0.07424990987849452,
+        "drift_over_response_potential": 0.050929345197109344,
+        "control_drift_potential": 0.001972277554165601
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.30093424250139017,
+        "control_drift_density": 0.1262211485692902,
+        "drift_over_response_potential": 0.06592218163495146,
+        "control_drift_potential": 0.003631565185466958
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.46553269922220253,
+        "control_drift_density": 0.20529182176776048,
+        "drift_over_response_potential": 0.11488641997682054,
+        "control_drift_potential": 0.00697741077215884
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.6735056738173788,
+        "control_drift_density": 0.3246923366043074,
+        "drift_over_response_potential": 0.21482854237320514,
+        "control_drift_potential": 0.01456059200908491
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 0.9924392632559558,
+        "control_drift_density": 0.5121334106089519,
+        "drift_over_response_potential": 0.38387116170398516,
+        "control_drift_potential": 0.032358111121828834
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.4184249110737643,
+        "control_drift_density": 0.7943730244380839,
+        "drift_over_response_potential": 0.7768588771126367,
+        "control_drift_potential": 0.07739359949034161
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.596288201238412,
+        "control_drift_density": 1.0100795445894435,
+        "drift_over_response_potential": 1.0228479664501464,
+        "control_drift_potential": 0.12438766259244713
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.5067866560573457,
+        "control_drift_density": 0.9720786809377586,
+        "drift_over_response_potential": 1.0855931603228395,
+        "control_drift_potential": 0.13513518828689816
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.5370665220959487,
+        "control_drift_density": 1.0180473841388684,
+        "drift_over_response_potential": 1.1293014728294826,
+        "control_drift_potential": 0.1490577165609098
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.447556679694049,
+        "control_drift_density": 1.012790111364813,
+        "drift_over_response_potential": 1.2899424606699916,
+        "control_drift_potential": 0.16503919450202248
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.4218038524871284,
+        "control_drift_density": 0.9987858601296147,
+        "drift_over_response_potential": 1.152444454254883,
+        "control_drift_potential": 0.18484159629443392
+      }
+    ],
+    "b_p6_dt0p0125": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 0.6703897041474501,
+        "control_drift_density": 0.0020472329549978147,
+        "drift_over_response_potential": 0.03204531523958597,
+        "control_drift_potential": 1.7406419490772188e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.4686649612544366,
+        "control_drift_density": 0.002545286494442734,
+        "drift_over_response_potential": 0.03745136325620646,
+        "control_drift_potential": 4.051906513198229e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.28566438610870976,
+        "control_drift_density": 0.002881439680287168,
+        "drift_over_response_potential": 0.03878491719189035,
+        "control_drift_potential": 7.520020415166023e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.17373946258513406,
+        "control_drift_density": 0.0031745102343077604,
+        "drift_over_response_potential": 0.04272995734356031,
+        "control_drift_potential": 1.4968171575259965e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.11322473964680958,
+        "control_drift_density": 0.0035750310300650657,
+        "drift_over_response_potential": 0.05251046500258693,
+        "control_drift_potential": 3.5053652232688904e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.08962075950251165,
+        "control_drift_density": 0.004699423032974185,
+        "drift_over_response_potential": 0.05733085992076084,
+        "control_drift_potential": 8.209804997656177e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.09497949631402416,
+        "control_drift_density": 0.00815208757848681,
+        "drift_over_response_potential": 0.05904661000685913,
+        "control_drift_potential": 0.00018993318494022162
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.11870922512070008,
+        "control_drift_density": 0.01676297410176544,
+        "drift_over_response_potential": 0.05115255185799664,
+        "control_drift_potential": 0.00039461217463075075
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.14849038715392898,
+        "control_drift_density": 0.034411013935839396,
+        "drift_over_response_potential": 0.04418356280425663,
+        "control_drift_potential": 0.0008315266116903047
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.18662350577218104,
+        "control_drift_density": 0.06467635153249968,
+        "drift_over_response_potential": 0.04262378574268832,
+        "control_drift_potential": 0.0016512723053548734
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.2646464203312044,
+        "control_drift_density": 0.11134865046230093,
+        "drift_over_response_potential": 0.055223862203117764,
+        "control_drift_potential": 0.0030406592136075785
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.4127523570648925,
+        "control_drift_density": 0.18285188085761991,
+        "drift_over_response_potential": 0.09638865219640419,
+        "control_drift_potential": 0.005841436064691461
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.6006985206804616,
+        "control_drift_density": 0.2907536289431613,
+        "drift_over_response_potential": 0.18047278478290038,
+        "control_drift_potential": 0.012188754536479319
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 0.8918092040938017,
+        "control_drift_density": 0.46080543513728517,
+        "drift_over_response_potential": 0.32393246740940435,
+        "control_drift_potential": 0.027204647269328624
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.2984257319291546,
+        "control_drift_density": 0.7245552595331929,
+        "drift_over_response_potential": 0.6692813206890501,
+        "control_drift_potential": 0.06586394071377404
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.5508394540372208,
+        "control_drift_density": 0.9840957527885844,
+        "drift_over_response_potential": 0.956436127815377,
+        "control_drift_potential": 0.11541179591250318
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.4615550791126823,
+        "control_drift_density": 0.976515861908085,
+        "drift_over_response_potential": 1.0399833181177178,
+        "control_drift_potential": 0.13102497984206835
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.469106933625947,
+        "control_drift_density": 1.0088130418497916,
+        "drift_over_response_potential": 1.0257332547291542,
+        "control_drift_potential": 0.13854890102289386
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.3922273567556696,
+        "control_drift_density": 1.0063192369976386,
+        "drift_over_response_potential": 1.1476025404770083,
+        "control_drift_potential": 0.15050000373512795
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.347813896155179,
+        "control_drift_density": 0.9954962527398196,
+        "drift_over_response_potential": 1.0272856625026499,
+        "control_drift_potential": 0.16579163406065783
+      }
+    ],
+    "b_p6_dt0p025": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 0.6705603034857476,
+        "control_drift_density": 0.0020472116489507583,
+        "drift_over_response_potential": 0.032048895789119576,
+        "control_drift_potential": 1.7404970612097632e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.46876454776870635,
+        "control_drift_density": 0.002545273514851606,
+        "drift_over_response_potential": 0.03745349154127231,
+        "control_drift_potential": 4.051568021940348e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.2857220649626197,
+        "control_drift_density": 0.0028814255536356993,
+        "drift_over_response_potential": 0.03878354370373795,
+        "control_drift_potential": 7.518471804430281e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.17377651284115497,
+        "control_drift_density": 0.0031744789686631836,
+        "drift_over_response_potential": 0.042728762007466566,
+        "control_drift_potential": 1.4964524794536338e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.11325280573024957,
+        "control_drift_density": 0.003574867173400598,
+        "drift_over_response_potential": 0.05251676646104953,
+        "control_drift_potential": 3.5044276381375785e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.08964085349492365,
+        "control_drift_density": 0.004698677549740099,
+        "drift_over_response_potential": 0.057348037508394414,
+        "control_drift_potential": 8.207297365538749e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.09500762939314003,
+        "control_drift_density": 0.00814987876809207,
+        "drift_over_response_potential": 0.05907393898604073,
+        "control_drift_potential": 0.00018987738797037598
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.11878605446133052,
+        "control_drift_density": 0.016758288551437787,
+        "drift_over_response_potential": 0.05118627876194975,
+        "control_drift_potential": 0.00039453368695516644
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.14863159586687,
+        "control_drift_density": 0.03440247458034835,
+        "drift_over_response_potential": 0.04421842333642401,
+        "control_drift_potential": 0.0008314364028533278
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.18688640910527868,
+        "control_drift_density": 0.0646604774922165,
+        "drift_over_response_potential": 0.04264861741133715,
+        "control_drift_potential": 0.0016510976378397854
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.26516721835153956,
+        "control_drift_density": 0.11131682421837522,
+        "drift_over_response_potential": 0.05522500082161923,
+        "control_drift_potential": 0.003040273852117593
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.4141706074145188,
+        "control_drift_density": 0.1827829930415916,
+        "drift_over_response_potential": 0.09638508737437437,
+        "control_drift_potential": 0.005839787336288803
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.6024850162054636,
+        "control_drift_density": 0.29057101559355913,
+        "drift_over_response_potential": 0.1804005909286007,
+        "control_drift_potential": 0.012182132381447665
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 0.8935443576542449,
+        "control_drift_density": 0.46035043092735406,
+        "drift_over_response_potential": 0.32371888853153014,
+        "control_drift_potential": 0.027182724896272877
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.302590467895355,
+        "control_drift_density": 0.7236267967465656,
+        "drift_over_response_potential": 0.6685610360564727,
+        "control_drift_potential": 0.065792018297836
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.5590783627711575,
+        "control_drift_density": 0.9825725696655194,
+        "drift_over_response_potential": 0.9555787735175175,
+        "control_drift_potential": 0.1153426547588492
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.4721496457087426,
+        "control_drift_density": 0.9733837566579282,
+        "drift_over_response_potential": 1.0398564604234923,
+        "control_drift_potential": 0.13107088411923737
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.4840479925279801,
+        "control_drift_density": 1.003771525074327,
+        "drift_over_response_potential": 1.0258071900014403,
+        "control_drift_potential": 0.13847286088684865
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.4060299210662677,
+        "control_drift_density": 1.0020888299228274,
+        "drift_over_response_potential": 1.1488067845864123,
+        "control_drift_potential": 0.15039327184245968
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.3636224414292526,
+        "control_drift_density": 0.9917718572647053,
+        "drift_over_response_potential": 1.029393022095395,
+        "control_drift_potential": 0.16587999056841568
+      }
+    ],
+    "b_p6_dt0p05": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 0.6712716671884373,
+        "control_drift_density": 0.0020471514747814903,
+        "drift_over_response_potential": 0.032063411113453615,
+        "control_drift_potential": 1.7399187380853236e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.4691790194172485,
+        "control_drift_density": 0.0025452336252607816,
+        "drift_over_response_potential": 0.03746233686549191,
+        "control_drift_potential": 4.050209854156388e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.2859617976423189,
+        "control_drift_density": 0.0028813795755527013,
+        "drift_over_response_potential": 0.038778211218235534,
+        "control_drift_potential": 7.512254843074529e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.17392933493632937,
+        "control_drift_density": 0.003174363575090837,
+        "drift_over_response_potential": 0.04272415341862069,
+        "control_drift_potential": 1.4949901216466734e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.1133684585305989,
+        "control_drift_density": 0.0035742113924941534,
+        "drift_over_response_potential": 0.052541844467820835,
+        "control_drift_potential": 3.500650904865016e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.0897256191975978,
+        "control_drift_density": 0.004695659699053892,
+        "drift_over_response_potential": 0.05741626526479738,
+        "control_drift_potential": 8.197145806408446e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.09513251009589196,
+        "control_drift_density": 0.008140881148443049,
+        "drift_over_response_potential": 0.0591830425999191,
+        "control_drift_potential": 0.00018965086373791694
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.11907346277863891,
+        "control_drift_density": 0.016739084252999005,
+        "drift_over_response_potential": 0.05132129657923952,
+        "control_drift_potential": 0.00039421173268768206
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.14910934411443785,
+        "control_drift_density": 0.03436722737717907,
+        "drift_over_response_potential": 0.04435788866028255,
+        "control_drift_potential": 0.0008310551197560572
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.18758124947718213,
+        "control_drift_density": 0.06459456184357558,
+        "drift_over_response_potential": 0.04274648604938104,
+        "control_drift_potential": 0.0016503560769946517
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.26654518780351655,
+        "control_drift_density": 0.11118236641860486,
+        "drift_over_response_potential": 0.055227062002342626,
+        "control_drift_potential": 0.003038647820534751
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.41788815790713313,
+        "control_drift_density": 0.18247979780232165,
+        "drift_over_response_potential": 0.09635336268694643,
+        "control_drift_potential": 0.005833055125845234
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.606773469808473,
+        "control_drift_density": 0.2898156605319494,
+        "drift_over_response_potential": 0.1802373680846408,
+        "control_drift_potential": 0.012155403167516359
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 0.8969019733555029,
+        "control_drift_density": 0.45869921819890835,
+        "drift_over_response_potential": 0.322708987390264,
+        "control_drift_potential": 0.02709442985488044
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.313447167064683,
+        "control_drift_density": 0.7204458419973756,
+        "drift_over_response_potential": 0.6660580061823039,
+        "control_drift_potential": 0.06550364066289384
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.5826665611494217,
+        "control_drift_density": 0.9782064990643358,
+        "drift_over_response_potential": 0.9527144219373381,
+        "control_drift_potential": 0.11506610678422373
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.5002905588765438,
+        "control_drift_density": 0.9653190199574847,
+        "drift_over_response_potential": 1.0413365880988141,
+        "control_drift_potential": 0.1312457412247293
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.5177197074038602,
+        "control_drift_density": 0.99252848815418,
+        "drift_over_response_potential": 1.025439469414823,
+        "control_drift_potential": 0.13831993975259874
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.4361262078074075,
+        "control_drift_density": 0.9898417845048038,
+        "drift_over_response_potential": 1.1516330502387422,
+        "control_drift_potential": 0.15008357289896937
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.3920432717767968,
+        "control_drift_density": 0.9795882984355714,
+        "drift_over_response_potential": 1.0362070673823631,
+        "control_drift_potential": 0.1659770158797974
+      }
+    ],
+    "b_p5_dt0p025": [
+      {
+        "time": 0.0,
+        "drift_over_response_density": 0.0,
+        "control_drift_density": 0.0,
+        "drift_over_response_potential": 0.0,
+        "control_drift_potential": 0.0
+      },
+      {
+        "time": 5.0,
+        "drift_over_response_density": 1.3082785868829676,
+        "control_drift_density": 0.003912517692199452,
+        "drift_over_response_potential": 0.05063975415727465,
+        "control_drift_potential": 2.7501248098875574e-06
+      },
+      {
+        "time": 10.0,
+        "drift_over_response_density": 0.9026786103889854,
+        "control_drift_density": 0.004786000129476984,
+        "drift_over_response_potential": 0.04842391393781123,
+        "control_drift_potential": 5.238299507041241e-06
+      },
+      {
+        "time": 15.0,
+        "drift_over_response_density": 0.5434907004739603,
+        "control_drift_density": 0.005358269227957653,
+        "drift_over_response_potential": 0.047944431464785074,
+        "control_drift_potential": 9.294360692274077e-06
+      },
+      {
+        "time": 20.0,
+        "drift_over_response_density": 0.32375416064493134,
+        "control_drift_density": 0.005817426725403633,
+        "drift_over_response_potential": 0.052053322273292534,
+        "control_drift_potential": 1.8230183175694864e-05
+      },
+      {
+        "time": 25.0,
+        "drift_over_response_density": 0.20133401133666598,
+        "control_drift_density": 0.006308248982209734,
+        "drift_over_response_potential": 0.06371316769379207,
+        "control_drift_potential": 4.251557024251905e-05
+      },
+      {
+        "time": 30.0,
+        "drift_over_response_density": 0.14145461112562846,
+        "control_drift_density": 0.007388708091527638,
+        "drift_over_response_potential": 0.06951639130633232,
+        "control_drift_potential": 9.94875177360493e-05
+      },
+      {
+        "time": 35.0,
+        "drift_over_response_density": 0.1266772979093227,
+        "control_drift_density": 0.01084945462027697,
+        "drift_over_response_potential": 0.07158597030136436,
+        "control_drift_potential": 0.00023009429707603147
+      },
+      {
+        "time": 40.0,
+        "drift_over_response_density": 0.1444917098588737,
+        "control_drift_density": 0.02036637720630047,
+        "drift_over_response_potential": 0.06202365737119269,
+        "control_drift_potential": 0.00047807331255117215
+      },
+      {
+        "time": 45.0,
+        "drift_over_response_density": 0.17517837341041598,
+        "control_drift_density": 0.04051729515079706,
+        "drift_over_response_potential": 0.05358606221791151,
+        "control_drift_potential": 0.0010075736266182617
+      },
+      {
+        "time": 50.0,
+        "drift_over_response_density": 0.21602326080858644,
+        "control_drift_density": 0.07470690922186839,
+        "drift_over_response_potential": 0.0516536970255087,
+        "control_drift_potential": 0.0020003690209271893
+      },
+      {
+        "time": 55.0,
+        "drift_over_response_density": 0.3030676634817951,
+        "control_drift_density": 0.12712083755727077,
+        "drift_over_response_potential": 0.0668475850844814,
+        "control_drift_potential": 0.003682707133212182
+      },
+      {
+        "time": 60.0,
+        "drift_over_response_density": 0.4694497099729621,
+        "control_drift_density": 0.20695089520341345,
+        "drift_over_response_potential": 0.11644799252332529,
+        "control_drift_potential": 0.0070732919039192925
+      },
+      {
+        "time": 65.0,
+        "drift_over_response_density": 0.679096198439204,
+        "control_drift_density": 0.32732923765666205,
+        "drift_over_response_potential": 0.21764542336658532,
+        "control_drift_potential": 0.014755492031461674
+      },
+      {
+        "time": 70.0,
+        "drift_over_response_density": 1.000251723393376,
+        "control_drift_density": 0.5160665488069593,
+        "drift_over_response_potential": 0.3884681270993846,
+        "control_drift_potential": 0.03276191127582772
+      },
+      {
+        "time": 75.0,
+        "drift_over_response_density": 1.4262122506042523,
+        "control_drift_density": 0.7994288330061321,
+        "drift_over_response_potential": 0.7844000620274184,
+        "control_drift_potential": 0.07825468540044711
+      },
+      {
+        "time": 80.0,
+        "drift_over_response_density": 1.5982109593268485,
+        "control_drift_density": 1.0115799242344727,
+        "drift_over_response_potential": 1.02696705851695,
+        "control_drift_potential": 0.12500054960590415
+      },
+      {
+        "time": 85.0,
+        "drift_over_response_density": 1.5087433702591608,
+        "control_drift_density": 0.9722188015835038,
+        "drift_over_response_potential": 1.0899830816621903,
+        "control_drift_potential": 0.1355701265224846
+      },
+      {
+        "time": 90.0,
+        "drift_over_response_density": 1.542689692602172,
+        "control_drift_density": 1.0196143615869144,
+        "drift_over_response_potential": 1.139167201015164,
+        "control_drift_potential": 0.1500933452627675
+      },
+      {
+        "time": 95.0,
+        "drift_over_response_density": 1.4524069110324918,
+        "control_drift_density": 1.0145647440859373,
+        "drift_over_response_potential": 1.3031756873804117,
+        "control_drift_potential": 0.1663961172858052
+      },
+      {
+        "time": 100.0,
+        "drift_over_response_density": 1.4261732013097135,
+        "control_drift_density": 0.998655936679868,
+        "drift_over_response_potential": 1.162278882895036,
+        "control_drift_potential": 0.18603710796507827
+      }
+    ]
+  },
+  "responses": {}
+}

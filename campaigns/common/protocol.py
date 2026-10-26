@@ -49,7 +49,7 @@ from pathlib import Path
 from scripts.guiding_center.paths import REPO_ROOT
 
 HYBRIDGE = REPO_ROOT
-PYTHON = HYBRIDGE / ".venv" / "bin" / "python"
+PYTHON = Path(os.environ.get("HYBRIDGE_PYTHON", HYBRIDGE / ".venv" / "bin" / "python"))
 LOCK = HYBRIDGE / ".cache" / "gpu-campaign.lock"
 OOM_TOKENS = ("OutOfMemory", "out of memory", "cudaErrorMemoryAllocation")
 # A foreign compute process contaminates a run only above these: device memory in MiB, or lifetime in
@@ -281,7 +281,8 @@ class Campaign:
         self.study = Path(study)
         self.runs = self.study / runs_dir
         self.records_path = self.study / records_name
-        self.cpu_cores, self.run_timeout, self.max_attempts = cpu_cores, float(run_timeout), int(max_attempts)
+        self.cpu_cores = os.environ.get("HYBRIDGE_CAMPAIGN_CPU_CORES", cpu_cores)
+        self.run_timeout, self.max_attempts = float(run_timeout), int(max_attempts)
         self.current: subprocess.Popen | None = None
         self._lock = None
         self.exclusive, self.min_free_mib = bool(exclusive), float(min_free_mib)
@@ -470,7 +471,7 @@ class Campaign:
         diff = git("diff", "HEAD")
         (source / "hybridge_tracked.diff").write_text(diff)
         untracked = [line for line in git("ls-files", "--others", "--exclude-standard").splitlines()
-                     if line.endswith((".py", ".json")) and line.startswith(("hybridge/", "scripts/", "configs/"))]
+                     if line.endswith((".py", ".json")) and line.startswith(("hybridge/", "scripts/", "configs/", "campaigns/"))]
         digest = hashlib.sha256(diff.encode())
         for name in untracked:
             target = source / "untracked" / name

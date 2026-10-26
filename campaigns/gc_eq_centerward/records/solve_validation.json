@@ -1,0 +1,46 @@
+{
+  "accepted_equilibria": 4,
+  "runner_tests_passed": 19,
+  "runs": [
+    {
+      "geometry": "star",
+      "archive_id": "star_centerward_20261015_01-0828fa6548f4",
+      "dual_residual": 1.1336783024370314e-15,
+      "mpi_ranks": 8,
+      "linear_solver": "mumps",
+      "peak_cpu_cores": 8.049998095706803,
+      "peak_active_ranks": 8,
+      "threads_per_rank_verified": 1
+    },
+    {
+      "geometry": "uglypacman",
+      "archive_id": "uglypacman_centerward_20261015_01-a1cd1093d1de",
+      "dual_residual": 5.169980068308706e-15,
+      "mpi_ranks": 8,
+      "linear_solver": "mumps",
+      "peak_cpu_cores": 8.061405519559688,
+      "peak_active_ranks": 8,
+      "threads_per_rank_verified": 1
+    },
+    {
+      "geometry": "iter",
+      "archive_id": "iter_centerward_20261015_01-04b1cdaffd04",
+      "dual_residual": 8.796130367843384e-16,
+      "mpi_ranks": 8,
+      "linear_solver": "mumps",
+      "peak_cpu_cores": 8.054900178663932,
+      "peak_active_ranks": 8,
+      "threads_per_rank_verified": 1
+    },
+    {
+      "geometry": "horseshoe",
+      "archive_id": "horseshoe_centerward_20261015_01-e7d2014fe7d2",
+      "dual_residual": 1.7789888363334226e-15,
+      "mpi_ranks": 8,
+      "linear_solver": "mumps",
+      "peak_cpu_cores": 8.159335108875489,
+      "peak_active_ranks": 8,
+      "threads_per_rank_verified": 1
+    }
+  ]
+}

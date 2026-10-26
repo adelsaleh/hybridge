@@ -1,0 +1,13 @@
+{
+  "rho_min_checked": -0.0002669621873651563,
+  "rho_max_checked": 1.0001513448267596,
+  "rho_bernstein_lower_bound": -0.026538343374377632,
+  "rho_bernstein_upper_bound": 1.0136664642842523,
+  "rho_cell_average_min": 0.0,
+  "rho_negative_mass_quadrature": 2.973645115302424e-08,
+  "rho_negative_l2_quadrature": 7.106698910301504e-07,
+  "rho_negative_cells_sampled": 1403.0,
+  "positivity_status": "violated",
+  "positivity_tolerance": 1e-12,
+  "positivity_backend": "device"
+}

@@ -1,0 +1,48 @@
+{
+  "rows": [
+    {
+      "prefix": "d1tau12800_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p05_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "imex-ark3",
+      "dt": 0.05,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17811454797019632,
+      "relative_error": -0.008607308055305792,
+      "potential_norm_gamma": 0.1786996049228345,
+      "potential_norm_relative_error": -0.005350857676452055,
+      "r_squared": 0.9999137188127173,
+      "subwindow_gammas": [
+        0.1796440831933241,
+        0.1748840890864864
+      ],
+      "control_fraction": 3.945497294317817e-09,
+      "positivity": "violated",
+      "density_minimum": -0.2628170977477357,
+      "invariants": {
+        "mass": 1.190182789774595e-14,
+        "energy_from_q_l2": 3.0217811926680184e-06,
+        "enstrophy": 0.011257925134341084
+      },
+      "wall_time_s": 369.2373363149818,
+      "jsonl": "run_outputs/article/diocotron/d1tau12800_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p05_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.2189169068587944,
+      "median_poisson_step_wall_time": 0.11714795336592942,
+      "median_transport_step_wall_time": 0.05967959063127637
+    }
+  ],
+  "failures": []
+}

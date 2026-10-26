@@ -1,0 +1,7 @@
+{
+  "ranks": 0,
+  "elapsed": 10.017493434948847,
+  "total_cpu_cores": 0,
+  "processes": {},
+  "interpretation": "The sampled CG4 process had completed; use cg4_star.execution.json and cg6_star.execution.json for actual eight-rank activity."
+}

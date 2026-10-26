@@ -1,0 +1,12 @@
+{
+  "pid": 837758,
+  "pgid": 837758,
+  "stop": "kill -- -837758",
+  "started_utc": "2026-10-20T11:07:05.994198+00:00",
+  "min_free_mib": 5500,
+  "exclusive": false,
+  "phase": "smoke then early-response checks",
+  "status": "failed",
+  "error": "RuntimeError: Smoke memory use needs a higher free-memory threshold",
+  "finished_utc": "2026-10-20T11:09:37.708116+00:00"
+}

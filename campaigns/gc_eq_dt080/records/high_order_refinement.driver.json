@@ -1,0 +1,7 @@
+{
+  "pid": 2673498,
+  "pgid": 2655634,
+  "stop": "kill -- -2655634",
+  "started": 1792161125.609286,
+  "scope": "DOLFINx equilibrium refinement only; no HDG runs"
+}

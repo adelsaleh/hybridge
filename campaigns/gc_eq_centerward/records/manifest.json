@@ -1,0 +1,152 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "completed.json records the accepted four geometries.",
+  "total_bytes": 1209316025,
+  "file_count": 327,
+  "subdirectories": 6,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "completed.json",
+    "horseshoe.complete.json",
+    "iter.complete.json",
+    "star.complete.json",
+    "uglypacman.complete.json"
+  ],
+  "copied": [
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 4287,
+      "sha256": "fc5567a6d18d483c727805dee402f41ba4261e00996b1d633e597d254ca118f7"
+    },
+    {
+      "path": "archive_verification.json",
+      "copy": "archive_verification.json",
+      "bytes": 64,
+      "sha256": "d7737702ff7482c81ba050eed34b7c347a39c701dfd5658ddffcd6f1b07f8bda"
+    },
+    {
+      "path": "catalog.csv",
+      "copy": "catalog.csv",
+      "bytes": 2232,
+      "sha256": "74dbdc7ee3488f7a8022f778edb43e76c44a639dd11a01dd168592da960b7c3a"
+    },
+    {
+      "path": "comparison.json",
+      "copy": "comparison.json",
+      "bytes": 4840,
+      "sha256": "05f49463527d92c7688713b9e122f650d4a414f42d19fa40fc643a449023fbfc"
+    },
+    {
+      "path": "completed.json",
+      "copy": "completed.json",
+      "bytes": 142,
+      "sha256": "95c956d50c76a2980ce8869cc09ad1148c5220a36dd914870a72e9478bcd5dbd"
+    },
+    {
+      "path": "driver.json",
+      "copy": "driver.json",
+      "bytes": 99,
+      "sha256": "b5bb064c92c65455edae7908b1a6d0dbe0061ff6fb6d9f6f42ba9a8567545245"
+    },
+    {
+      "path": "horseshoe.complete.json",
+      "copy": "horseshoe.complete.json",
+      "bytes": 534,
+      "sha256": "301e3a24b562e109d14954499946b9adf6c0fa7eab1db707c0d0aa6b7f3f180c"
+    },
+    {
+      "path": "horseshoe.execution.json",
+      "copy": "horseshoe.execution.json",
+      "bytes": 956,
+      "sha256": "d88f59d992bb4a8c221969b3abec1eb41236dd4df6576b8a7c991f21afbc038f"
+    },
+    {
+      "path": "inputs/horseshoe.json",
+      "copy": "inputs/horseshoe.json",
+      "bytes": 1121,
+      "sha256": "463551a824e70629e09131b7e358735b38727f82a8b706930b3996597859ce66"
+    },
+    {
+      "path": "inputs/iter.json",
+      "copy": "inputs/iter.json",
+      "bytes": 1118,
+      "sha256": "1f38a2d517942880bd43fecb3a7bd49a1c1b4874df2822c20627875dfdfc927a"
+    },
+    {
+      "path": "inputs/star.json",
+      "copy": "inputs/star.json",
+      "bytes": 1083,
+      "sha256": "32e1a47c776d2a00bed55a8726bb56b4bb2f186478f9fd15301eb7327d202465"
+    },
+    {
+      "path": "inputs/uglypacman.json",
+      "copy": "inputs/uglypacman.json",
+      "bytes": 1121,
+      "sha256": "4e66a387c53a20af2b16bcb9ddc6352ce2d84f4e189e85f8e454cf04a3e1fe1b"
+    },
+    {
+      "path": "iter.complete.json",
+      "copy": "iter.complete.json",
+      "bytes": 499,
+      "sha256": "ac1e5bbea911431359c1d9e8347f695fd87d986df19515dd11c7f3ddff4e956d"
+    },
+    {
+      "path": "iter.execution.json",
+      "copy": "iter.execution.json",
+      "bytes": 1043,
+      "sha256": "c304f9854a8b81e3f809100c6e7c9babe34a165fbabd8fa0ed04c94770e543ed"
+    },
+    {
+      "path": "producer_provenance.json",
+      "copy": "producer_provenance.json",
+      "bytes": 2999,
+      "sha256": "6f81a0f952a740af38ad6079dcdcc4a0cde4dca427d05f191145ca26a0c806b1"
+    },
+    {
+      "path": "solve_validation.json",
+      "copy": "solve_validation.json",
+      "bytes": 1352,
+      "sha256": "ac76ac277376f2850ff06f793373d6de591926942a834493807766b306d0d23d"
+    },
+    {
+      "path": "star.complete.json",
+      "copy": "star.complete.json",
+      "bytes": 514,
+      "sha256": "9436061a60b64b892fe58dd079f6887ee0afd98853a9daad81bcc06431bfa065"
+    },
+    {
+      "path": "star.execution.json",
+      "copy": "star.execution.json",
+      "bytes": 931,
+      "sha256": "f41923e0dd3846b2b5cd3fe66ee8743c2266c570a1691b202c7d684804dfd1f4"
+    },
+    {
+      "path": "star_clearance_check.json",
+      "copy": "star_clearance_check.json",
+      "bytes": 428,
+      "sha256": "6674013266fc389e3d79693cc39505bc940dadcb16871bbcf4855505b5b12ea6"
+    },
+    {
+      "path": "uglypacman.complete.json",
+      "copy": "uglypacman.complete.json",
+      "bytes": 522,
+      "sha256": "f546999b55f754b7cb4be2621dfba9ec4ca5d140f279e08b6664b9871a85b4c1"
+    },
+    {
+      "path": "uglypacman.execution.json",
+      "copy": "uglypacman.execution.json",
+      "bytes": 961,
+      "sha256": "a2de79cce5e957d661621a91783edcb9a30e5aa8e5be4e08817fc3c31193e257"
+    },
+    {
+      "path": "validation.json",
+      "copy": "validation.json",
+      "bytes": 707,
+      "sha256": "2470e088061d4e8ff58faf116e5393c85ae7df7dacf2e19dbe230b174a6a5cf0"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

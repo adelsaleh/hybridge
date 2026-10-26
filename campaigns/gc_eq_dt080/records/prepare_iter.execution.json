@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "-m",
+    "projects.diocotron.studies.equilibrium_catalog.prepare_refined",
+    "--archive",
+    "/home/adelsaleh/src/gc-hdg-article/equilibria",
+    "--equilibrium",
+    "iter_centerward_20261015_01",
+    "--mesh-size",
+    "0.02",
+    "--output",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/inputs/iter"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 8.053915281081572,
+  "peak_cpu_cores": 0.9784557853586631,
+  "peak_active_ranks": 1,
+  "peak_sum_rank_rss_bytes": 347951104,
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/prepare_iter_1792151872.log"
+}

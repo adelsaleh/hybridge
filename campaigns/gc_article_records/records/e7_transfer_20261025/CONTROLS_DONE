@@ -1,0 +1,13 @@
+{
+  "pid": 1330538,
+  "pgid": 1330538,
+  "stop": "kill -- -1330538",
+  "started_utc": "2026-10-25T10:36:15.066829+00:00",
+  "runs": [
+    "pacman_resolved",
+    "mid_b",
+    "pacman_refined_k0"
+  ],
+  "finished_utc": "2026-10-25T10:58:34.240952+00:00",
+  "failures": []
+}

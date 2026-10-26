@@ -1,0 +1,80 @@
+{
+  "reference": "p6_dt025_seed_a02_undercut_star_p6_si_bdf2_dt0p025_seed",
+  "rows": [
+    {
+      "time": 1,
+      "density_p4_vs_p6": 0.12297223681828134,
+      "density_p5_vs_p6": 0.03809663110338601,
+      "density_dt_halving": 0.002230342948179187,
+      "response_dt_halving": 0.12306477330277175,
+      "fine_rho_min": -1.4428723745605635e-05,
+      "fine_rho_max": 0.9963124705694651,
+      "fine_enstrophy_relative_drift": -1.8788547587318312e-07,
+      "fine_energy_relative_drift": 3.0421452026096225e-09,
+      "fine_mass_relative_drift": -2.6145558744033794e-15
+    },
+    {
+      "time": 15,
+      "density_p4_vs_p6": 0.3962840035228832,
+      "density_p5_vs_p6": 0.11017312790091566,
+      "density_dt_halving": 0.027713650913435597,
+      "response_dt_halving": 0.4056892341162213,
+      "fine_rho_min": -4.393550390072008e-05,
+      "fine_rho_max": 0.9966219707045247,
+      "fine_enstrophy_relative_drift": -2.2269970021726566e-06,
+      "fine_energy_relative_drift": -3.9885915102955695e-09,
+      "fine_mass_relative_drift": -4.215971347475449e-14
+    },
+    {
+      "time": 30,
+      "density_p4_vs_p6": 0.6094325076122988,
+      "density_p5_vs_p6": 0.1818897643269806,
+      "density_dt_halving": 0.4112722648380588,
+      "response_dt_halving": 0.571604049352331,
+      "fine_rho_min": -0.0009043516200095123,
+      "fine_rho_max": 1.0175412656988085,
+      "fine_enstrophy_relative_drift": -3.7672946086448266e-05,
+      "fine_energy_relative_drift": 1.16282528039952e-07,
+      "fine_mass_relative_drift": -8.464624643380941e-14
+    },
+    {
+      "time": 35,
+      "density_p4_vs_p6": 0.6380775784294362,
+      "density_p5_vs_p6": 0.1872964104441318,
+      "density_dt_halving": 1.3982986077493655,
+      "response_dt_halving": 0.6150497802892668,
+      "fine_rho_min": -0.005586756486050841,
+      "fine_rho_max": 1.0366893310722451,
+      "fine_enstrophy_relative_drift": -0.00018412071227419245,
+      "fine_energy_relative_drift": 5.876668334549269e-07,
+      "fine_mass_relative_drift": -9.853607451657736e-14
+    },
+    {
+      "time": 40,
+      "density_p4_vs_p6": 1.1472140711942613,
+      "density_p5_vs_p6": 0.4141645678820475,
+      "density_dt_halving": 4.346270535973266,
+      "response_dt_halving": 0.697046714027999,
+      "fine_rho_min": -0.14811490213607564,
+      "fine_rho_max": 1.0511427412613235,
+      "fine_enstrophy_relative_drift": -0.0009886348547626968,
+      "fine_energy_relative_drift": 2.9502328799292876e-06,
+      "fine_mass_relative_drift": -1.1258931234149551e-13
+    }
+  ],
+  "density_color_limits": [
+    -0.005586756486050841,
+    1.0366893310722451
+  ],
+  "plotted_times": [
+    25,
+    30,
+    35
+  ],
+  "through_35": {
+    "mass_relative_drift_maximum": 9.853607451657736e-14,
+    "energy_relative_drift_maximum": 5.876668334549269e-07,
+    "minimum_sampled_density": -0.005586756486050841,
+    "maximum_sampled_density": 1.0419778777222746
+  }
+}

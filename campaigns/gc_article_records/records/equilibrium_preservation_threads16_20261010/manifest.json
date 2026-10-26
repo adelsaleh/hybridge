@@ -1,0 +1,62 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_preservation_threads16_20261010",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 3738784,
+  "file_count": 10,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "star_02_p4_si-bdf2.csv",
+      "copy": "star_02_p4_si-bdf2.csv",
+      "bytes": 26912,
+      "sha256": "64989d5724f24f64f4a8e9f55568d529c91bffef4463376b449c09772f783d25"
+    },
+    {
+      "path": "star_02_p4_si-bdf2.jsonl",
+      "copy": "star_02_p4_si-bdf2.jsonl",
+      "bytes": 58788,
+      "sha256": "e73ef9cbe5b079d315a30ae877db08ea520b72ba4ac37bfe911a0a2ab7555cd0"
+    },
+    {
+      "path": "star_02_p4_si-bdf2_config.json",
+      "copy": "star_02_p4_si-bdf2_config.json",
+      "bytes": 4216,
+      "sha256": "ef2e0f563f85515c9ff82eb7f77b200377271f0afe97a0e2c30241c55aff06f9"
+    },
+    {
+      "path": "star_02_p4_si-bdf2_initial_positivity.json",
+      "copy": "star_02_p4_si-bdf2_initial_positivity.json",
+      "bytes": 488,
+      "sha256": "1fc9c524029540ce781e86c0e3613c509aeccba7a3d385c446106e36d8bd847b"
+    },
+    {
+      "path": "star_02_p4_si-bdf2_timings.csv",
+      "copy": "star_02_p4_si-bdf2_timings.csv",
+      "bytes": 20653,
+      "sha256": "f7f973c880e3a662b6b941c31fee351faa5e8d41689e5db47308165998e433cc"
+    },
+    {
+      "path": "star_02_p4_si-bdf2_timings.jsonl",
+      "copy": "star_02_p4_si-bdf2_timings.jsonl",
+      "bytes": 44900,
+      "sha256": "04646773969ecc1cf1d13fdad7cbe5785da872a9e5d8269e652f936172d38707"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 3881,
+      "sha256": "231d3c7c8a24a656d8bca0d797001a7e66b18f94b147b717fb30682d09a8c66a"
+    },
+    {
+      "path": "thread_parity.json",
+      "copy": "thread_parity.json",
+      "bytes": 324,
+      "sha256": "468afeb83df626130ce48de6a87be2500af44a483855b84994575a93254ab71b"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

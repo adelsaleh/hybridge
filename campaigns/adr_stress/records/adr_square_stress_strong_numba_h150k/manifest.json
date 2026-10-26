@@ -1,0 +1,43 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 19650154260,
+  "file_count": 272,
+  "subdirectories": 8,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "assemblies.json",
+      "copy": "assemblies.json",
+      "bytes": 5864,
+      "sha256": "c5c1041f5c8b1122ab99bcb8f3d709c7790fa9b61691cf9af8b3acc8a7acf8fd"
+    },
+    {
+      "path": "events.jsonl",
+      "copy": "events.jsonl",
+      "bytes": 136754,
+      "sha256": "54f8d3f5107b781d6bde71827c973420a7ac00ed421487f8a944a060f129ba2c"
+    },
+    {
+      "path": "manifest.json",
+      "copy": "source/manifest.json",
+      "bytes": 39011,
+      "sha256": "8f0218a39bd6ea0707387c24c44146cbec8ebc92c488bf0c827aa52f9d3d8c2e"
+    },
+    {
+      "path": "pardiso_checks.json",
+      "copy": "pardiso_checks.json",
+      "bytes": 1924,
+      "sha256": "c605a2d784e1cfc3aa366217b79f5e0751cfb4946c2e935687ec96bb04da2e62"
+    }
+  ],
+  "too_large_or_nontext": [
+    {
+      "path": "summary.json",
+      "bytes": 1444639
+    }
+  ],
+  "inventory_errors": []
+}

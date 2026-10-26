@@ -1,0 +1,111 @@
+{
+  "scope": "short unperturbed preservation check; no long-time certification",
+  "command": [
+    "scripts/guiding_center/benchmarks/run_equilibrium_preservation.py",
+    "--archive",
+    "../gc-hdg-article/equilibria",
+    "--output",
+    "../gc-hdg-article/run_outputs/equilibrium_preservation_threads16_20261010",
+    "--equilibria",
+    "star_02",
+    "--schemes",
+    "si-bdf2",
+    "--orders",
+    "4",
+    "--remesh-size",
+    ".04",
+    "--quadrature-1d",
+    "16"
+  ],
+  "settings": {
+    "archive": "../gc-hdg-article/equilibria",
+    "output": "../gc-hdg-article/run_outputs/equilibrium_preservation_threads16_20261010",
+    "equilibria": "star_02",
+    "schemes": "si-bdf2",
+    "orders": "4",
+    "dt": 0.05,
+    "steps": 4,
+    "remesh_size": 0.04,
+    "iter_remesh_size": 0.6,
+    "original_mesh": false,
+    "max_triangles": 20000,
+    "quadrature_1d": 16,
+    "threads": 16,
+    "dry_run": false
+  },
+  "assembly_threads": {
+    "numba": 16,
+    "host_numpy": 16,
+    "pardiso_requested": 16,
+    "available_cpus": 24
+  },
+  "runs": [
+    {
+      "name": "star_02",
+      "key": "star_02_p4_si-bdf2",
+      "order": 4,
+      "scheme": "si-bdf2",
+      "triangles": 7407,
+      "dt": 0.05,
+      "steps": 4,
+      "time": 0.2,
+      "pardiso_threads": 16,
+      "assembly_threads": {
+        "numba": 16,
+        "host_numpy": 16,
+        "pardiso_requested": 16,
+        "available_cpus": 24
+      },
+      "activity": {
+        "wall_seconds": 13.68510113703087,
+        "cpu_seconds": 24.654161462999998,
+        "peak_active_threads": 16,
+        "peak_cpu_cores": 3.255013884708654,
+        "peak_rss_bytes": 1642954752
+      },
+      "metrics": {
+        "equilibrium_import": {
+          "checkpoint": "/home/adelsaleh/src/gc-hdg-article/equilibria/objects/64318bc1b1496c8b47f5ad3f470df050d870329eeebeba7f6249102fbec7e1cc.npz",
+          "checkpoint_sha256": "64318bc1b1496c8b47f5ad3f470df050d870329eeebeba7f6249102fbec7e1cc",
+          "archive_id": "star_02-64318bc1b149",
+          "geometry": "star",
+          "source_state_id": "41cecb02e20f41e8bcbafcdb8edf7175",
+          "source_cells": 463589,
+          "source_certificate_status": "ADMISSIBLE_EQUILIBRIUM",
+          "source_dual_residual": 4.606964402468316e-16,
+          "window": {
+            "epsilon": 8e-05,
+            "kind": "logistic",
+            "midpoint": 0.0025,
+            "relative_epsilon": 0.08,
+            "smoothing_mode": "relative_to_delta",
+            "threshold_width_delta": 0.001
+          },
+          "density_transfer": "L2 projection of W(phi_CG2) at quadrature points",
+          "remesh_size": 0.04,
+          "boundary": "archived affine polygon, unchanged",
+          "certificate_transferred": false
+        },
+        "equilibrium_semilinear_l2": 0.02109436421331758,
+        "equilibrium_semilinear_relative_l2": 0.0441595905480748,
+        "equilibrium_poisson_cg_relative_l2": 0.005107279933833926,
+        "equilibrium_projection_quadrature_relative_l2": 3.733303333174521e-05,
+        "equilibrium_projection_quadrature_check_1d": 20,
+        "equilibrium_steady_transport_l2": 0.255494237622563,
+        "equilibrium_steady_transport_relative_l2": 0.534859491696928,
+        "equilibrium_density_projection_time": 1.3435341140720993,
+        "equilibrium_poisson_wall_time": 0.16996671294327825,
+        "diocotron_rho_eq_relative_l2": 0.03096974460378852,
+        "diocotron_phi_eq_relative_l2": 0.002424415290342868,
+        "mass_relative_drift": 0.0,
+        "energy_relative_drift": -4.225757983043506e-06,
+        "enstrophy_relative_drift": -0.0013804784613619479,
+        "rho_min": -0.19185241476721207,
+        "rho_max": 1.1971971232340912,
+        "maximum_poisson_physical_relative_residual": 7.671781911876359e-14
+      },
+      "diagnostics": "star_02_p4_si-bdf2.jsonl",
+      "fields": "star_02_p4_si-bdf2_fields.npz"
+    }
+  ]
+}

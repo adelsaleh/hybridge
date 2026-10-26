@@ -1,0 +1,20 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/iter_h003_lu_gpu_20260925",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 3298910980,
+  "file_count": 29,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 27328,
+      "sha256": "b3880b4c2f58f57d26902d8a9ac380a6297a5298a9b082108f4aec5804a15e02"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

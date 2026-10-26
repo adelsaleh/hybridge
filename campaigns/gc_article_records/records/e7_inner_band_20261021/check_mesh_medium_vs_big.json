@@ -1,0 +1,61 @@
+{
+  "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_inner_band_20261021/medium_cg6_r0p005/medium_cg6_r0p005_01.npz",
+  "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_inner_band_20261021/big_cg6_r0p005/big_cg6_r0p005_01.npz",
+  "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+  "comparisons": [
+    {
+      "quadrature_points_per_duffy_coordinate": 12,
+      "coarse_cells": 262932,
+      "fine_cells": 507612,
+      "coarse_midpoint": 0.00525,
+      "fine_midpoint": 0.00525,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 9.962750696249785e-11,
+        "coarse_l2_norm": 0.00652365316368146,
+        "fine_l2_norm": 0.006523653164636255,
+        "relative_l2_difference": 1.5271735705166487e-08
+      },
+      "density": {
+        "l2_difference": 2.6708388193243716e-08,
+        "coarse_l2_norm": 0.3844175540411779,
+        "fine_l2_norm": 0.38441755416337386,
+        "relative_l2_difference": 6.947754571554477e-08
+      },
+      "gradient": {
+        "l2_difference": 1.5874012923959731e-06,
+        "coarse_l2_norm": 0.029094304044955128,
+        "fine_l2_norm": 0.029094304324758777,
+        "relative_l2_difference": 5.456055160064854e-05
+      }
+    },
+    {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 262932,
+      "fine_cells": 507612,
+      "coarse_midpoint": 0.00525,
+      "fine_midpoint": 0.00525,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 9.987434566049695e-11,
+        "coarse_l2_norm": 0.006523653163681489,
+        "fine_l2_norm": 0.006523653164636256,
+        "relative_l2_difference": 1.5309573200779706e-08
+      },
+      "density": {
+        "l2_difference": 2.670836081834233e-08,
+        "coarse_l2_norm": 0.3844175540411721,
+        "fine_l2_norm": 0.38441755416337253,
+        "relative_l2_difference": 6.947747450417318e-08
+      },
+      "gradient": {
+        "l2_difference": 1.654069403288318e-06,
+        "coarse_l2_norm": 0.029094304376796894,
+        "fine_l2_norm": 0.02909430432475878,
+        "relative_l2_difference": 5.685200047490848e-05
+      }
+    }
+  ]
+}

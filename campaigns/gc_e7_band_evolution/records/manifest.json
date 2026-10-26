@@ -1,0 +1,78 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_band_evolution_20261019",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "E7_DONE present; eight production runs completed, earlier smoke failures retained.",
+  "total_bytes": 50988806730,
+  "file_count": 239,
+  "subdirectories": 5,
+  "run_attempt_statuses": {
+    "ok": 10
+  },
+  "completion_markers": [
+    "E7_DONE"
+  ],
+  "copied": [
+    {
+      "path": "E7_DONE",
+      "copy": "E7_DONE",
+      "bytes": 20,
+      "sha256": "8dc016240a014dec9cf33bdd2e512542702c7cc91643cc35f149ee688c2df4d8"
+    },
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 6422,
+      "sha256": "30c9711996ee5ef22725005214ef0cecae1395d1c58dc9ea4813448209532455"
+    },
+    {
+      "path": "analysis/e7_summary.json",
+      "copy": "analysis/e7_summary.json",
+      "bytes": 828889,
+      "sha256": "143a223187aedda05a83a0e0f72ba056da7894ce180dba855c611bfc72be9d40"
+    },
+    {
+      "path": "analysis/e7_summary.md",
+      "copy": "analysis/e7_summary.md",
+      "bytes": 2564,
+      "sha256": "3a47a63c93a5f9163dd7e77124bc62c2a0a20d86f48a1e62dd66236aa4c36b3c"
+    },
+    {
+      "path": "driver.json",
+      "copy": "driver.json",
+      "bytes": 106,
+      "sha256": "94959e58112e70878de790a751857802fa685ef3ca9375099314a6267d90c1e6"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 12166,
+      "sha256": "f75cb9888baccb18437855becaf48d76aef797032170e609bfe5a960f2bd14b2"
+    },
+    {
+      "path": "runs/smoke/e7smoke_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/smoke/e7smoke_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4156,
+      "sha256": "097afd439e0547791af03f6948e14a07fcde2f66d85563e73c0f8dd30cbb2c79"
+    },
+    {
+      "path": "runs/smoke/e7smoke_star_p6_si_bdf2_dt0p05_seed_summary.json",
+      "copy": "runs/smoke/e7smoke_star_p6_si_bdf2_dt0p05_seed_summary.json",
+      "bytes": 4339,
+      "sha256": "7d8f3e455bd7e32d117248e717fbfce969ee969b24f61beba2cb1f9fed03658f"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 19406,
+      "sha256": "38b5d22fedd3d2b4b0563d69da004b7dc45cdda1257031bb84c0ceb49e1b7505"
+    },
+    {
+      "path": "runs_failed.jsonl",
+      "copy": "runs_failed.jsonl",
+      "bytes": 3957,
+      "sha256": "3971bdb7efa3677ac02cfb471dbaf9d549878bd6f4247f0ef289a36f43648213"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

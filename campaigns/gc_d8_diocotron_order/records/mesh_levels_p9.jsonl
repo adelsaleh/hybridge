@@ -1,0 +1,8 @@
+{"family": "smooth", "level": "L0", "p": 9, "s": 5.35602, "hb": 0.0428482, "h": 0.2142409, "triangles": 1998, "edges": 3019, "element_unknowns": 109890, "trace_unknowns": 30190, "target": 110000.0}
+{"family": "smooth", "level": "L1", "p": 9, "s": 2.76365, "hb": 0.0221092, "h": 0.1105462, "triangles": 5919, "edges": 8907, "element_unknowns": 325545, "trace_unknowns": 89070, "target": 330000.0}
+{"family": "smooth", "level": "L2", "p": 9, "s": 1.4639, "hb": 0.0117112, "h": 0.058556, "triangles": 18156, "edges": 27288, "element_unknowns": 998580, "trace_unknowns": 272880, "target": 1000000.0}
+{"family": "smooth", "level": "L3", "p": 9, "s": 0.80334, "hb": 0.0064267, "h": 0.0321335, "triangles": 54570, "edges": 81953, "element_unknowns": 3001350, "trace_unknowns": 819530, "target": 3000000.0}
+{"family": "zg", "level": "L0", "p": 9, "s": 4.00773, "hb": 0.0320618, "h": 0.1603092, "triangles": 1984, "edges": 2996, "element_unknowns": 109120, "trace_unknowns": 29960, "target": 110000.0}
+{"family": "zg", "level": "L1", "p": 9, "s": 1.8258, "hb": 0.0146064, "h": 0.0730321, "triangles": 5913, "edges": 8913, "element_unknowns": 325215, "trace_unknowns": 89130, "target": 330000.0}
+{"family": "zg", "level": "L2", "p": 9, "s": 0.90434, "hb": 0.0072347, "h": 0.0361736, "triangles": 18218, "edges": 27414, "element_unknowns": 1001990, "trace_unknowns": 274140, "target": 1000000.0}
+{"family": "zg", "level": "L3", "p": 9, "s": 0.4794, "hb": 0.0038352, "h": 0.019176, "triangles": 54450, "edges": 81839, "element_unknowns": 2994750, "trace_unknowns": 818390, "target": 3000000.0}

@@ -1,0 +1,13 @@
+{
+  "geometry": "iter",
+  "requested_size": 0.02,
+  "num_cells": 182558,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "da56d69e7d2622c0c326af4c7c2f799b424d75059bfde1649065896e00e38d15",
+  "source_archive_id": "iter_centerward_20261015_01-04b1cdaffd04",
+  "source_checkpoint_sha256": "04b1cdaffd0428bda951f6cb3c82d8abbe4c4a74edc20ed105ccec72f01094bf",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 3342,
+  "geometric_extrapolation_required": false
+}

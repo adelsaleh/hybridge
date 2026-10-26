@@ -1,0 +1,10 @@
+{
+  "label": "final_plots",
+  "pid": 154678,
+  "pgid": 123363,
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_eps0005_20261016/postprocess.py"
+  ],
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_eps0005_20261016/logs/final_plots_1792244298604250499.log"
+}

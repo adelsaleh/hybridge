@@ -1,0 +1,15 @@
+{
+  "status": "partial",
+  "failures": [
+    "horseshoe: continuation failed at eps0p005_q48",
+    "horseshoe: target equilibrium unavailable"
+  ],
+  "finished": 1792238952.1458492,
+  "target_relative_epsilon": 0.005,
+  "accepted_geometries": [
+    "iter",
+    "star",
+    "uglypacman"
+  ],
+  "guiding_center_evolution_performed": false
+}

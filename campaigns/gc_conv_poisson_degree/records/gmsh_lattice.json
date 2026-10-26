@@ -1,0 +1,91 @@
+{
+ "box": [
+  [
+   -0.6,
+   0.6
+  ],
+  [
+   -0.6,
+   0.6
+  ]
+ ],
+ "meshes": [
+  {
+   "mesh_size": 0.08,
+   "triangles": 1474,
+   "lattice": {
+    "edges": 781,
+    "triangles": 507,
+    "coherence": 0.9999998672276206,
+    "angle": 0.0003925613198862729,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.04,
+   "triangles": 5822,
+   "lattice": {
+    "edges": 3094,
+    "triangles": 2079,
+    "coherence": 1.0,
+    "angle": 2.2879756112758044e-09,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.02,
+   "triangles": 23254,
+   "lattice": {
+    "edges": 12420,
+    "triangles": 8340,
+    "coherence": 1.0,
+    "angle": 29.999999999999375,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.01,
+   "triangles": 92552,
+   "lattice": {
+    "edges": 49920,
+    "triangles": 33360,
+    "coherence": 1.0,
+    "angle": 29.99999999992785,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.005,
+   "triangles": 369790,
+   "lattice": {
+    "edges": 199920,
+    "triangles": 132960,
+    "coherence": 0.9999999999999999,
+    "angle": 1.0050681924187361e-10,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.0025,
+   "triangles": 1478818,
+   "lattice": {
+    "edges": 798240,
+    "triangles": 531840,
+    "coherence": 1.0,
+    "angle": 4.978541210001597e-10,
+    "equilateral": 1.0
+   }
+  },
+  {
+   "mesh_size": 0.00177,
+   "triangles": 2950142,
+   "lattice": {
+    "edges": 1592622,
+    "triangles": 1061748,
+    "coherence": 0.9999999999999999,
+    "angle": 1.6538942567492717e-10,
+    "equilateral": 1.0
+   }
+  }
+ ]
+}

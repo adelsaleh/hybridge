@@ -1,0 +1,18 @@
+{
+  "definition": "Normal distance from rho=0.1 to rho=0.9 at each edge",
+  "sampling": "Uniform arclength on the smoothed middle contour",
+  "points_along_contour": 282,
+  "sampling_refinement_max_relative_difference": 0.00019892274320865155,
+  "widths_over_mean_band_thickness": {
+    "inner": {
+      "minimum": 0.949900815781148,
+      "mean": 1.140647569186681,
+      "maximum": 1.4595737496484802
+    },
+    "outer": {
+      "minimum": 0.18943869062820598,
+      "mean": 0.21414793024451947,
+      "maximum": 0.2706143644967253
+    }
+  }
+}

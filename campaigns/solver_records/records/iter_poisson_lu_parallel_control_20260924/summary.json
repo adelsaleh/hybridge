@@ -1,0 +1,228 @@
+{
+  "pardiso": {
+    "status": "passed",
+    "candidate": "pardiso",
+    "samples": [
+      {
+        "warmup": true,
+        "seconds": 2.8441403340548277,
+        "residual_norm": 3.6632356543922774e-11,
+        "relative_residual": 8.941224315080914e-11,
+        "relative_trace_difference": 3.349808181608632e-13,
+        "passed": true,
+        "pardiso_phase": 33,
+        "cpu_seconds": 20.447990341000008,
+        "effective_cores": 7.189515262718335
+      },
+      {
+        "warmup": false,
+        "seconds": 2.831273237010464,
+        "residual_norm": 3.6643245150558344e-11,
+        "relative_residual": 8.943882005810981e-11,
+        "relative_trace_difference": 3.3113102036837367e-13,
+        "passed": true,
+        "pardiso_phase": 33,
+        "cpu_seconds": 19.00560791999999,
+        "effective_cores": 6.712742405628068
+      },
+      {
+        "warmup": false,
+        "seconds": 2.83474797103554,
+        "residual_norm": 3.664694391008509e-11,
+        "relative_residual": 8.944784798908022e-11,
+        "relative_trace_difference": 3.3550197267219487e-13,
+        "passed": true,
+        "pardiso_phase": 33,
+        "cpu_seconds": 18.958547547999984,
+        "effective_cores": 6.687912908558986
+      },
+      {
+        "warmup": false,
+        "seconds": 2.8153506910894066,
+        "residual_norm": 3.669019397408844e-11,
+        "relative_residual": 8.955341273030343e-11,
+        "relative_trace_difference": 3.377917336632314e-13,
+        "passed": true,
+        "pardiso_phase": 33,
+        "cpu_seconds": 18.927839796,
+        "effective_cores": 6.723084216792839
+      }
+    ],
+    "new_compilation_allowed": false,
+    "time_integration": false,
+    "capture": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/iter_repeated_poisson_20260924",
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "diagnostic_sha256": "c14b88c20816885dba52c2cd78d748dece0225d6a5f8e5c57fd23510d6916bce",
+    "thread_environment": {
+      "MKL_NUM_THREADS": "16",
+      "OMP_NUM_THREADS": "16",
+      "OPENBLAS_NUM_THREADS": "16",
+      "MKL_DYNAMIC": "FALSE",
+      "OMP_DYNAMIC": "FALSE"
+    },
+    "stage": "completed",
+    "peak_process_rss_kib": 19929580,
+    "trace_dofs": 3820649,
+    "matrix_sha256": {
+      "data": "59c6b08d61e871beed14d061e941e8488c5dc2bef4ccef8e343a3d4534a2813f",
+      "indices": "49162ac81bae0917a9bb204ee7ca74f3adecf8606405315d461f96a0f71284c4",
+      "indptr": "7cd6a7b4176bb89f13d050280490b2bf8572c64fe79f21be8f7c1d2d9743f98a"
+    },
+    "rhs_sha256": "13d7e30fc7c8d1223c9b22bede10ccc908c83fd7153abd0c826e6cbcecf91a2b",
+    "target": 1e-10,
+    "rhs_norm": 0.4097017953361935,
+    "conversion_seconds": 0.5808786191046238,
+    "matrix_nnz": 133547687,
+    "mkl_max_threads": 16,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "factorization_seconds": 12.249270770931616,
+    "factorization_cpu_seconds": 115.149039294,
+    "factorization_effective_cores": 9.400481175357541,
+    "factor_statistics": {
+      "raw_iparm": {
+        "7": 0,
+        "14": 0,
+        "15": 8429376,
+        "16": 6099224,
+        "17": 10778505,
+        "18": 1231945211,
+        "60": 0
+      },
+      "iparm_indexing": "one_based",
+      "in_core": true,
+      "symbolic_peak_kib": 8429376,
+      "symbolic_permanent_kib": 6099224,
+      "numerical_factors_kib": 10778505,
+      "estimated_solver_peak_kib": 16877729,
+      "factor_nnz": 1231945211,
+      "fill_ratio": 9.224758875831373,
+      "wrapper_matrix_copy_bytes": 0,
+      "wrapper_uses_matrix_hash": true,
+      "perturbed_pivots": 0,
+      "iterative_refinement_steps": 0
+    },
+    "timing_scope": "PyPardiso solve with retained factors, including wrapper matrix-reuse checks; RHS and solution on CPU",
+    "mean_reused_seconds": 2.8271239663784704,
+    "returncode": 0,
+    "worker_wall_seconds": 28.04531208379194,
+    "monitored_peak_rss_gib": 19.009185791015625,
+    "monitored_peak_hwm_gib": 19.009185791015625,
+    "minimum_available_gib": 92.82389831542969,
+    "memory_poll_seconds": 0.5
+  },
+  "pmg-fast": {
+    "status": "passed",
+    "candidate": "pmg-fast",
+    "samples": [
+      {
+        "warmup": true,
+        "seconds": 0.25850365520454943,
+        "residual_norm": 7.342827861749732e-11,
+        "relative_residual": 1.7922371698967898e-10,
+        "relative_trace_difference": 3.2859577437110905e-13,
+        "passed": true,
+        "gpu_free_bytes": 44575031296,
+        "cupy_pool_reserved_bytes": 3281546752
+      },
+      {
+        "warmup": false,
+        "seconds": 0.25884985784068704,
+        "residual_norm": 7.342827861749732e-11,
+        "relative_residual": 1.7922371698967898e-10,
+        "relative_trace_difference": 3.2859577437110905e-13,
+        "passed": true,
+        "gpu_free_bytes": 44575031296,
+        "cupy_pool_reserved_bytes": 3281546752
+      },
+      {
+        "warmup": false,
+        "seconds": 0.2587057650089264,
+        "residual_norm": 7.342827861749732e-11,
+        "relative_residual": 1.7922371698967898e-10,
+        "relative_trace_difference": 3.2859577437110905e-13,
+        "passed": true,
+        "gpu_free_bytes": 44575031296,
+        "cupy_pool_reserved_bytes": 3281546752
+      },
+      {
+        "warmup": false,
+        "seconds": 0.25851906300522387,
+        "residual_norm": 7.342827861749732e-11,
+        "relative_residual": 1.7922371698967898e-10,
+        "relative_trace_difference": 3.2859577437110905e-13,
+        "passed": true,
+        "gpu_free_bytes": 44575031296,
+        "cupy_pool_reserved_bytes": 3281546752
+      }
+    ],
+    "new_compilation_allowed": false,
+    "time_integration": false,
+    "capture": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/iter_repeated_poisson_20260924",
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "diagnostic_sha256": "c14b88c20816885dba52c2cd78d748dece0225d6a5f8e5c57fd23510d6916bce",
+    "thread_environment": {
+      "MKL_NUM_THREADS": "16",
+      "OMP_NUM_THREADS": "16",
+      "OPENBLAS_NUM_THREADS": "16",
+      "MKL_DYNAMIC": "FALSE",
+      "OMP_DYNAMIC": "FALSE"
+    },
+    "stage": "completed",
+    "peak_process_rss_kib": 4842576,
+    "trace_dofs": 3820649,
+    "matrix_sha256": {
+      "data": "59c6b08d61e871beed14d061e941e8488c5dc2bef4ccef8e343a3d4534a2813f",
+      "indices": "49162ac81bae0917a9bb204ee7ca74f3adecf8606405315d461f96a0f71284c4",
+      "indptr": "7cd6a7b4176bb89f13d050280490b2bf8572c64fe79f21be8f7c1d2d9743f98a"
+    },
+    "rhs_sha256": "13d7e30fc7c8d1223c9b22bede10ccc908c83fd7153abd0c826e6cbcecf91a2b",
+    "target": 1e-10,
+    "rhs_norm": 0.4097017953361935,
+    "conversion_seconds": 0.5745372590608895,
+    "matrix_nnz": 133547687,
+    "hierarchy_setup_seconds": 1.7240947261452675,
+    "timing_scope": "native fast PCGF solve on the identical matrix/RHS, zero initial guess, cached hierarchy; original-matrix residual checks included",
+    "iterative_details": [
+      {
+        "iterations": 46,
+        "converged": true
+      },
+      {
+        "iterations": 46,
+        "converged": true
+      },
+      {
+        "iterations": 46,
+        "converged": true
+      },
+      {
+        "iterations": 46,
+        "converged": true
+      }
+    ],
+    "mean_reused_seconds": 0.2586915619516124,
+    "returncode": 0,
+    "worker_wall_seconds": 6.50969498208724,
+    "monitored_peak_rss_gib": 4.590633392333984,
+    "monitored_peak_hwm_gib": 4.6182403564453125,
+    "minimum_available_gib": 107.57649612426758,
+    "memory_poll_seconds": 0.5
+  }
+}

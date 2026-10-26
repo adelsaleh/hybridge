@@ -1,0 +1,13 @@
+{
+  "name": "big_cg6_q48_01",
+  "midpoint": 0.002684847970782428,
+  "distance": null,
+  "mass": 0.37593424092572586,
+  "mean_thickness": 0.045063800263133745,
+  "wall_clearance": 0.04912442520014668,
+  "dual_residual": 3.23933586157494e-15,
+  "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_mid_band_20261023/big_cg6_q48/big_cg6_q48_01.npz",
+  "state_id": "c1e9f5df2f734420883560b5be83e7e3",
+  "archive_id": "big_cg6_q48_01-390b47b31cd8",
+  "ranks": 1
+}

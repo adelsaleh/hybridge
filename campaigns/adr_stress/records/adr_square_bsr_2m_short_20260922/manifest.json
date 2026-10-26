@@ -1,0 +1,44 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_bsr_2m_short_20260922",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 10455220,
+  "file_count": 178,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "assemblies.json",
+      "copy": "assemblies.json",
+      "bytes": 1646,
+      "sha256": "687f57697276eb6c892ff724dfc08aef9dc7d15ddc57b7b3ac2bde79fd023ea0"
+    },
+    {
+      "path": "completion.json",
+      "copy": "completion.json",
+      "bytes": 1978,
+      "sha256": "9940863fce38b6333237f500938e1f01826cbe654a90e04733d8490c61ac6c3e"
+    },
+    {
+      "path": "events.jsonl",
+      "copy": "events.jsonl",
+      "bytes": 7810,
+      "sha256": "1bb8aa00708304768b3a430a13b87bbb177aae495414d1b09b16fb1bc43962ee"
+    },
+    {
+      "path": "manifest.json",
+      "copy": "source/manifest.json",
+      "bytes": 38529,
+      "sha256": "cc7cfdbc8bf3e6f362851f0dd6ed0e2a3f3d0335f977025204642cd79be68d0a"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 13464,
+      "sha256": "b304701e51e3b318e987da6fdd48742c5c61ceff2c71cfe92f971ccf7f1d51f0"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

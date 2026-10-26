@@ -1,0 +1,41 @@
+{
+  "updated": "2026-10-16T13:48:08.194706+00:00",
+  "polynomial_archive_refinement_checks": {
+    "passed": 69,
+    "seconds": 2.26
+  },
+  "mpi_mumps_smoke": {
+    "ranks": 2,
+    "tests_passed_per_rank": 5,
+    "seconds": 7.86,
+    "equilibrium_degrees": [
+      4,
+      6
+    ],
+    "triangles": 756,
+    "checks": [
+      "nonlinear residual",
+      "flow admissibility",
+      "distance derivative against finite differences",
+      "three closed contours",
+      "complete polynomial checkpoint export"
+    ]
+  },
+  "cg2_regressions": {
+    "passed": 3,
+    "seconds": 5.31,
+    "checks": [
+      "distance derivative",
+      "released setup factors",
+      "restart and VTK"
+    ]
+  },
+  "known_rejected_smoke": "Coarse h=0.18 sharp-transition disk: upper-contour audit unresolved; retained guard. Resolved h=0.1 and epsilon=0.004 used for integration test.",
+  "guiding_center_evolution_performed": false,
+  "auxiliary_quadrature_update": {
+    "tests_passed_per_rank": 22,
+    "mpi_ranks": 2,
+    "seconds": 10.33,
+    "includes": "signature compatibility, polynomial geometry, CG4/CG6 MUMPS solve and export with auxiliary quadrature 24"
+  }
+}

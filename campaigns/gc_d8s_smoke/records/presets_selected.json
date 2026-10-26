@@ -1,0 +1,467 @@
+{
+  "1": {
+    "poisson": "amgx-cheb-bsr",
+    "transport": "fused+csr",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p1_amgx-cheb-bsr_fused-csr_raw",
+    "hard": 2.0296349289128557,
+    "step": 0.26296623097732663,
+    "poisson_ranking": [
+      [
+        "amgx-cheb-bsr",
+        0.26297,
+        2.02963
+      ]
+    ],
+    "run": "A_m128L3_p1_amgx-cheb-bsr_fused-csr_raw",
+    "transport_ranking": [
+      [
+        "fused+csr",
+        0.26297
+      ]
+    ]
+  },
+  "2": {
+    "poisson": "amgx-cheb-csr",
+    "transport": "fused+csr",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p2_amgx-cheb-csr_fused-csr_raw",
+    "hard": 2.077332819812,
+    "step": 0.24229540140368044,
+    "poisson_ranking": [
+      [
+        "amgx-cheb-csr",
+        0.2423,
+        2.07733
+      ]
+    ],
+    "run": "A_m128L3_p2_amgx-cheb-csr_fused-csr_raw",
+    "transport_ranking": [
+      [
+        "fused+csr",
+        0.2423
+      ]
+    ]
+  },
+  "4": {
+    "poisson": "fbmg-fast",
+    "transport": "fused+bsr",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p4_fbmg-fast_fused-bsr_raw",
+    "hard": 1.0930691331159323,
+    "step": 0.27360890805721283,
+    "poisson_ranking": [
+      [
+        "fbmg-standard",
+        0.27233,
+        1.12413
+      ],
+      [
+        "fbmg-fast",
+        0.27361,
+        1.09307
+      ]
+    ],
+    "run": "A_m128L3_p4_fbmg-fast_fused-bsr_raw",
+    "transport_ranking": [
+      [
+        "fused+bsr",
+        0.27361
+      ]
+    ]
+  },
+  "5": {
+    "poisson": "fbmg-standard",
+    "transport": "fused+bsr+bj",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p5_fbmg-standard_fused-bsr_raw",
+    "hard": 0.919649236719124,
+    "step": 0.26522137504071,
+    "poisson_ranking": [
+      [
+        "fbmg-fast",
+        0.25637,
+        0.91118
+      ],
+      [
+        "fbmg-standard",
+        0.2687,
+        0.92225
+      ],
+      [
+        "amgx-cheb-csr",
+        0.27417,
+        1.88341
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.27525,
+        1.88864
+      ],
+      [
+        "amgx-classical-abs-csr",
+        0.33243,
+        1.8853
+      ]
+    ],
+    "nonlinear_run": "H_m128L2_p5_fbmg-standard_fused-bsr-bj_raw_eps0p1",
+    "nonlinear_step": 0.12816553586162627,
+    "nonlinear_ranking": [
+      [
+        "fbmg-standard",
+        0.12817,
+        12.0
+      ],
+      [
+        "fbmg-fast",
+        0.13348,
+        18.0
+      ]
+    ],
+    "run": "C_m128L3_p5_fbmg-standard_fused-bsr-bj_raw",
+    "transport_ranking": [
+      [
+        "fused+bsr+bj",
+        0.26522
+      ],
+      [
+        "fused+bsr",
+        0.2687
+      ]
+    ]
+  },
+  "6": {
+    "poisson": "fbmg-standard",
+    "transport": "fused+bsr+bj",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p6_fbmg-standard_fused-bsr_raw",
+    "hard": 0.8532322914106771,
+    "step": 0.29230510245542973,
+    "poisson_ranking": [
+      [
+        "fbmg-fast",
+        0.30211,
+        0.879
+      ],
+      [
+        "fbmg-standard",
+        0.32075,
+        0.89033
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.32534,
+        1.74481
+      ],
+      [
+        "amgx-cheb-csr",
+        0.33061,
+        1.74448
+      ],
+      [
+        "fbmg-fast+lu",
+        0.34223,
+        0.91639
+      ],
+      [
+        "amgx-classical-abs-csr",
+        0.36503,
+        1.73899
+      ]
+    ],
+    "nonlinear_run": "H_m128L2_p6_fbmg-standard_fused-bsr-bj_raw_eps0p1",
+    "nonlinear_step": 0.13570022699423134,
+    "nonlinear_ranking": [
+      [
+        "fbmg-standard",
+        0.1357,
+        10.0
+      ],
+      [
+        "fbmg-fast",
+        0.14144,
+        19.0
+      ]
+    ],
+    "run": "C_m128L3_p6_fbmg-standard_fused-bsr-bj_raw",
+    "transport_ranking": [
+      [
+        "fused+bsr+bj",
+        0.29231
+      ],
+      [
+        "split3+bsr",
+        0.30719
+      ],
+      [
+        "fused+bsr",
+        0.32075
+      ]
+    ]
+  },
+  "7": {
+    "poisson": "fbmg-standard",
+    "transport": "split3+bsr+bj",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p7_fbmg-standard_fused-bsr_raw",
+    "hard": 0.8377267135074362,
+    "step": 0.34752561151981354,
+    "poisson_ranking": [
+      [
+        "fbmg-standard",
+        0.37664,
+        0.86576
+      ],
+      [
+        "fbmg-fast",
+        0.38505,
+        0.88286
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.39174,
+        1.77641
+      ],
+      [
+        "amgx-cheb-csr",
+        0.40032,
+        1.78014
+      ],
+      [
+        "amgx-classical-abs-csr",
+        0.43751,
+        1.783
+      ],
+      [
+        "amgx-classical-csr",
+        0.90513,
+        1.38953
+      ]
+    ],
+    "nonlinear_run": "H_m128L2_p7_fbmg-standard_fused-bsr_raw_eps0p1",
+    "nonlinear_step": 0.15757579891942441,
+    "nonlinear_ranking": [
+      [
+        "fbmg-standard",
+        0.15758,
+        10.0
+      ],
+      [
+        "fbmg-fast",
+        0.16149,
+        17.0
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.27637,
+        43.0
+      ],
+      [
+        "amgx-cheb-csr",
+        0.37265,
+        41.0
+      ]
+    ],
+    "run": "C_m128L3_p7_fbmg-standard_split3-bsr-bj_raw",
+    "transport_ranking": [
+      [
+        "split3+bsr+bj",
+        0.34753
+      ],
+      [
+        "fused+bsr+bj",
+        0.36102
+      ],
+      [
+        "split3+bsr",
+        0.3664
+      ],
+      [
+        "fused+bsr",
+        0.37664
+      ]
+    ]
+  },
+  "8": {
+    "poisson": "fbmg-standard",
+    "transport": "split3+bsr+bj",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p8_fbmg-standard_split3-bsr_raw",
+    "hard": 1.1319279205054045,
+    "step": 0.5583393254783005,
+    "poisson_ranking": [
+      [
+        "fbmg-fast",
+        0.60343,
+        1.26359
+      ],
+      [
+        "fbmg-standard",
+        0.61637,
+        1.20736
+      ],
+      [
+        "amgx-cheb-csr",
+        0.63602,
+        1.81736
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.64013,
+        1.81356
+      ],
+      [
+        "amgx-classical-abs-csr",
+        0.64881,
+        1.79111
+      ],
+      [
+        "amgx-cheb-bsr+modal",
+        0.86583,
+        62.80644
+      ],
+      [
+        "amgx-classical-csr",
+        1.02331,
+        1.48432
+      ]
+    ],
+    "nonlinear_run": "H_m128L2_p8_fbmg-standard_split3-bsr_raw_eps0p1",
+    "nonlinear_step": 0.23809849307872355,
+    "nonlinear_ranking": [
+      [
+        "fbmg-standard",
+        0.2381,
+        10.0
+      ],
+      [
+        "fbmg-fast",
+        0.24415,
+        17.0
+      ],
+      [
+        "amgx-cheb-csr",
+        0.39395,
+        34.0
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.40699,
+        32.0
+      ]
+    ],
+    "run": "C_m128L3_p8_fbmg-standard_split3-bsr-bj_raw",
+    "transport_ranking": [
+      [
+        "split3+bsr+bj",
+        0.55834
+      ],
+      [
+        "split3+bsr",
+        0.61637
+      ],
+      [
+        "fused+bsr",
+        0.73308
+      ],
+      [
+        "split3+bsr+l1",
+        0.80392
+      ]
+    ]
+  },
+  "9": {
+    "poisson": "fbmg-standard",
+    "transport": "split3+bsr+bj",
+    "level": "L3",
+    "poisson_run": "A_m128L3_p9_fbmg-standard_split3-bsr_raw",
+    "hard": 1.2523763845674694,
+    "step": 0.7534323934232816,
+    "poisson_ranking": [
+      [
+        "fbmg-fast",
+        0.77776,
+        1.33522
+      ],
+      [
+        "fbmg-standard",
+        0.79476,
+        1.29485
+      ],
+      [
+        "amgx-cheb-bsr+bs128",
+        0.79849,
+        1.91529
+      ],
+      [
+        "amgx-cheb-bsr+bs64",
+        0.79898,
+        1.91567
+      ],
+      [
+        "amgx-cheb-bsr",
+        0.80009,
+        1.91677
+      ],
+      [
+        "amgx-cheb-csr",
+        0.80978,
+        1.94032
+      ],
+      [
+        "amgx-classical-abs-csr",
+        0.83762,
+        1.92304
+      ],
+      [
+        "amgx-cheb-bsr+lu",
+        0.89302,
+        2.0106
+      ],
+      [
+        "amgx-classical-csr",
+        1.22771,
+        1.65207
+      ]
+    ],
+    "nonlinear_run": "H_m128L2_p9_fbmg-standard_split3-bsr_raw_eps0p1",
+    "nonlinear_step": 0.2900713838171214,
+    "nonlinear_ranking": [
+      [
+        "fbmg-standard",
+        0.29007,
+        10.0
+      ],
+      [
+        "fbmg-fast",
+        0.29627,
+        16.0
+      ],
+      [
+        "amgx-cheb-bsr+bs128",
+        0.39926,
+        29.0
+      ],
+      [
+        "amgx-cheb-csr",
+        0.41392,
+        28.0
+      ]
+    ],
+    "run": "C_m128L3_p9_fbmg-standard_split3-bsr-bj_raw",
+    "transport_ranking": [
+      [
+        "split3+bsr+bj",
+        0.75343
+      ],
+      [
+        "split3+bsr",
+        0.79476
+      ],
+      [
+        "fused+bsr",
+        1.21943
+      ]
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "uglypacman_centerward_20261015_01",
+  "midpoint": 0.004,
+  "distance": 0.8935483395521077,
+  "mass": 0.3008640138568641,
+  "mean_thickness": 0.03964656841796589,
+  "wall_clearance": 0.09804601084745615,
+  "dual_residual": 5.169980068308706e-15,
+  "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/uglypacman/uglypacman_centerward_20261015_01.npz",
+  "state_id": "2df151c1600141da86385b1ee69efda5",
+  "archive_id": "uglypacman_centerward_20261015_01-a1cd1093d1de"
+}

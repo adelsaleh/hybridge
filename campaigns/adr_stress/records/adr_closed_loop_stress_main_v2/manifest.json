@@ -1,0 +1,44 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_closed_loop_stress_main_v2",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 3880945885,
+  "file_count": 253,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "assemblies.json",
+      "copy": "assemblies.json",
+      "bytes": 2337,
+      "sha256": "641c03a92b8ade6da735777f061a334a0e7867f1b153cd7a1821defe18f31844"
+    },
+    {
+      "path": "events.jsonl",
+      "copy": "events.jsonl",
+      "bytes": 68747,
+      "sha256": "b18afb86a5d346fa3a94321b83d8423057f2587968268ddf77b117ed72e98b6b"
+    },
+    {
+      "path": "manifest.json",
+      "copy": "source/manifest.json",
+      "bytes": 34066,
+      "sha256": "0459d58c86bc32dba6e6fafefe6cf1e53f9a1f8b14a23c0ef22cd9db01180d5a"
+    },
+    {
+      "path": "profiles.json",
+      "copy": "profiles.json",
+      "bytes": 175080,
+      "sha256": "c699d84f26ec7dfbfb7f4307804ff3d59eb33a198b82177794d12d72975be413"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 772568,
+      "sha256": "2d9fc101f13b4d9c82d24ceb34cf12480b632cb0bf3b8b7921b70d3ba1e1780d"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

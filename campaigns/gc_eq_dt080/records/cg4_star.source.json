@@ -1,0 +1,302 @@
+{
+  "projects/diocotron/dolfinx/equilibrium_seed.py": {
+    "sha256": "3b533746a14f122ae15daea4c0f59bcd705290cb50d41b979a0dfbc061cf18f5",
+    "snapshot": "producer_source/3b533746a14f122ae15daea4c0f59bcd705290cb50d41b979a0dfbc061cf18f5/equilibrium_seed.py"
+  },
+  "projects/diocotron/dolfinx/pardiso.py": {
+    "sha256": "3163136361799d0e9c6f2dc6ae516e1bd30400504b6d271bec36f2bbd21f50ce",
+    "snapshot": "producer_source/3163136361799d0e9c6f2dc6ae516e1bd30400504b6d271bec36f2bbd21f50ce/pardiso.py"
+  },
+  "projects/diocotron/dolfinx/checkpoint.py": {
+    "sha256": "106f34c2cd6840d1835388f4131bb00b81bbb3ee2a639d00fec7c304473bc058",
+    "snapshot": "producer_source/106f34c2cd6840d1835388f4131bb00b81bbb3ee2a639d00fec7c304473bc058/checkpoint.py"
+  },
+  "projects/diocotron/dolfinx/equilibrium_archive.py": {
+    "sha256": "ab1cbae8365c4c66e45faa82eb5470fcf58e9b5370510150688d67b7f842a997",
+    "snapshot": "producer_source/ab1cbae8365c4c66e45faa82eb5470fcf58e9b5370510150688d67b7f842a997/equilibrium_archive.py"
+  },
+  "projects/diocotron/dolfinx/__init__.py": {
+    "sha256": "cec59060cf8e2f437552548ec39e3f3ae25a23351de83ea0d27922c83ec57371",
+    "snapshot": "producer_source/cec59060cf8e2f437552548ec39e3f3ae25a23351de83ea0d27922c83ec57371/__init__.py"
+  },
+  "projects/diocotron/dolfinx/checkpoint_data.py": {
+    "sha256": "65a91b48bb5f61da98d4af1a85337debd61af6e61a5316e91cb36275526b184c",
+    "snapshot": "producer_source/65a91b48bb5f61da98d4af1a85337debd61af6e61a5316e91cb36275526b184c/checkpoint_data.py"
+  },
+  "projects/diocotron/dolfinx/torsion/diagnostics.py": {
+    "sha256": "d778c9243e3dec109c85a2965fe19fa83e31b2c86ecd2d62fa78365aec18df55",
+    "snapshot": "producer_source/d778c9243e3dec109c85a2965fe19fa83e31b2c86ecd2d62fa78365aec18df55/diagnostics.py"
+  },
+  "projects/diocotron/dolfinx/torsion/__init__.py": {
+    "sha256": "70371caef6aa508bab4d268daacc7a5aa82d94f5900a9c0aaac3214741df6e0b",
+    "snapshot": "producer_source/70371caef6aa508bab4d268daacc7a5aa82d94f5900a9c0aaac3214741df6e0b/__init__.py"
+  },
+  "projects/diocotron/dolfinx/plotting/torsion.py": {
+    "sha256": "e799cbb99107827b71208260f58ffc6fb2353b677992101c1b999351540340d1",
+    "snapshot": "producer_source/e799cbb99107827b71208260f58ffc6fb2353b677992101c1b999351540340d1/torsion.py"
+  },
+  "projects/diocotron/dolfinx/plotting/poisson_geometries.py": {
+    "sha256": "a4b25c847510112788d3531625901e1239f306091df9d58c624118a7dc7c351b",
+    "snapshot": "producer_source/a4b25c847510112788d3531625901e1239f306091df9d58c624118a7dc7c351b/poisson_geometries.py"
+  },
+  "projects/diocotron/dolfinx/plotting/mpi_pyvista.py": {
+    "sha256": "2c0153679de11cde2c8c5f757cc2da7ee5bb828f6963b859b726c745ab240de1",
+    "snapshot": "producer_source/2c0153679de11cde2c8c5f757cc2da7ee5bb828f6963b859b726c745ab240de1/mpi_pyvista.py"
+  },
+  "projects/diocotron/dolfinx/plotting/__init__.py": {
+    "sha256": "54e51a74b40218ed07954579374d89822081e35fcfa822ee7feac5394e2e330b",
+    "snapshot": "producer_source/54e51a74b40218ed07954579374d89822081e35fcfa822ee7feac5394e2e330b/__init__.py"
+  },
+  "projects/diocotron/dolfinx/geometry/sampled_star.py": {
+    "sha256": "6cfb680758f6905a8ff8719879832d7a4541cd054d746915d3e14be1b7ed0ed3",
+    "snapshot": "producer_source/6cfb680758f6905a8ff8719879832d7a4541cd054d746915d3e14be1b7ed0ed3/sampled_star.py"
+  },
+  "projects/diocotron/dolfinx/geometry/center_audit.py": {
+    "sha256": "34ba80e4ee0540d415ba41d6c74fbe7dd900d701fe25308a387fac88068fc926",
+    "snapshot": "producer_source/34ba80e4ee0540d415ba41d6c74fbe7dd900d701fe25308a387fac88068fc926/center_audit.py"
+  },
+  "projects/diocotron/dolfinx/geometry/canonical.py": {
+    "sha256": "466c4b83323ad22fcd8b0c9043db831da1d5d66268b6af9e8dbb664e7baea05f",
+    "snapshot": "producer_source/466c4b83323ad22fcd8b0c9043db831da1d5d66268b6af9e8dbb664e7baea05f/canonical.py"
+  },
+  "projects/diocotron/dolfinx/geometry/__init__.py": {
+    "sha256": "07683c80be4717b759385b277270f75dd286f27e353654a6af0920ee61b63485",
+    "snapshot": "producer_source/07683c80be4717b759385b277270f75dd286f27e353654a6af0920ee61b63485/__init__.py"
+  },
+  "projects/diocotron/dolfinx/equiband/run_directory.py": {
+    "sha256": "4641bf541f228bcf1ec99170f426b2d9cc431147a2d77d7131bab75f1f6be9df",
+    "snapshot": "producer_source/4641bf541f228bcf1ec99170f426b2d9cc431147a2d77d7131bab75f1f6be9df/run_directory.py"
+  },
+  "projects/diocotron/dolfinx/equiband/plotting.py": {
+    "sha256": "0d386eef7edaccd78801b515f497a958f38d0043ee15927933ea9d0ed293b0c7",
+    "snapshot": "producer_source/0d386eef7edaccd78801b515f497a958f38d0043ee15927933ea9d0ed293b0c7/plotting.py"
+  },
+  "projects/diocotron/dolfinx/equiband/__main__.py": {
+    "sha256": "d11c6ece440135e6458c45b4bcf4e753ff1b2c8ad3bf81c6289b6436bfaaa2be",
+    "snapshot": "producer_source/d11c6ece440135e6458c45b4bcf4e753ff1b2c8ad3bf81c6289b6436bfaaa2be/__main__.py"
+  },
+  "projects/diocotron/dolfinx/equiband/nonlinearities.py": {
+    "sha256": "6bdd05f0301307ac1770497b5088c310bda898cbfc1810208536e1f95739aa0e",
+    "snapshot": "producer_source/6bdd05f0301307ac1770497b5088c310bda898cbfc1810208536e1f95739aa0e/nonlinearities.py"
+  },
+  "projects/diocotron/dolfinx/equiband/polynomial.py": {
+    "sha256": "57b7e6e903aacdbad1be3e07c2e65f268722222355105a3973885b94bbf52969",
+    "snapshot": "producer_source/57b7e6e903aacdbad1be3e07c2e65f268722222355105a3973885b94bbf52969/polynomial.py"
+  },
+  "projects/diocotron/dolfinx/equiband/models.py": {
+    "sha256": "7785b6d7e207bf3299b9d364405f3a5865ec70cf7ba043578143cf25fcd28b8d",
+    "snapshot": "producer_source/7785b6d7e207bf3299b9d364405f3a5865ec70cf7ba043578143cf25fcd28b8d/models.py"
+  },
+  "projects/diocotron/dolfinx/equiband/radial.py": {
+    "sha256": "ff91f90c2b41296ca4da64279ba5b722e975728cf488b3ea424a02b5b17d5cc8",
+    "snapshot": "producer_source/ff91f90c2b41296ca4da64279ba5b722e975728cf488b3ea424a02b5b17d5cc8/radial.py"
+  },
+  "projects/diocotron/dolfinx/equiband/crossings.py": {
+    "sha256": "8aa25b5a4793893075bccc6e48dc74ba7381d750e4b0336e52f1cd048c1c9ae7",
+    "snapshot": "producer_source/8aa25b5a4793893075bccc6e48dc74ba7381d750e4b0336e52f1cd048c1c9ae7/crossings.py"
+  },
+  "projects/diocotron/dolfinx/equiband/terminal_logging.py": {
+    "sha256": "712f7549ba0a5ddf5b16bce7d858cb040b96c5f32a7c7ef31071743539925210",
+    "snapshot": "producer_source/712f7549ba0a5ddf5b16bce7d858cb040b96c5f32a7c7ef31071743539925210/terminal_logging.py"
+  },
+  "projects/diocotron/dolfinx/equiband/geometry.py": {
+    "sha256": "40eeb5d92e25410c7fa63d1e039568e584e803cbb3b8c203df82469480b5b352",
+    "snapshot": "producer_source/40eeb5d92e25410c7fa63d1e039568e584e803cbb3b8c203df82469480b5b352/geometry.py"
+  },
+  "projects/diocotron/dolfinx/equiband/run_diagnostics.py": {
+    "sha256": "67f284284719f57d5254f5cb3a17259fd7ced0b765a38e66c7edd50665d43f65",
+    "snapshot": "producer_source/67f284284719f57d5254f5cb3a17259fd7ced0b765a38e66c7edd50665d43f65/run_diagnostics.py"
+  },
+  "projects/diocotron/dolfinx/equiband/bordered.py": {
+    "sha256": "dab0255dabdeca3ab4d9d0bbc58a846340807d70bc785c9937388c8ba26ccb67",
+    "snapshot": "producer_source/dab0255dabdeca3ab4d9d0bbc58a846340807d70bc785c9937388c8ba26ccb67/bordered.py"
+  },
+  "projects/diocotron/dolfinx/equiband/mesh_cache.py": {
+    "sha256": "196a3e3db98d97a39fd4a6c6931134fa0bd6de6e93699c2297760624ecae13af",
+    "snapshot": "producer_source/196a3e3db98d97a39fd4a6c6931134fa0bd6de6e93699c2297760624ecae13af/mesh_cache.py"
+  },
+  "projects/diocotron/dolfinx/equiband/pseudo_arclength.py": {
+    "sha256": "b69518bd8f60c2710f827e5e7c47428ae5e3833902bb15d91d5b62773dc6cc3a",
+    "snapshot": "producer_source/b69518bd8f60c2710f827e5e7c47428ae5e3833902bb15d91d5b62773dc6cc3a/pseudo_arclength.py"
+  },
+  "projects/diocotron/dolfinx/equiband/output.py": {
+    "sha256": "1cc20a0a2aba400c1fb44533d3449beea9063ec16e17c2a30e4836d6ea78cc26",
+    "snapshot": "producer_source/1cc20a0a2aba400c1fb44533d3449beea9063ec16e17c2a30e4836d6ea78cc26/output.py"
+  },
+  "projects/diocotron/dolfinx/equiband/continuation.py": {
+    "sha256": "81eb627a1f87f5565f63cacc49d9363daa1e24bee2f6513a0543a78ab5d0e259",
+    "snapshot": "producer_source/81eb627a1f87f5565f63cacc49d9363daa1e24bee2f6513a0543a78ab5d0e259/continuation.py"
+  },
+  "projects/diocotron/dolfinx/equiband/benchmark.py": {
+    "sha256": "144b014dea0c11637999274d69613374f4174f96a87744c5df544b9783b5d44d",
+    "snapshot": "producer_source/144b014dea0c11637999274d69613374f4174f96a87744c5df544b9783b5d44d/benchmark.py"
+  },
+  "projects/diocotron/dolfinx/equiband/equilibrium.py": {
+    "sha256": "1fbb15595471ad6753e767e9159f6492775802e084357320c040e68d1208b722",
+    "snapshot": "producer_source/1fbb15595471ad6753e767e9159f6492775802e084357320c040e68d1208b722/equilibrium.py"
+  },
+  "projects/diocotron/dolfinx/equiband/reporting.py": {
+    "sha256": "61d0c160efb0e94f68ca48a89f54a69b22af8956608828653085d26db24563c9",
+    "snapshot": "producer_source/61d0c160efb0e94f68ca48a89f54a69b22af8956608828653085d26db24563c9/reporting.py"
+  },
+  "projects/diocotron/dolfinx/equiband/audit.py": {
+    "sha256": "013b17ff5ca9e9d868b0512f5a181abf2f82505863aef7fa2277dfbeeb79660e",
+    "snapshot": "producer_source/013b17ff5ca9e9d868b0512f5a181abf2f82505863aef7fa2277dfbeeb79660e/audit.py"
+  },
+  "projects/diocotron/dolfinx/equiband/__init__.py": {
+    "sha256": "fa1cb7035b1ba129ba2254596b5deb1224e479fc1a642581fe66c017a69f6dab",
+    "snapshot": "producer_source/fa1cb7035b1ba129ba2254596b5deb1224e479fc1a642581fe66c017a69f6dab/__init__.py"
+  },
+  "projects/diocotron/dolfinx/equiband/config.py": {
+    "sha256": "35fe809899a851b4582daa3ceb1a90f7a115366602d2fdb8405ee29dbd6c217f",
+    "snapshot": "producer_source/35fe809899a851b4582daa3ceb1a90f7a115366602d2fdb8405ee29dbd6c217f/config.py"
+  },
+  "projects/diocotron/dolfinx/equiband/cli.py": {
+    "sha256": "8fcbba8ed3ede14baf42c1591b305bee5233ef37daaee67e06508db045075ead",
+    "snapshot": "producer_source/8fcbba8ed3ede14baf42c1591b305bee5233ef37daaee67e06508db045075ead/cli.py"
+  },
+  "projects/diocotron/dolfinx/runtime/mpi_rank_policy.py": {
+    "sha256": "09d4bb7570121626a4c7a42c503d246254f4a9d5f1f73699893e6087683cd0af",
+    "snapshot": "producer_source/09d4bb7570121626a4c7a42c503d246254f4a9d5f1f73699893e6087683cd0af/mpi_rank_policy.py"
+  },
+  "projects/diocotron/dolfinx/runtime/__init__.py": {
+    "sha256": "b55f3982472e2c5d5b6ae47b5c8bde3e3a40f779e47711b94d27c9da9b61ffc7",
+    "snapshot": "producer_source/b55f3982472e2c5d5b6ae47b5c8bde3e3a40f779e47711b94d27c9da9b61ffc7/__init__.py"
+  },
+  "projects/diocotron/dolfinx/runtime/terminal_log_capture.py": {
+    "sha256": "0a78d1f1606042387bc41306b38a1d00cc5008c9853ef8f5fc6c599ff1fe0430",
+    "snapshot": "producer_source/0a78d1f1606042387bc41306b38a1d00cc5008c9853ef8f5fc6c599ff1fe0430/terminal_log_capture.py"
+  },
+  "projects/diocotron/dolfinx/guiding_center/supg.py": {
+    "sha256": "8119b1f12367ec6a1590effaa57fbc63c0f0ceef4f38eaf3468b8db21dd4c237",
+    "snapshot": "producer_source/8119b1f12367ec6a1590effaa57fbc63c0f0ceef4f38eaf3468b8db21dd4c237/supg.py"
+  },
+  "projects/diocotron/dolfinx/guiding_center/__init__.py": {
+    "sha256": "2affab44cdffc433158e12b35aee996fe97c734433dc52ee0b0b68b49d734007",
+    "snapshot": "producer_source/2affab44cdffc433158e12b35aee996fe97c734433dc52ee0b0b68b49d734007/__init__.py"
+  },
+  "projects/diocotron/dolfinx/torsion/equilibrium/window_fit.py": {
+    "sha256": "e366a92cdeba73f50798e6f1565356b6b9a4fa0c13afeb794d724bde4287713f",
+    "snapshot": "producer_source/e366a92cdeba73f50798e6f1565356b6b9a4fa0c13afeb794d724bde4287713f/window_fit.py"
+  },
+  "projects/diocotron/dolfinx/torsion/equilibrium/closed_loop.py": {
+    "sha256": "e6a01bc5d7cb9c553425a4f7d3b00fbb64f9ec2a7a4d2c86c19b45a2aca8b14e",
+    "snapshot": "producer_source/e6a01bc5d7cb9c553425a4f7d3b00fbb64f9ec2a7a4d2c86c19b45a2aca8b14e/closed_loop.py"
+  },
+  "projects/diocotron/dolfinx/torsion/equilibrium/newton_budget.py": {
+    "sha256": "77948b802d1a184da4e524c86767410c84912ced2f5fd2d56d0f22fc717afae8",
+    "snapshot": "producer_source/77948b802d1a184da4e524c86767410c84912ced2f5fd2d56d0f22fc717afae8/newton_budget.py"
+  },
+  "projects/diocotron/dolfinx/torsion/equilibrium/newton.py": {
+    "sha256": "9464fb1357ff3fcae2556ac0329b9fa2c776d2ff838f552c8b0f2d442ab7a4fb",
+    "snapshot": "producer_source/9464fb1357ff3fcae2556ac0329b9fa2c776d2ff838f552c8b0f2d442ab7a4fb/newton.py"
+  },
+  "projects/diocotron/dolfinx/torsion/equilibrium/__init__.py": {
+    "sha256": "ce60c31906c3d5dd94cfd390767805ddc2579d9fc90af5d0de667a32ae296e83",
+    "snapshot": "producer_source/ce60c31906c3d5dd94cfd390767805ddc2579d9fc90af5d0de667a32ae296e83/__init__.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/energy_primer.py": {
+    "sha256": "ea4a2f59377e36e918e3a4b9782f56df199e32e0ee326fe5bfb5344c099446f5",
+    "snapshot": "producer_source/ea4a2f59377e36e918e3a4b9782f56df199e32e0ee326fe5bfb5344c099446f5/energy_primer.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/frozen_frontier_run.py": {
+    "sha256": "824f74da40e106effce513f964adda489c28cbebac0bd44cef0aac40bc423f7f",
+    "snapshot": "producer_source/824f74da40e106effce513f964adda489c28cbebac0bd44cef0aac40bc423f7f/frozen_frontier_run.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/fractional_target.py": {
+    "sha256": "d4860dfb60ad697ec8b2eeaf2b42b5682b4a3f208a072cc0d2f23df7dd79ecf7",
+    "snapshot": "producer_source/d4860dfb60ad697ec8b2eeaf2b42b5682b4a3f208a072cc0d2f23df7dd79ecf7/fractional_target.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/source_homotopy.py": {
+    "sha256": "62774e2dc71758a9a4c5bbb0af089d6d723457275fe689de2c08ab2710bcb59f",
+    "snapshot": "producer_source/62774e2dc71758a9a4c5bbb0af089d6d723457275fe689de2c08ab2710bcb59f/source_homotopy.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/frozen_frontier.py": {
+    "sha256": "0e95979720b32188794fc3d2656556f5579923b9176313feceed2bba904c3cc0",
+    "snapshot": "producer_source/0e95979720b32188794fc3d2656556f5579923b9176313feceed2bba904c3cc0/frozen_frontier.py"
+  },
+  "projects/diocotron/dolfinx/torsion/initialization/__init__.py": {
+    "sha256": "36959d30a7ed337a3f28c68e55b8a8e99f28209db74d2a0ef868bedc2b8aeb2b",
+    "snapshot": "producer_source/36959d30a7ed337a3f28c68e55b8a8e99f28209db74d2a0ef868bedc2b8aeb2b/__init__.py"
+  },
+  "projects/diocotron/dolfinx/torsion/search/metrics.py": {
+    "sha256": "0e7d447e85e255b2e7e6ae46c0d2ef966c799325e94287c8b2a40458a2c35455",
+    "snapshot": "producer_source/0e7d447e85e255b2e7e6ae46c0d2ef966c799325e94287c8b2a40458a2c35455/metrics.py"
+  },
+  "projects/diocotron/dolfinx/torsion/search/helpers.py": {
+    "sha256": "c0c93cd642df6ef0ecbf9cde65bde3719200dba1ad692b0e2e7f63ec75bb16cc",
+    "snapshot": "producer_source/c0c93cd642df6ef0ecbf9cde65bde3719200dba1ad692b0e2e7f63ec75bb16cc/helpers.py"
+  },
+  "projects/diocotron/dolfinx/torsion/search/brute_force.py": {
+    "sha256": "b5d8be7fb1951ac9a74a34d4a493e3e1790df385f120a94dbb7cbf9550531f96",
+    "snapshot": "producer_source/b5d8be7fb1951ac9a74a34d4a493e3e1790df385f120a94dbb7cbf9550531f96/brute_force.py"
+  },
+  "projects/diocotron/dolfinx/torsion/search/__init__.py": {
+    "sha256": "3848071ca5b1e8b400fb3a186e44567b87b6d5a36e53f6613c16c01386d8fcef",
+    "snapshot": "producer_source/3848071ca5b1e8b400fb3a186e44567b87b6d5a36e53f6613c16c01386d8fcef/__init__.py"
+  },
+  "projects/diocotron/dolfinx/torsion/search/adaptive.py": {
+    "sha256": "f614bde4b146067e452fa0b5290e33cbdc7a7f511156d416d41a6a215a0e0842",
+    "snapshot": "producer_source/f614bde4b146067e452fa0b5290e33cbdc7a7f511156d416d41a6a215a0e0842/adaptive.py"
+  },
+  "projects/diocotron/dolfinx/torsion/optimization/h1_projection.py": {
+    "sha256": "1c63ef07bcb13455291408874bba6d81416fc3a4be080bded73060cfe4b76b8c",
+    "snapshot": "producer_source/1c63ef07bcb13455291408874bba6d81416fc3a4be080bded73060cfe4b76b8c/h1_projection.py"
+  },
+  "projects/diocotron/dolfinx/torsion/optimization/reduced.py": {
+    "sha256": "699b1dd6161722eaa60f7c391eee8df45ff436530d3bae1f1b76edf4dc7f8ced",
+    "snapshot": "producer_source/699b1dd6161722eaa60f7c391eee8df45ff436530d3bae1f1b76edf4dc7f8ced/reduced.py"
+  },
+  "projects/diocotron/dolfinx/torsion/optimization/h1_controls.py": {
+    "sha256": "fbff6967a57c574511777600a5b7a2b51e7bcc4248652d150f9470c738d3c06d",
+    "snapshot": "producer_source/fbff6967a57c574511777600a5b7a2b51e7bcc4248652d150f9470c738d3c06d/h1_controls.py"
+  },
+  "projects/diocotron/dolfinx/torsion/optimization/homotopy.py": {
+    "sha256": "0d640df5391a4343dbdf13f28581d8eb8bc8334f7754dce67287e2fe70f96ca8",
+    "snapshot": "producer_source/0d640df5391a4343dbdf13f28581d8eb8bc8334f7754dce67287e2fe70f96ca8/homotopy.py"
+  },
+  "projects/diocotron/dolfinx/torsion/optimization/__init__.py": {
+    "sha256": "e9866ff6dffa335830095039f8fd16cf9b3be3ca5843c91930faea1421cb4934",
+    "snapshot": "producer_source/e9866ff6dffa335830095039f8fd16cf9b3be3ca5843c91930faea1421cb4934/__init__.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/render.py": {
+    "sha256": "69113fbe1155684b25e883ba2b87febc1cf843b9e81eb69ee4f5ba3d24db75f1",
+    "snapshot": "producer_source/69113fbe1155684b25e883ba2b87febc1cf843b9e81eb69ee4f5ba3d24db75f1/render.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/export_saved.py": {
+    "sha256": "5b91e3762b6af446bfb5eb7f8de47ab9c4ce1ba5077ffba2a65e6c125066d9a8",
+    "snapshot": "producer_source/5b91e3762b6af446bfb5eb7f8de47ab9c4ce1ba5077ffba2a65e6c125066d9a8/export_saved.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/prepare_refined.py": {
+    "sha256": "a98ca87ff068804816fce400b5dd5953ead1ba2a3d0811da5d46fd1a1ef1e2a8",
+    "snapshot": "producer_source/a98ca87ff068804816fce400b5dd5953ead1ba2a3d0811da5d46fd1a1ef1e2a8/prepare_refined.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/prepare.py": {
+    "sha256": "6ca089a0d960bbc8d37944933375ef5eae49179827525f85c452eebcbba57635",
+    "snapshot": "producer_source/6ca089a0d960bbc8d37944933375ef5eae49179827525f85c452eebcbba57635/prepare.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/check_distance.py": {
+    "sha256": "2e793535883e2a2ad897d4c7d777c9dc9d536e7d3592fe6556fc3f65fd444ca7",
+    "snapshot": "producer_source/2e793535883e2a2ad897d4c7d777c9dc9d536e7d3592fe6556fc3f65fd444ca7/check_distance.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/check_refinement.py": {
+    "sha256": "e3917dde833112dcccbba85112c40940c8b5cfd8d4074be793254a18964d3080",
+    "snapshot": "producer_source/e3917dde833112dcccbba85112c40940c8b5cfd8d4074be793254a18964d3080/check_refinement.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/run.py": {
+    "sha256": "ba4b374a38ffd7e5df487a00cd333742ea163db1b38f735b9765ce6917d9b70a",
+    "snapshot": "producer_source/ba4b374a38ffd7e5df487a00cd333742ea163db1b38f735b9765ce6917d9b70a/run.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/run_distance.py": {
+    "sha256": "1783f56a33f67fdacda15e234cead439ce8b37275ed3f6bf867d6a728e515ef4",
+    "snapshot": "producer_source/1783f56a33f67fdacda15e234cead439ce8b37275ed3f6bf867d6a728e515ef4/run_distance.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/compare.py": {
+    "sha256": "412965ab3cf92d9b9ff783bb5f2ff812ec53e885d9feb84094494668a0337f6d",
+    "snapshot": "producer_source/412965ab3cf92d9b9ff783bb5f2ff812ec53e885d9feb84094494668a0337f6d/compare.py"
+  },
+  "projects/diocotron/studies/equilibrium_catalog/run_contours.py": {
+    "sha256": "5f7c740a0091a3b877d5ef592863a56d472e9a5614838cfbc17f6d32264fcd07",
+    "snapshot": "producer_source/5f7c740a0091a3b877d5ef592863a56d472e9a5614838cfbc17f6d32264fcd07/run_contours.py"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "status": "completed",
+  "attempted": 28,
+  "scheduled": 28,
+  "passed": 25,
+  "failures": [
+    {
+      "case": "cellular7_weak",
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_anisotropic",
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    }
+  ]
+}

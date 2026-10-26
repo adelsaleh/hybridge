@@ -1,0 +1,56 @@
+{
+ "p2_K792588": {
+  "run": "p2_s0p227",
+  "order": 2,
+  "triangles": 792588,
+  "steps": 98,
+  "step_wall": 0.8060995794367045,
+  "poisson_time": 0.3229105081409216,
+  "transport_time": 0.48420899943448603
+ },
+ "p2_K221708": {
+  "run": "p2_s0p45",
+  "order": 2,
+  "triangles": 221708,
+  "steps": 98,
+  "step_wall": 0.2446829496184364,
+  "poisson_time": 0.12684827134944499,
+  "transport_time": 0.11518679605796933
+ },
+ "p4_K331825": {
+  "run": "p4_s0p36",
+  "order": 4,
+  "triangles": 331825,
+  "steps": 98,
+  "step_wall": 0.6642520999303088,
+  "poisson_time": 0.17140531295444816,
+  "transport_time": 0.49083966249600053
+ },
+ "p4_K99510": {
+  "run": "p4_s0p72",
+  "order": 4,
+  "triangles": 99510,
+  "steps": 98,
+  "step_wall": 0.21804950304795057,
+  "poisson_time": 0.07753881404642016,
+  "transport_time": 0.13899200048763305
+ },
+ "p6_K184495": {
+  "run": "p6_s0p5",
+  "order": 6,
+  "triangles": 184495,
+  "steps": 98,
+  "step_wall": 0.8020070770289749,
+  "poisson_time": 0.13554462906904519,
+  "transport_time": 0.6688667200505733
+ },
+ "p6_K60840": {
+  "run": "p6_s1",
+  "order": 6,
+  "triangles": 60840,
+  "steps": 98,
+  "step_wall": 0.28362292994279414,
+  "poisson_time": 0.0657675745896995,
+  "transport_time": 0.21170729806181043
+ }
+}

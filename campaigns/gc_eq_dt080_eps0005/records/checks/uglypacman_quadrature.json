@@ -1,0 +1,61 @@
+{
+  "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_eps0005_20261016/stages/uglypacman/eps0p005_q48/uglypacman_dt080_eps0p005_q48_cg6_20261016.npz",
+  "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_eps0005_20261016/stages/uglypacman/eps0p005_q64/uglypacman_dt080_eps0p005_q64_cg6_20261016.npz",
+  "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+  "comparisons": [
+    {
+      "quadrature_points_per_duffy_coordinate": 16,
+      "coarse_cells": 215246,
+      "fine_cells": 215246,
+      "coarse_midpoint": 0.006359180215280679,
+      "fine_midpoint": 0.006359180215280679,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 1.2560672040031821e-11,
+        "coarse_l2_norm": 0.008130362397461876,
+        "fine_l2_norm": 0.00813036240006689,
+        "relative_l2_difference": 1.544909245365063e-09
+      },
+      "density": {
+        "l2_difference": 4.3843772725773575e-08,
+        "coarse_l2_norm": 0.4807113651964449,
+        "fine_l2_norm": 0.48071136526757596,
+        "relative_l2_difference": 9.120602484896324e-08
+      },
+      "gradient": {
+        "l2_difference": 4.1366990030072284e-09,
+        "coarse_l2_norm": 0.040097402457806804,
+        "fine_l2_norm": 0.040097402477733864,
+        "relative_l2_difference": 1.0316625884443119e-07
+      }
+    },
+    {
+      "quadrature_points_per_duffy_coordinate": 24,
+      "coarse_cells": 215246,
+      "fine_cells": 215246,
+      "coarse_midpoint": 0.006359180215280679,
+      "fine_midpoint": 0.006359180215280679,
+      "coarse_degree": 6,
+      "fine_degree": 6,
+      "potential": {
+        "l2_difference": 1.2560671913976231e-11,
+        "coarse_l2_norm": 0.008130362397461876,
+        "fine_l2_norm": 0.00813036240006689,
+        "relative_l2_difference": 1.5449092298607616e-09
+      },
+      "density": {
+        "l2_difference": 4.384305347447174e-08,
+        "coarse_l2_norm": 0.4807113666390395,
+        "fine_l2_norm": 0.48071136671016207,
+        "relative_l2_difference": 9.120452835247032e-08
+      },
+      "gradient": {
+        "l2_difference": 4.136699002986858e-09,
+        "coarse_l2_norm": 0.040097402457806804,
+        "fine_l2_norm": 0.040097402477733864,
+        "relative_l2_difference": 1.0316625884392318e-07
+      }
+    }
+  ]
+}

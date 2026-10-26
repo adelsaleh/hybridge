@@ -1,0 +1,20 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/iter_repeated_poisson_shared_confirmation_20260924",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 20488,
+  "file_count": 1,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "results.json",
+      "copy": "results.json",
+      "bytes": 20488,
+      "sha256": "d9c1a260a4e566c2f9b760df6565684c02d7287a59efc247757e4aed252feb2b"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

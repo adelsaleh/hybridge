@@ -1,0 +1,28 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e9_cg_vs_hdg",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Original and retiming all-done markers present.",
+  "total_bytes": 232240,
+  "file_count": 8,
+  "subdirectories": 1,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "all-done"
+  ],
+  "copied": [
+    {
+      "path": "all-done",
+      "copy": "all-done",
+      "bytes": 20,
+      "sha256": "ab8cdd10d33ee43dee8c66db9a21212eda64403c4328c99219617374a2ab439a"
+    },
+    {
+      "path": "poisson_cg_vs_hdg.jsonl",
+      "copy": "poisson_cg_vs_hdg.jsonl",
+      "bytes": 7232,
+      "sha256": "302937006fb56ab4db851448d61aea360ad579f7e6e9561b70acbda6faafba60"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

@@ -1,0 +1,33 @@
+{
+  "catalog_mpi_tests": {
+    "ranks": 2,
+    "passed_per_rank": 3
+  },
+  "archive_unit_tests": 14,
+  "center_and_topology_tests": 7,
+  "hybridge_import_tests": 17,
+  "archive_verification": {
+    "entries": 18,
+    "unique_objects": 76,
+    "verified": true
+  },
+  "mpi_parity": {
+    "samples": 513,
+    "maximum_potential_difference": 9.71445146547012e-17,
+    "relative_mass_difference": 8.647391288017683e-14,
+    "mean_thickness_difference": 6.938893903907228e-17,
+    "wall_clearance_difference": 2.7755575615628914e-17,
+    "source_backend": "serial PyPardiso",
+    "new_backend": "MUMPS, 2 MPI ranks"
+  },
+  "amgx_build_performed": false,
+  "mpi_installation_required": false,
+  "article_build": {
+    "success": true,
+    "pages": 60,
+    "undefined_references_or_citations": false,
+    "log": "article_build.log",
+    "new_band_figure_page": 42,
+    "new_hdg_figure_page": 43
+  }
+}

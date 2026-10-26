@@ -1,0 +1,112 @@
+{
+  "prefix": "e7smoke_star_p6_si_bdf2_dt0p05_control",
+  "geometry": "star",
+  "kind": "control",
+  "triangles": 264268,
+  "element_unknowns": 7399504,
+  "order": 6,
+  "dt": 0.05,
+  "steps": 20,
+  "final_time": 1.0,
+  "wall_time_s": 375.47246265015565,
+  "snapshots": "e7smoke_star_p6_si_bdf2_dt0p05_control_snapshots.npz",
+  "transfer": {
+    "equilibrium_semilinear_l2": 0.0012981289748645246,
+    "equilibrium_semilinear_relative_l2": 0.0027010057316395513,
+    "equilibrium_poisson_cg_relative_l2": 1.06013993821409e-05,
+    "equilibrium_projection_quadrature_relative_l2": 9.304050139832926e-08,
+    "equilibrium_projection_quadrature_check_1d": 28,
+    "equilibrium_steady_transport_l2": 0.6497883908343056,
+    "equilibrium_steady_transport_relative_l2": 1.3520090853680116,
+    "equilibrium_density_projection_time": 73.20464321295731,
+    "equilibrium_poisson_wall_time": 0.7880211658775806
+  },
+  "initial": {
+    "diocotron_rho_eq_relative_l2": 0.0,
+    "diocotron_phi_eq_relative_l2": 0.0,
+    "band_rho_dominant_mode": 5,
+    "band_rho_active_modes": 80,
+    "mass": 0.24648598422294868,
+    "rho_min": -0.39791854927561676,
+    "rho_max": 1.3667392461935808
+  },
+  "final": {
+    "time": 1.0000000000000002,
+    "mass_relative_drift": -9.008406933360968e-16,
+    "energy_relative_drift": -8.628175684312238e-10,
+    "enstrophy_relative_drift": -0.00022168807163138872,
+    "rho_min": -0.08102622731293489,
+    "rho_max": 1.0868264542589863,
+    "diocotron_rho_eq_relative_l2": 0.011528900388155348,
+    "diocotron_phi_eq_relative_l2": 9.597127980017556e-06,
+    "band_rho_dominant_mode": 54,
+    "band_rho_active_modes": 80,
+    "band_rho_participation": 21.16849681278104
+  },
+  "max_abs": {
+    "mass_relative_drift": 1.013445780003109e-15,
+    "energy_relative_drift": 8.628175684312238e-10,
+    "l2_budget_relative_defect": 2.403758979340625e-16,
+    "poisson_physical_rel_residual": 4.458837467816939e-11
+  },
+  "seed": {
+    "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_eps0005_20261016/stages/star/eps0p005_q64",
+    "contours_sha256": "96294fb3aa475460308b096063069910eb9355f9f6503932e889d96f9beada58",
+    "archive_id": "star_dt080_eps0p005_q64_cg6_20261016-50344ef8ba2a",
+    "thickness": 0.04351453915218868,
+    "half_width": 0.08702907830437737,
+    "half_width_factor": 2.0,
+    "band_length": 5.520273987211127,
+    "circulation_period": 176.94821097449062,
+    "max_mode": 80,
+    "coordinate": "flow angle on the middle contour",
+    "drift_speed_min": 0.029637042058079745,
+    "drift_speed_mean": 0.031232811883826397,
+    "drift_speed_max": 0.03239350532211955,
+    "wall_clearance_min": 0.1298965362616219,
+    "wall_clearance_mean": 0.1773715508505166,
+    "band_mode_max": 80,
+    "band_mode_bins": 2048,
+    "band_mode_taylor_order": 5,
+    "band_mode_support_points": 11290943,
+    "band_mode_total_points": 26426800,
+    "band_mode_weight_integral": 0.43924594324744115,
+    "band_mode_density_norm": 0.2212992866931275,
+    "band_mode_potential_norm": 0.0029514575246922413,
+    "band_mode_relative_threshold": 0.01
+  },
+  "provenance": {
+    "recorded": "2026-10-19T13:10:32+00:00",
+    "python": "3.12.3",
+    "packages": {
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "numba": "0.67.0",
+      "cupy-cuda13x": "14.2.0",
+      "gmsh": "4.15.2",
+      "matplotlib": "3.11.1",
+      "pillow": "12.3.0",
+      "imageio-ffmpeg": "0.6.0",
+      "holoscan-cu13": "4.6.0",
+      "pypardiso": "0.4.7",
+      "pyamgx": "0.1"
+    },
+    "code": {
+      "git_head": "1b761db8eb30bdd68ba3fa491df4a52a25260d7e",
+      "git_branch": "master",
+      "git_dirty_entries": 151,
+      "code_diff_sha256": "36e782a3ff28347242942c4ad005a8f3f0ad98ac55b17c438c710ae57948a32b"
+    },
+    "gpu_stack": {
+      "pyamgx_revision": "a44d224d8b92f94b8d004794805528dfe3e8b460",
+      "pyamgx_dirty": false,
+      "amgx_library": "libamgxsh.so",
+      "amgx_library_bytes": 151633152,
+      "amgx_library_modified": "2026-09-28T11:21:52+00:00",
+      "amgx_revision": "c564f9d866eaff427bac17fddaaeeb5c3bbad2d0",
+      "amgx_dirty": false
+    },
+    "cuda_runtime": 13020,
+    "cuda_driver": 13000
+  }
+}

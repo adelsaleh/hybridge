@@ -1,0 +1,116 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_catalog_20261009",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 1184365135,
+  "file_count": 161,
+  "subdirectories": 14,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 2464,
+      "sha256": "6a115fdb258db056960fb00bd31efae0bae357d36d8690d84f30baf41cbb1f71"
+    },
+    {
+      "path": "catalog.csv",
+      "copy": "catalog.csv",
+      "bytes": 5041,
+      "sha256": "9dd2b92f885f16a537b6dbd808112783db5ccc97ff0edcd8a4917641845c97a8"
+    },
+    {
+      "path": "catalog.json",
+      "copy": "catalog.json",
+      "bytes": 9091,
+      "sha256": "b240a7f6d1a1c6c51172650d1745f6d83c90615a28189722aab0ff8991fc0ede"
+    },
+    {
+      "path": "check_input.json",
+      "copy": "check_input.json",
+      "bytes": 902,
+      "sha256": "249bd40e2c292865a8077359dbb0474926b805334764cf554c68430f314105e7"
+    },
+    {
+      "path": "inputs/horseshoe.json",
+      "copy": "inputs/horseshoe.json",
+      "bytes": 1103,
+      "sha256": "0efc6b09eff4cbd1cedfeb9e9f42a720cd66e861999f8d4d6eb4e0e448049a92"
+    },
+    {
+      "path": "inputs/horseshoe.msh.json",
+      "copy": "inputs/horseshoe.msh.json",
+      "bytes": 851,
+      "sha256": "5a14000d3943a1e516d494511ad971e131c4b47fef22cbd6bb36b02fbead6a0a"
+    },
+    {
+      "path": "inputs/iter.json",
+      "copy": "inputs/iter.json",
+      "bytes": 1100,
+      "sha256": "6cc2a6c1feca740ced8080bf27c0ba22eb66813b28951246be30bc3dba634fdb"
+    },
+    {
+      "path": "inputs/iter.msh.json",
+      "copy": "inputs/iter.msh.json",
+      "bytes": 748,
+      "sha256": "1e870bf32219dc11d50c95207862e1d1c923dadb6ebe29d4ec5cf957fd4ca202"
+    },
+    {
+      "path": "inputs/iter_coarse.json",
+      "copy": "inputs/iter_coarse.json",
+      "bytes": 1106,
+      "sha256": "9f6f682b6fbbe1cb5a18a8e851478a5fcf73248b1ee6bacae945860ef8312c07"
+    },
+    {
+      "path": "inputs/iter_coarse.msh.json",
+      "copy": "inputs/iter_coarse.msh.json",
+      "bytes": 743,
+      "sha256": "0c7b3d647151997b1a5927942c6584da1b730bee1f52d6cdfb9df634d4efa0b4"
+    },
+    {
+      "path": "inputs/star.json",
+      "copy": "inputs/star.json",
+      "bytes": 1098,
+      "sha256": "6de012a94bd8ac815198716a108db56a2f208f775cd5e1819b7b39555453f467"
+    },
+    {
+      "path": "inputs/star.msh.json",
+      "copy": "inputs/star.msh.json",
+      "bytes": 759,
+      "sha256": "46e95dd60ad4f2bda9e0e79aa84f1a7b4ae9bf415557d8248fd8f1f598cd80df"
+    },
+    {
+      "path": "inputs/uglypacman.json",
+      "copy": "inputs/uglypacman.json",
+      "bytes": 1126,
+      "sha256": "ea2ccc3a286d5a02480ff106e7d8363cfc0174e8abcf8436ad9f63403c0f2107"
+    },
+    {
+      "path": "inputs/uglypacman.msh.json",
+      "copy": "inputs/uglypacman.msh.json",
+      "bytes": 1841,
+      "sha256": "15815f260756bf358864c265ff021480693678948f1b5f376349031b2980b8ea"
+    },
+    {
+      "path": "relocation.json",
+      "copy": "relocation.json",
+      "bytes": 44879,
+      "sha256": "49ec3546bdad0ecb75317fdff3b4f1c17bc3d4bcb93827a9c823d54a5aaeffc9"
+    },
+    {
+      "path": "results_2026_10_09.md",
+      "copy": "results_2026_10_09.md",
+      "bytes": 5606,
+      "sha256": "2d9e1ba5eb4baf1330e9b67edfd06eb03b22e8a961198b46243fed716dd43a75"
+    },
+    {
+      "path": "validation.json",
+      "copy": "validation.json",
+      "bytes": 465,
+      "sha256": "75c50f01b2f500b37761f748ccb7757a1e1ece125ff1f8cc9fd646c2fd33da54"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

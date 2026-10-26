@@ -1,0 +1,38 @@
+{
+  "status": "passed",
+  "source_counts": {
+    "smooth": 128,
+    "focused_million_dof": 54,
+    "focused_scaling": 160,
+    "oscillatory": 258
+  },
+  "selected_rows": 876,
+  "lu_baseline": {
+    "confirmed_systems": 107,
+    "overview_cells": 180,
+    "selection": "Independent confirmations at pilot-selected threads; fresh and reused selected separately."
+  },
+  "directional_amg_attempted": 32,
+  "directional_amg_passed": 0,
+  "directional_native_hp_passed_systems": 16,
+  "directional_tuned_asm_pp_passed": 2,
+  "native_completion": {
+    "status": "completed",
+    "scheduled": 126,
+    "attempted": 126,
+    "outcomes": {
+      "passed": 91,
+      "numerical_failure": 35
+    },
+    "systems": 101,
+    "native_attempted_systems": 101,
+    "native_passed_systems": 87,
+    "note": "Completed means attempted, not necessarily converged. Numerical failures, setup errors and timeouts remain separate.",
+    "profiles": {
+      "passed": 6,
+      "skipped": 3
+    },
+    "validation": "passed"
+  },
+  "selection": "Metric-specific passing minima; native policy curves cover every system. Historic native measurements retain their original suite, without choosing faster duplicate trials."
+}

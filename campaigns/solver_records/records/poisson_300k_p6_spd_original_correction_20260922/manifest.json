@@ -1,0 +1,26 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/poisson_300k_p6_spd_original_correction_20260922",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 84956,
+  "file_count": 17,
+  "subdirectories": 5,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "arguments.json",
+      "copy": "arguments.json",
+      "bytes": 980,
+      "sha256": "173b27f7363f1504973beb8578529d276bb866e51c3ba481a580641c71f45125"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 42119,
+      "sha256": "ac529bec2dc7ba45aef45941f9f5ede1444263f6948b50a3dc0efba8dbcd23e8"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

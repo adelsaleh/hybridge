@@ -1,0 +1,27 @@
+{
+  "git_head": "c9da79930b3bcb0ad3a708da25939573c7b1bbbc",
+  "scope": "consumer sources after validation; working tree contains uncommitted changes",
+  "files": {
+    "projects/diocotron/dolfinx/checkpoint_data.py": "c03a15ff2355da5627172126266789d7b05c56a39600243e647178b2bbf9a1e8",
+    "projects/diocotron/comparisons/hdg_projection.py": "611785747ca17af4288c96b3682224baffe7d2a11c81d5526026742b1a8c4311",
+    "scripts/guiding_center/cases/imported_equilibrium.py": "ca55fb73137c9235d414dfcf694516f85973009a423443e02869d2682cd26f55",
+    "scripts/guiding_center/cases/guiding_center_cases.py": "c9e613ee580b80609fee30491b8e45b53e647b8cfb50b54254b3f1efc7b331aa",
+    "scripts/guiding_center/runtime/runner.py": "2a53303c31e115a93becc94de00e3b2bd5ec3b4afef798db996c71451d09d1e5",
+    "scripts/guiding_center/benchmarks/run_equilibrium_preservation.py": "d4d82cebb48ec9b6953346a2c3801545d987b127b86f08fb6de0d5ff8265f2bf",
+    "scripts/guiding_center/diagnostics/plot_equilibrium_preservation.py": "d0e8772fd4428056255e785c5c8949cde44e8798a9040a28b01e49ab740cb9b2",
+    "hybridge/core/mesh.py": "fa42539277c5745646e38cfa3667446e9859e27accb288a8ad8b707b7632226b"
+  },
+  "checks": "17 focused tests passed; 6 registry/import selected checks passed; no AMGX build or GPU run",
+  "original_runs_environment": {
+    "NUMBA_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "16"
+  },
+  "thread_check_environment": {
+    "NUMBA_NUM_THREADS": "16",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "16",
+    "MKL_NUM_THREADS": "16"
+  }
+}

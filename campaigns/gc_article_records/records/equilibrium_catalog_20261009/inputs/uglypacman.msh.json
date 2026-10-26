@@ -1,0 +1,95 @@
+{
+  "geometry_variant": "ugly-pacman",
+  "name": "Ugly Pacman",
+  "boundary_description": "Asymmetric nonconvex rounded polygon with sharp re-entrant and obtuse corners",
+  "unrounded_control_polygon": [
+    [
+      1.08,
+      0.06
+    ],
+    [
+      0.7334530253726266,
+      0.803172385370053
+    ],
+    [
+      -0.28,
+      1.02
+    ],
+    [
+      -0.94,
+      0.62
+    ],
+    [
+      0.35,
+      -0.1
+    ],
+    [
+      -1.01,
+      -0.76
+    ],
+    [
+      -0.38,
+      -1.02
+    ],
+    [
+      0.7721818710068982,
+      -0.7857233587073176
+    ]
+  ],
+  "control_polygon_interior_angles_degrees": [
+    135.0,
+    127.07632957684541,
+    136.70526765880822,
+    60.38601614392415,
+    304.9453603540955,
+    48.31288818767848,
+    146.08069975149573,
+    121.49343832715248
+  ],
+  "rounding": "Quadratic Bezier arcs tangent to adjacent straight sides",
+  "rounding_trim_fraction": 0.3,
+  "rounding_trim_lengths": [
+    0.0,
+    0.24599999999999997,
+    0.23152537657889682,
+    0.23152537657889682,
+    0.0,
+    0.20446271053666484,
+    0.20446271053666484,
+    0.27
+  ],
+  "nonsmooth_corners": [
+    {
+      "vertex": 0,
+      "coordinates": [
+        1.08,
+        0.06
+      ],
+      "interior_angle_degrees": 135.0
+    },
+    {
+      "vertex": 4,
+      "coordinates": [
+        0.35,
+        -0.1
+      ],
+      "interior_angle_degrees": 304.9453603540955
+    }
+  ],
+  "concave_rounded_vertices": [],
+  "corner_refinement": {
+    "size": 0.0005,
+    "inner_radius": 0.005,
+    "outer_radius": 0.12
+  },
+  "requested_size": 0.004,
+  "geometry_degree": 1,
+  "gmsh_version": "4.15.2",
+  "mesh_sha256": "18587ad23de3dd6fa9463b57175815e2ddd42172b530e4c489bd7f7c5a38a93e",
+  "vertices": 226013,
+  "edges": 675842,
+  "cells": 449830,
+  "area": 2.3656688180477508,
+  "h_max": 0.005585486480936106,
+  "domain_diameter": 2.811123048867053
+}

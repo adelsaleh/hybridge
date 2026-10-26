@@ -1,0 +1,79 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/diocotron_order_20261016",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Partial: phases I and X completed; the full D8 ladder remains pending.",
+  "total_bytes": 12014797533,
+  "file_count": 547,
+  "subdirectories": 5,
+  "run_attempt_statuses": {
+    "ok": 6
+  },
+  "completion_markers": [
+    "D8_I_DONE",
+    "D8_X_DONE"
+  ],
+  "copied": [
+    {
+      "path": "D8_I_DONE",
+      "copy": "D8_I_DONE",
+      "bytes": 20,
+      "sha256": "3152d148731f71187c9f4d5e5eb053d7e2c0b1d9ff629601dde2b925593e4930"
+    },
+    {
+      "path": "D8_X_DONE",
+      "copy": "D8_X_DONE",
+      "bytes": 20,
+      "sha256": "413cb495a084955db906c26d2768d97e84974ea4e5077ffd8e95573795be61b1"
+    },
+    {
+      "path": "mesh_calibration.jsonl",
+      "copy": "mesh_calibration.jsonl",
+      "bytes": 2073,
+      "sha256": "be3897b3dbe81d9f486f2e85f48383561cdb754404c85936d64a805c9cd266d2"
+    },
+    {
+      "path": "mesh_levels.jsonl",
+      "copy": "mesh_levels.jsonl",
+      "bytes": 12761,
+      "sha256": "ffaa6fe3710d1bc55b89255d5deb97da11ef19c15aebb6ca6bf7e200791a03d5"
+    },
+    {
+      "path": "mesh_levels_m128.jsonl",
+      "copy": "mesh_levels_m128.jsonl",
+      "bytes": 6043,
+      "sha256": "281064cf6dfa030a5c24767ad7291dc138d3db991891634d47fe1301f4e66905"
+    },
+    {
+      "path": "mesh_levels_m128_p9.jsonl",
+      "copy": "mesh_levels_m128_p9.jsonl",
+      "bytes": 1326,
+      "sha256": "cd01174ca272b718105505db43fbdf7bdc1485811edb81148ef0c0067713ee8d"
+    },
+    {
+      "path": "mesh_levels_p9.jsonl",
+      "copy": "mesh_levels_p9.jsonl",
+      "bytes": 1582,
+      "sha256": "65ecb8dbafcc31b145562dec17d0ede4cb61680d212a0a51a9d328f3282f0203"
+    },
+    {
+      "path": "pause_pgids.json",
+      "copy": "pause_pgids.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 46084,
+      "sha256": "c1299e62f6d7d26dd8daf1e03fc5d3355d74b354758754cdcf7bd92784000ed8"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 12229,
+      "sha256": "533c0a851aacf290ddbde70881f84c714aa711e912a2aa46f961c3e7be626cec"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

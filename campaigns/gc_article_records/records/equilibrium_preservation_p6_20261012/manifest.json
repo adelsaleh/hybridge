@@ -1,0 +1,38 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_preservation_p6_20261012",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 493705249,
+  "file_count": 77,
+  "subdirectories": 6,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 276,
+      "sha256": "2a3dae9d8d4644773ee0ab3bb78c3e6f2a02dd300c52085b8d59f43bcba2375f"
+    },
+    {
+      "path": "consumer_provenance.json",
+      "copy": "consumer_provenance.json",
+      "bytes": 1823,
+      "sha256": "cfac4cb30d36c59312a7bbe7fe1cfc0493951e0f60ecb0e31c774eb5bbeeffcc"
+    },
+    {
+      "path": "launch.json",
+      "copy": "launch.json",
+      "bytes": 2864,
+      "sha256": "143bd6d115e26ff15a0d79afda844f7fe6c84e45bf40ea5e08198db361792fd1"
+    },
+    {
+      "path": "validation.json",
+      "copy": "validation.json",
+      "bytes": 1934,
+      "sha256": "1446f8975b3d64f0c38fffd5890caaee5bbb56ec9ffdb45f647473bd8bc2de6a"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}
