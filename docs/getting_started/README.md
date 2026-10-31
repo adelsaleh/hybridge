@@ -1,6 +1,6 @@
 # Getting Started
 
-- [`gpu_showcase.md`](gpu_showcase.md): run the GPU vortex-gas example, reproduce
+- [`gpu_showcase.md`](gpu_showcase.md): run the small BDF2 turbulence example and find the provenance of
   the README videos, and inspect their numerical checks and recording parameters.
 - [`installation.md`](installation.md): dependency groups, wheel contents,
   optional runtimes, clean-install smoke tests, and CI qualification.

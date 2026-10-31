@@ -24,6 +24,7 @@ class BandProbeGrid:
     @classmethod
     def from_coordinates(cls, coordinates, thickness, *, angles=1024,
                          transverse=32, half_width_factor=1.0):
+        """Build probes at uniform band angles and Gauss quadrature normal offsets."""
         if angles < 16 or transverse < 2 or thickness <= 0 or half_width_factor <= 0:
             raise ValueError("positive widths, angles >= 16 and transverse >= 2 required")
         theta = np.arange(angles) * (2 * np.pi / angles)
@@ -42,6 +43,7 @@ class BandProbeGrid:
         return cls(theta, eta, weights / 2, points)
 
     def coefficients(self, values, *, max_mode=None):
+        """Return normalized angular real-FFT coefficients for each transverse probe row."""
         values = np.asarray(values)
         if values.shape[-2:] != self.points.shape[:2]:
             raise ValueError("values must have trailing shape (transverse, angles)")
@@ -53,6 +55,7 @@ class BandProbeGrid:
         return result
 
     def amplitudes(self, values, *, max_mode=None):
+        """Return one-sided modal amplitudes averaged in quadrature across the band."""
         coefficient = self.coefficients(values, max_mode=max_mode)
         amplitude = np.sqrt(np.einsum("r,...rm->...m", self.weights,
                                      np.abs(coefficient) ** 2))
@@ -63,6 +66,7 @@ class BandProbeGrid:
         return amplitude * factors
 
     def rms(self, values):
+        """Return the root mean square over angle and weighted transverse probes."""
         values = np.asarray(values)
         if values.shape[-2:] != self.points.shape[:2]:
             raise ValueError("values must have trailing shape (transverse, angles)")
@@ -74,12 +78,14 @@ class BandProfileSampler:
     """Reusable point evaluation on a fixed mesh; outside-wall probes are errors."""
 
     def __init__(self, space, grid):
+        """Prepare cellwise interpolation on the probe grid with an empty cell-hint cache."""
         self.grid = grid
         self.evaluator = CellwiseEvaluator(space.mesh.node_coords, space.mesh.triangles,
                                           space.order, space.reference.basis_type)
         self.cells = None
 
     def __call__(self, field):
+        """Sample a field on the probe grid, reusing cell hints and rejecting invalid points."""
         coefficients = field.coeffs
         if hasattr(coefficients, "get"):
             coefficients = coefficients.get()

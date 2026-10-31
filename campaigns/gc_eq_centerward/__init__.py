@@ -1,1 +1,0 @@
-"""Centerward equilibrium continuation."""

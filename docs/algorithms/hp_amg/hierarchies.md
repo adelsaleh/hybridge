@@ -215,10 +215,10 @@ p-coarsening, BSR operators and block-Chebyshev smoothing, followed by scalar
 AMGX at p=0. The most consequential new direction is the degree-one coarse
 trace space and its h-transfer.
 
-The [hierarchy BSR feasibility study](../../research/solver_studies/hybrid_hierarchy_bsr_feasibility_2026_09.md)
+The hierarchy BSR feasibility study (`../../../../guiding-center-cg-hdg/docs/research/solver_studies/hybrid_hierarchy_bsr_feasibility_2026_09.md`)
 reports unfavorable projections for repacking the existing scalar coarse
 hierarchy into artificial blocks. The
-[ASM study](../../research/solver_studies/asm_pp_bsr_opportunities_2026_09.md) reports that the tested wider
+ASM study (`../../../../guiding-center-cg-hdg/docs/research/solver_studies/asm_pp_bsr_opportunities_2026_09.md`) reports that the tested wider
 finest-level patches cost more than they saved. These are specific retained
 results, not a rejection of every block hierarchy or patch method.
 

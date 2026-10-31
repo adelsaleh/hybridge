@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k` |
+| Data directory | `run_outputs/solver_studies/adr_square_stress_strong_numba_h150k` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 18.3 GiB |
 | Files / immediate subdirectories | 272 / 8 |

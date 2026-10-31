@@ -113,6 +113,5 @@ and reconstruction with current master raw-CUDA kernels.  The benchmark should
 then be repeated with identical error quadrature and matched peak-memory
 instrumentation.
 
-Raw logs and full JSON remain under
-`/tmp/codex-diffusion-benchmark/`.  The compact 24-row evidence table is
-stored beside this report.
+The compact 24-row evidence table is stored beside this report. Full logs were
+recorded in a temporary workspace and are not required to read these results.

@@ -557,6 +557,9 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         advection_stabilization=None,
         beta_face_basis=None,
         volume_table=None,
+        beta_volume_values=None,
+        beta_normal_flux=None,
+        reaction_values=None,
         precision: str = "float32",
         contraction: str = "cutensor",
         compute: str = "default",
@@ -572,6 +575,10 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
 
     Parameters
     ----------
+    beta_volume_values, beta_normal_flux, reaction_values : None
+        Accepted for input compatibility with split3. Quadrature-point
+        coefficients are unsupported and raise ``NotImplementedError``;
+        use fused or split3 assembly for those inputs.
     precision : {"float32", "float64"}
         Working precision of the contractions, local LU, and Schur rows. Face
         tables and coefficient rows are formed in FP64; ``data`` and ``rhs``
@@ -593,6 +600,11 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         CUDA-event seconds, ``raw.tsle_tensor.workspace.bytes``, and the generic
         ``raw.kernel.device``.
     """
+    if any(value is not None for value in (beta_volume_values, beta_normal_flux, reaction_values)):
+        raise NotImplementedError(
+            "tensor TSLE does not support quadrature-point coefficients; use "
+            "raw_local_assembly='fused' or 'split3'"
+        )
     cupy = require_cupy()
     validate_raw_cuda_supported(cspace, trace_ref, max_el_dof=55, max_order=9,
                                 label="tensor TSLE advection assembly")

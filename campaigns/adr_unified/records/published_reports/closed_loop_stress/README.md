@@ -1,10 +1,10 @@
 # Closed-loop stress section: preliminary results
 
-[section.tex](section.tex) is included by both [main.tex](../main.tex) and
-[main_synthesis.tex](../main_synthesis.tex). It defines the common main-level
+[section.tex](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/closed_loop_stress/section.tex) is included by both [main.tex](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/main.tex) and
+[main_synthesis.tex](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/main_synthesis.tex). It defines the common main-level
 geometry and exact solution, distinguishes trapping/crossing/orthogonal
 transport and briefly explains the difficulty. Its shared
-[results.tex](results.tex) reports the completed 22 September 2026 strong-preset
+[results.tex](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/closed_loop_stress/results.tex) reports the completed 22 September 2026 strong-preset
 campaign: **8/60 passed**, all on the orthogonal control; **0/36 AMGX passes**.
 The tables include all 60 final physical residuals and setup/fresh/reused timings
 for the eight converged configurations. Failed warmup costs are not ranked.

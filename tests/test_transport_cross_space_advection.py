@@ -227,6 +227,15 @@ cuda_only = pytest.mark.skipif(not (CUDA and _cuda_available()),
                                reason="CUDA compilation requires HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 and a GPU")
 
 RAW_PATHS = [("fused", "coo"), ("fused", "csr"), ("fused", "bsr"), ("split3", "bsr"), ("precomputed", "coo")]
+# Precomputed assembly uses CuPy local matrices and eliminated boundaries;
+# the selectable volume operator belongs to the fused and split3 paths.
+RAW_CASES = [
+    (mode, fmt, boundary_mode, volume_operator)
+    for mode, fmt in RAW_PATHS
+    for boundary_mode in ("eliminate", "zero-flux")
+    for volume_operator in ("tensor", "quadrature")
+    if mode != "precomputed" or (boundary_mode == "eliminate" and volume_operator == "tensor")
+]
 
 
 def _device_matrix(device, fmt, shape):
@@ -241,12 +250,10 @@ def _device_matrix(device, fmt, shape):
 
 
 @cuda_only
-@pytest.mark.parametrize("mode,fmt", RAW_PATHS)
+@pytest.mark.parametrize("mode,fmt,boundary_mode,volume_operator", RAW_CASES)
 @pytest.mark.parametrize("order,beta_order", [(2, 4), (3, 2), (6, 5), (4, 6)])
 @pytest.mark.parametrize("trace_basis", ["legacy-lagrange", "legendre-modal"])
-@pytest.mark.parametrize("boundary_mode", ["eliminate", "zero-flux"])
 @pytest.mark.parametrize("policy", [None, "upwind"])
-@pytest.mark.parametrize("volume_operator", ["tensor", "quadrature"])
 @pytest.mark.parametrize("constant_reaction", [False, True])
 def test_raw_cuda_cross_space_matrices_and_reconstruction(mode, fmt, order, beta_order, trace_basis,
                                                           boundary_mode, policy, volume_operator,
@@ -264,8 +271,6 @@ def test_raw_cuda_cross_space_matrices_and_reconstruction(mode, fmt, order, beta
     from hybridge.hdg.stabilization import resolve_transport_stabilization
     from hybridge.transport.cuda import assemble_reduced_system_cuda, reconstruct_advection_field_cuda
 
-    if mode == "precomputed" and (boundary_mode == "zero-flux" or volume_operator == "quadrature"):
-        pytest.skip("precomputed raw assembly: eliminate, CuPy-built local matrices only")
     space, beta, source, reaction = _problem(order, beta_order, mesh=rectangle_mesh(3, 2))
     if constant_reaction:
         # Coercive (r - div(beta)/2 > 0, |div(beta)| <= 4 here): a smaller
@@ -306,6 +311,33 @@ def test_raw_cuda_cross_space_matrices_and_reconstruction(mode, fmt, order, beta
     actual, _ = reconstruct_advection_field_cuda(cp.asarray(full_trace), source, reaction, coeffs, device)
     np.testing.assert_allclose(cp.asnumpy(actual), host.coeffs, rtol=2e-10,
                                atol=2e-12 * np.abs(host.coeffs).max())
+
+
+@cuda_only
+@pytest.mark.parametrize("options,error,message", [
+    pytest.param({"zero_boundary_flux": True}, NotImplementedError, "zero-flux assembly", id="zero-flux"),
+    pytest.param({"raw_lu_mode": "coop"}, ValueError, "raw_lu_mode='coop'", id="cooperative-lu"),
+])
+def test_precomputed_cross_space_rejects_unsupported_options_before_assembly(options, error, message, monkeypatch):
+    """Unsupported options must fail before constructing local matrices."""
+    from hybridge.core.device import as_cupy_space, as_cupy_trace_space, as_cupy_vector_coefficients
+    import hybridge.transport.cuda as transport_cuda
+
+    space, beta, source, reaction = _problem(2, 4, mesh=rectangle_mesh(1, 1))
+    cspace = as_cupy_space(space)
+    coefficients = as_cupy_vector_coefficients(beta, cspace)
+    trace = as_cupy_trace_space(space.trace_space("legendre-modal"))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid precomputed options reached local assembly")
+
+    monkeypatch.setattr(transport_cuda, "local_mats_cupy", forbidden)
+    boundary = None if options.get("zero_boundary_flux") else BOUNDARY
+    with pytest.raises(error, match=message):
+        transport_cuda.assemble_reduced_system_cuda(
+            source, reaction, boundary, coefficients, cspace, trace,
+            backend="raw-cuda", raw_local_assembly="precomputed", raw_matrix_format="coo",
+            beta_space=beta.components[0].space, **options)
 
 
 @cuda_only

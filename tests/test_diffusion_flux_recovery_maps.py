@@ -11,8 +11,6 @@ from hybridge.core.mesh import DGMesh, rectangle_mesh
 from hybridge.core.space import DGSpace
 from hybridge.mixed.postprocess.flux import _postprocess_diffusion_solution
 from hybridge.solvers.diffusion_reaction import _resolve_diffusion_postprocessing_backend
-from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from scripts.guiding_center.runtime.configuration import _validate_config
 
 
 def apply_maps(reference, space, trace_space, local, trace, tau):
@@ -62,20 +60,6 @@ def test_reference_lifting_matches_existing_postprocessor_on_skew_triangles(degr
     assert reference.nullspace.shape[1] == (degree if variant=='l2_closest' else 0)
 
 
-@pytest.mark.parametrize('suffix,variant', [('rt','RT_projection'),('l2_closest','l2_closest')])
-def test_disk_bdf2_presets_require_continuous_raw_cuda_recovered_drift(suffix,variant):
-    config = preset_by_key(f'euler_vortex_gas_si_bdf2_p6_poisson_p5_{suffix}_p6')
-    _validate_config(config)
-    assert config.case == 'euler_vortex_gas'
-    assert config.time_scheme == 'si-bdf2'
-    assert config.order == 6 and config.poisson_order_offset == -1
-    assert config.transport_electric_field == 'postprocessed'
-    assert config.poisson_hdg_postprocess == 'flux'
-    assert config.poisson_flux_postprocess_space == variant
-    assert config.poisson_flux_postprocess_every == 0
-    assert config.poisson_postprocessing_backend == 'raw-cuda'
-    assert config.poisson_assembly_backend == config.transport_assembly_backend == 'raw-cuda'
-    assert _resolve_diffusion_postprocessing_backend('raw-cuda','flux',variant,'auto') == 'raw-cuda'
 
 
 @pytest.mark.parametrize('variant', ['RT_projection', 'l2_closest'])
@@ -155,42 +139,3 @@ def test_cuda_recovery_matches_host_and_reuses_geometry(degree,variant,monkeypat
         if previous is not None:
             assert cache is previous
         np.testing.assert_allclose(field.as_component_first(),expected.as_component_first(),atol=2.e-9,rtol=2.e-9)
-
-
-@pytest.mark.parametrize('preset', [
-    'euler_vortex_gas_si_bdf2_p6_poisson_p5_rt_p6_fast',
-    'euler_vortex_gas_si_bdf2_p6_poisson_p5_l2_closest_p6_fast',
-    'positive_turbulence_iter_si_bdf2_p6_poisson_p5_rt_p6_fast',
-])
-def test_solver_hands_device_buffers_to_recovery_and_reuses_cache_on_rhs_updates(monkeypatch, preset):
-    """Exercise the runner's public source/boundary-update path without solving."""
-    import hybridge.solvers.diffusion_reaction as diffusion
-    from scripts.guiding_center.runtime.configuration import _make_poisson_options
-    space=DGSpace(rectangle_mesh(1,1),1,basis_type='dub_orth')
-    local,trace,flux,cache=object(),object(),object(),object()
-    options = _make_poisson_options(preset_by_key(preset))
-    assert options.cache_device_matrix
-    solver = diffusion.DiffusionReactionHDGSolver(
-        space, source=space.zeros(), reaction=space.zeros(), boundary_condition=0., options=options)
-    calls = []
-    def recover(actual_local,actual_trace,*args,**kwargs):
-        assert actual_local is local and actual_trace is trace
-        assert kwargs['postprocessing_backend']=='raw-cuda'
-        assert kwargs['flux_postprocess_space']==options.flux_postprocess_space
-        calls.append(kwargs['cache'])
-        return None,flux,cache
-    monkeypatch.setattr(diffusion,'_postprocess_diffusion_solution',recover)
-    monkeypatch.setattr(postprocess_flux,'_postprocess_diffusion_solution',recover)
-    timings=diffusion.DiffusionReactionTimings(0.,0.,0.,0.,0.,0.,0.)
-    for source in (0., 1., 2.):
-        solver.set_source(space.constant(source))
-        solver.set_boundary_condition(source)
-        if calls:
-            assert solver._hdg_postprocess_cache is cache
-        result=diffusion.DiffusionReactionResult(field=space.zeros(),flux=None,trace=None,
-            timings=timings,trace_device=trace,local_unknowns_device=local)
-        recovered=solver._postprocess_result(result)
-        assert recovered.postprocessed_flux is flux
-        assert recovered.trace_device is recovered.local_unknowns_device is None
-        assert solver._hdg_postprocess_cache is cache
-    assert calls == [None, cache, cache]

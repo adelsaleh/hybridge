@@ -90,6 +90,6 @@ The measured 60.5 ms kernel and 103.7 ms wrapper replace the earlier 54.9 ms
 and 149 ms extrapolations for this mesh. Block 128 is the fastest tested
 configuration for FP32 p=6; this is not a universal block-size choice.
 
-[Complete measured samples](fp32_poisson_300k_2026_09_25.json).
+Complete measured samples (`../../../../guiding-center-cg-hdg/docs/research/solver_studies/fp32_poisson_300k_2026_09_25.json`).
 Use the reproduction commands above with `--nx 500 --ny 300` in both
 reference and FP32 processes, using fresh matching output directories.

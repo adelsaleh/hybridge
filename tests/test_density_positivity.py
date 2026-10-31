@@ -1,7 +1,6 @@
-"""KKT density positivity projection: projector contract, stepper wiring, order gates and preset.
+"""KKT density positivity projection on small affine meshes.
 
-Small affine meshes and canned solves. The two order gates integrate small manufactured
-transport problems on the host, with at most 2,048 elements.
+The experiment-specific stepper checks live with the research application.
 """
 from dataclasses import replace
 from types import SimpleNamespace
@@ -9,24 +8,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import scripts.guiding_center.run_guiding_center_cases as cli
 from hybridge import DGSpace, rectangle_mesh
 from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.transport.positivity import DensityPositivityProjector, positivity_points
-from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from scripts.guiding_center.runtime.configuration import _validate_config
-from scripts.guiding_center.runtime.labels import run_label
-from test_guiding_center_bdf3 import scalar_problem
-
-PRESET = "positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz"
 
 
-def _kkt_showcase_preset():
-    """The KKT showcase preset (star with island) lives on the positivity-kkt branch."""
-    try:
-        return preset_by_key(PRESET)
-    except ValueError:
-        pytest.skip("KKT showcase preset is only on the positivity-kkt branch")
+
+
 
 
 def touching_zero(x, y):
@@ -145,208 +133,24 @@ def test_projector_rejects_foreign_fields_and_nonpositive_mass():
         DensityPositivityProjector(space, points="bernstein")
 
 
-class RecordingProjector:
-    """Canned projector: shifts the density by a constant and records its inputs."""
-
-    def __init__(self, shift):
-        self.shift, self.calls = shift, []
-
-    def project(self, field, *, name=None):
-        self.calls.append(float(field.coeffs[0, 0]))
-        projected = field.copy(name=name)
-        projected.coeffs[...] += self.shift
-        return projected, {"positivity_flagged": 1, "positivity_negative_mean_projected": 0,
-                           "positivity_negative_mean_zeroed": 0, "positivity_fallback": 0,
-                           "positivity_min_before": -1.0, "positivity_min_after": 0.0,
-                           "positivity_correction_relative": 1e-3, "positivity_mass_returned": 0.0,
-                           "positivity_projection_time": 0.0}
 
 
-@pytest.mark.parametrize("scheme", ["si-euler", "si-bdf2"])
-def test_projected_density_feeds_poisson_history_and_metrics(scheme):
-    stepper, poisson, transport, _ = scalar_problem(scheme, 0.1)
-    projector = RecordingProjector(0.25)
-    stepper.density_projector = projector
-    for step in range(3):
-        accepted = stepper.advance(poisson, transport)
-        raw = projector.calls[-1]
-        assert accepted.density.coeffs[0, 0] == pytest.approx(raw + 0.25)
-        assert poisson.calls[-1] == pytest.approx(raw + 0.25)
-        assert accepted.metrics["positivity_flagged"] == 1
-    assert len(projector.calls) == 3
-    if scheme == "si-bdf2":
-        np.testing.assert_allclose(stepper.density.coeffs, accepted.density.coeffs)
-        assert stepper.previous_density.coeffs[0, 0] == pytest.approx(projector.calls[-2] + 0.25)
 
 
-def test_runner_feeds_the_uncorrected_initial_density_to_the_first_solves(monkeypatch, tmp_path):
-    """Canned solves: the projector first sees rho_h(dt); rho_h(0) is never corrected."""
-    import hybridge.core.space as space_module
-    import hybridge.solvers.advection_reaction as advection
-    import hybridge.solvers.diffusion_reaction as diffusion
-    import hybridge.transport.positivity as positivity
-    from scripts.guiding_center.runtime import runner
-    from test_guiding_center_bdf2 import CoefficientSpace, flux_for_x_velocity
-
-    config = replace(preset_by_key("rho_helm_wave_host_accuracy"), time_scheme="si-bdf2", dt=0.05,
-                     num_steps=2, density_positivity="kkt", poisson_order_offset=0,
-                     diagnostics_every=0, record_timings=False, plot_every=0,
-                     diagnostics_dir=str(tmp_path), verbosity=0)
-    timings = SimpleNamespace(total=0.0, assembly=0.0, solve=0.0, reconstruction=0.0, postprocessing=0.0)
-    poisson_sources, transport_sources = [], []
-    projector = RecordingProjector(0.25)
-
-    def result(space, value):
-        return SimpleNamespace(field=space.constant(value), trace=np.array([value], dtype=float),
-                               flux=flux_for_x_velocity(space, 0), postprocessed_flux=None, timings=timings,
-                               global_solve_result=None, assembly_backend="numpy", boundary_mode="eliminate")
-
-    class Transport:
-        def __init__(self, space, **kwargs):
-            self.space = space
-
-        def set_problem(self, source, beta, reaction, boundary):
-            transport_sources.append(float(source.coeffs[0, 0]))
-
-        def solve(self, **kwargs):
-            return result(self.space, 10 * len(transport_sources))
-
-    class Poisson:
-        def __init__(self, space, source, **kwargs):
-            self.space, self.source = space, source
-            self.options = SimpleNamespace(stabilization=config.poisson_tau)
-
-        def set_source(self, source):
-            self.source = source
-
-        def set_boundary_condition(self, boundary):
-            pass
-
-        def solve(self, **kwargs):
-            poisson_sources.append(float(self.source.coeffs[0, 0]))
-            return result(self.space, 0)
-
-    mesh = SimpleNamespace(num_tri=8, triangulation=object(), num_edg=1, int_edges_inds=[0])
-    monkeypatch.setattr(space_module, "DGSpace", CoefficientSpace)
-    monkeypatch.setattr(positivity, "DensityPositivityProjector", lambda space, **kwargs: projector)
-    monkeypatch.setattr(advection, "AdvectionReactionHDGSolver", Transport)
-    monkeypatch.setattr(diffusion, "DiffusionReactionHDGSolver", Poisson)
-    monkeypatch.setattr(runner, "_build_mesh", lambda *args: mesh)
-    monkeypatch.setattr(runner, "_project_initial_field", lambda config, space, function, **kwargs: space.constant(2))
-    monkeypatch.setattr(runner, "project_callable_to_trace", lambda *args, **kwargs: np.array([2.0]))
-    monkeypatch.setattr(runner, "_make_poisson_options", lambda *args: SimpleNamespace())
-    monkeypatch.setattr(runner, "_make_transport_options", lambda *args: SimpleNamespace())
-    monkeypatch.setattr(runner, "solver_result_metrics", lambda *args: {})
-    monkeypatch.setattr(runner, "result_transfer_time", lambda *args: 0.0)
-    monkeypatch.setattr(runner, "audit_arrays", lambda *args: None)
-    monkeypatch.setattr(runner, "_make_plotter", lambda *args, **kwargs: SimpleNamespace(
-        update=lambda *args, **kwargs: None, close=lambda: None))
-    outcome = runner.run_guiding_center_case(config)
-    # The canned projection rho_h(0) = 2 is the initial Poisson source and the first
-    # transport source; the BDF2 history keeps it, and only transported densities
-    # (10, then 20) are corrected (+0.25).
-    assert projector.calls == [10.0, 20.0]
-    assert poisson_sources == [2.0, 10.25, 20.25]
-    assert transport_sources == [2.0, pytest.approx((4 * 10.25 - 2.0) / 3)]
-    np.testing.assert_allclose(outcome.final_density.coeffs, 20.25)
 
 
-def _gate_errors(case, space, runs):
-    """L2 errors of unprojected and KKT-projected SI-BDF2 runs ``(steps, final_time)``."""
-    gates = pytest.importorskip("scripts.guiding_center.diagnostics.positivity_order_gates")
-    Norms, advance = gates.Norms, gates.advance
-
-    norms, errors = Norms(space), {}
-    for label, projector in (("none", None), ("kkt", DensityPositivityProjector(space))):
-        errors[label] = []
-        for steps, final_time in runs:
-            density, exact, metrics = advance(case, space, steps, final_time, 1.0, projector)
-            errors[label].append(norms.error(density, exact))
-            assert projector is None or min(m["positivity_flagged"] for m in metrics) > 0
-    return {label: np.array(values) for label, values in errors.items()}
 
 
-def test_projection_keeps_the_bdf2_time_rate_of_a_rotating_bump():
-    """Small time gate: projected SI-BDF2 has the unprojected errors and dt rates."""
-    pytest.importorskip("pypardiso")
-    if REAL_DTYPE == np.float32:
-        pytest.skip("convergence-order check requires FP64")
-    errors = _gate_errors("rotation", DGSpace(rectangle_mesh(24, 24), 3, basis_type="dub_orth"),
-                          [(steps, 1.0) for steps in (16, 32, 64)])
-    rates = {label: np.log2(values[:-1] / values[1:]) for label, values in errors.items()}
-    assert rates["none"][-1] > 1.5
-    np.testing.assert_allclose(rates["kkt"], rates["none"], atol=0.05)
-    np.testing.assert_array_less(errors["kkt"], 1.1 * errors["none"])
 
 
-def test_projection_keeps_the_spatial_rate_on_a_steady_ring():
-    """Small space gate: the steady ring keeps its unprojected h rate with the projection active."""
-    pytest.importorskip("pypardiso")
-    if REAL_DTYPE == np.float32:
-        pytest.skip("convergence-order check requires FP64")
-    errors = {}
-    for cells in (16, 32):
-        level = _gate_errors("ring", DGSpace(rectangle_mesh(cells, cells), 3, basis_type="dub_orth"), [(10, 0.5)])
-        for label, values in level.items():
-            errors.setdefault(label, []).extend(values)
-    rates = {label: np.log2(values[0] / values[1]) for label, values in errors.items()}
-    assert rates["none"] > 3.0 and rates["kkt"] > rates["none"] - 0.1
-    np.testing.assert_array_less(errors["kkt"], 1.1 * np.array(errors["none"]))
 
 
-def test_showcase_recorder_accepts_kkt_for_the_positive_case_only(monkeypatch):
-    pytest.importorskip("matplotlib")
-    from scripts.reports import record_gpu_showcase as recorder
-
-    launched = []
-    monkeypatch.setattr(recorder, "record", launched.append)
-    monkeypatch.setattr("sys.argv", ["record", "--strength-mode", "positive", "--density-positivity", "kkt"])
-    recorder.main()
-    assert launched[0].density_positivity == "kkt"
-    assert launched[0].density_positivity_points == "quadrature+lattice"
-    monkeypatch.setattr("sys.argv", ["record", "--density-positivity", "kkt"])
-    with pytest.raises(SystemExit):
-        recorder.main()
-    assert len(launched) == 1
 
 
-def test_kkt_option_is_validated_and_labelled():
-    config = _kkt_showcase_preset()
-    _validate_config(config)
-    assert config.density_positivity == "kkt" and config.time_scheme == "si-bdf2"
-    assert config.case_params["geometry"] == "smooth-star" and config.plot_backend == "holoviz"
-    assert config.verbosity == 3
-    assert run_label(config).endswith("SI BDF2 + KKT positivity")
-    with pytest.raises(ValueError, match="si-euler and si-bdf2"):
-        _validate_config(replace(config, time_scheme="si-bdf3"))
-    with pytest.raises(ValueError, match="density_positivity"):
-        _validate_config(replace(config, density_positivity="limiter"))
 
 
-def test_readme_case_loads_the_saved_profile_on_the_star():
-    from scripts.guiding_center.cases.guiding_center_cases import CASE_DEFINITIONS
-
-    case = CASE_DEFINITIONS["positive_turbulence"].build(**_kkt_showcase_preset().case_params)
-    assert case.default_domain == "smooth-star"
-    assert case.parameters["counts"] == (512, 256, 128, 64)
-    assert case.parameters["geometry"]["hole_radius"] == 0.3
-    assert case.parameters["geometry"]["num_threads"] == 16
-    density = case.initial_density_at()
-    assert float(density(np.array([2.0]), np.array([2.0]))[0]) == 0.0
-    with pytest.raises(ValueError, match="profile_path"):
-        CASE_DEFINITIONS["positive_turbulence"].build(geometry="smooth-star")
 
 
-def test_response_file_selects_the_kkt_preset_without_launch(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["guiding-center", f"@run_configs/guiding_center/{PRESET}.args", "--dry-run"])
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError("dry-run attempted to launch the simulation")
-    monkeypatch.setattr(cli, "_run_cli_case_with_terminal_log", forbidden)
-    monkeypatch.setattr(cli, "run_guiding_center_case", forbidden)
-    cli._main()
-    output = capsys.readouterr().out
-    assert f"Preset: {PRESET}" in output and "density_positivity: 'kkt'" in output
 
 
 @pytest.mark.parametrize("order", [8, 9])

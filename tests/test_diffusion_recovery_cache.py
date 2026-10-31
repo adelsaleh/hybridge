@@ -14,9 +14,6 @@ from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGSolver,
 )
 from hybridge.mixed.postprocess.flux import _new_hdg_postprocess_cache
-from scripts.guiding_center.runtime.poisson_recovery import (
-    PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
-)
 
 
 HOST_FACTORS = (
@@ -145,18 +142,6 @@ def test_explicit_resets_release_recovery_cache(monkeypatch, reset):
     assert solver._hdg_postprocess_cache is None
 
 
-@pytest.mark.parametrize("initial_tau", [0.4, "global_length"])
-def test_poisson_retry_controller_preserves_recovery_from_resolved_scalar_tau(monkeypatch, initial_tau):
-    solver, cache, _ = cached_solver(monkeypatch)
-    solver.options = solver.options.with_overrides(stabilization=initial_tau)
-    old_tau = float(solver._resolved_options().stabilization)
-    checkpoint = PoissonCheckpoint(solver.source, object(), 0., "prescribed checkpoint")
-    failure = PoissonStageFailure(RuntimeError("failed to converge"), checkpoint, "transport")
-    retry = PoissonTauRecovery(factor=2., max_retries=2)
-    for count in (1, 2):
-        assert retry.increase(solver, failure, step_time=0.) == old_tau * 2**count
-        assert solver._hdg_postprocess_cache.raw_flux_cache is cache.raw_flux_cache
-    assert len(retry.events) == 2 and checkpoint.time == 0.
 
 
 def test_tau_update_without_recovery_does_not_load_cuda(monkeypatch):

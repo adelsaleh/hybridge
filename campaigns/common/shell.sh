@@ -4,11 +4,10 @@
 campaign_setup() {
     CAMPAIGN_REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
     HYBRIDGE_PYTHON=${HYBRIDGE_PYTHON:-"$CAMPAIGN_REPO/.venv/bin/python"}
-    HYBRIDGE_ARTICLE_ROOT=${HYBRIDGE_ARTICLE_ROOT:-"$CAMPAIGN_REPO/../gc-hdg-article"}
-    CAMPAIGN_ARTICLE_OUT="$HYBRIDGE_ARTICLE_ROOT/run_outputs"
-    CAMPAIGN_OUT=${HYBRIDGE_CAMPAIGN_OUT:-"$CAMPAIGN_ARTICLE_OUT/$1"}
-    HYBRIDGE_FENICS_PYTHON=${HYBRIDGE_FENICS_PYTHON:-"$CAMPAIGN_REPO/../.envs/diocotron-fenicsx/bin/python"}
+    HYBRIDGE_ARTICLE_ROOT=${HYBRIDGE_ARTICLE_ROOT:-"$CAMPAIGN_REPO/../guiding-center-cg-hdg/guiding_center_cg_hdg/gc-hdg-article"}
+    CAMPAIGN_OUT=${HYBRIDGE_CAMPAIGN_OUT:-"$CAMPAIGN_REPO/run_outputs/campaigns/$1"}
     export PYTHONUNBUFFERED=1
+    export HYBRIDGE_PYTHON HYBRIDGE_ARTICLE_ROOT
     cd -- "$CAMPAIGN_REPO" || return
     mkdir -p "$CAMPAIGN_OUT"
     local pgid

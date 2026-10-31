@@ -10,10 +10,6 @@ import pytest
 from hybridge import DGMesh, DGSpace, rectangle_mesh
 from hybridge.io.raster import DeviceRasterSampler, RasterGeometry
 from hybridge.runtime.precision import REAL_DTYPE
-from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from scripts.guiding_center.runtime import runner
-import scripts.guiding_center.run_guiding_center_cases as cli
-import scripts.guiding_center.runtime.plotting as plotting
 
 
 def pixel_centers(geometry):
@@ -103,64 +99,12 @@ def test_device_sampler_rejects_cross_device_host_fallback():
         sampler.sample(field)
 
 
-@pytest.mark.parametrize("backend", ["pyvista", "holoviz"])
-def test_factory_selects_only_requested_backend(monkeypatch, backend):
-    from hybridge.io import holoviz
-
-    def construct(*fields, **options):
-        return fields, options
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError("constructed the unselected backend")
-
-    monkeypatch.setattr(plotting, "GuidingCenterPyVistaPanels", construct if backend == "pyvista" else forbidden)
-    monkeypatch.setattr(holoviz, "GuidingCenterHolovizPanels", construct if backend == "holoviz" else forbidden)
-    config = replace(preset_by_key("diocotron_gaussian_annulus_host_smoke"), plot_backend=backend)
-    fields, options = plotting._make_plotter(
-        config, "density", "potential", title="test", off_screen=True,
-        screenshot_dir=None, screenshot_prefix="test", density_is_vorticity=True,
-    )
-    assert fields == ("density", "potential")
-    assert options["density_is_vorticity"] is True
-    assert options["screenshot_dir"] is None
-    if backend == "holoviz":
-        assert options["width"] == config.plot_width
-        assert options["max_fps"] == config.plot_max_fps
 
 
-def test_headless_holoviz_only_saves_when_requested(monkeypatch):
-    monkeypatch.delenv("DISPLAY", raising=False)
-    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    config = replace(preset_by_key("diocotron_gaussian_annulus_host_smoke"), plot_backend="holoviz", plot_every=1)
-    assert plotting._plot_output_settings(config, "test") == (True, True, None)
-    assert plotting._plot_output_settings(replace(config, screenshot_dir="frames"), "test") == (True, True, "frames")
-    assert plotting._plot_output_settings(replace(config, plot_backend="pyvista"), "test")[2] is not None
 
 
-def test_holoviz_cli_dry_run_does_not_start_solver(monkeypatch, capsys):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("dry run started a solve")
-
-    monkeypatch.setattr(cli, "_run_cli_case_with_terminal_log", forbidden)
-    monkeypatch.setattr(sys, "argv", [
-        "run_guiding_center_cases.py", "--preset", "diocotron_gaussian_annulus_host_smoke",
-        "--plot", "--plot-backend", "holoviz", "--plot-width", "320", "--plot-height", "240",
-        "--plot-max-fps", "5", "--dry-run",
-    ])
-    cli._main()
-    output = capsys.readouterr().out
-    assert "holoviz" in output
-    assert "320" in output and "240" in output
 
 
-@pytest.mark.parametrize("overrides", [
-    {"plot_backend": "unknown"}, {"plot_width": 1}, {"plot_height": 0},
-    {"plot_max_fps": 0}, {"plot_max_fps": float("nan")}, {"plot_every": -1},
-])
-def test_invalid_plot_options_fail_before_solver(overrides):
-    config = replace(preset_by_key("diocotron_gaussian_annulus_host_smoke"), **overrides)
-    with pytest.raises(ValueError, match="plot"):
-        runner._validate_config(config)
 
 
 def _viewer_queue_without_gpu():
@@ -210,16 +154,6 @@ def test_idle_redraw_does_not_add_frames_or_prevent_shutdown():
     assert viewer._frame_for_tick() is None
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-def test_movie_toggle_reaches_only_selected_capture(monkeypatch, enabled):
-    import hybridge.io.holoviz as holoviz
-    config = replace(preset_by_key("diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast"),
-                     save_movie=enabled)
-    monkeypatch.setattr(holoviz, "GuidingCenterHolovizPanels", lambda *args, **kw: kw)
-    options = plotting._make_plotter(config, None, None, title="test", off_screen=True,
-                                    screenshot_dir=None, screenshot_prefix="test", density_is_vorticity=True)
-    assert options["movie_path"] == (config.movie_path if enabled else None)
-    assert options["movie_fps"] == 20
 
 
 def test_color_limits_keep_padding_until_exceeded_and_never_shrink():

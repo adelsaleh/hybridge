@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cuda13_root="${HYBRIDGE_CUDA13_ROOT:-/tmp/cuda}"
-amgx_build_root="${HYBRIDGE_AMGX_BUILD_ROOT:-/tmp/AMGX-build}"
-amgx_install_root="${HYBRIDGE_AMGX_INSTALL_ROOT:-/tmp/AMGX-install}"
+hybridge_repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+cuda13_root="${HYBRIDGE_CUDA13_ROOT:-${CUDA_HOME:-${CUDA_PATH:-/usr/local/cuda}}}"
+amgx_build_root="${HYBRIDGE_AMGX_BUILD_ROOT:-${AMGX_BUILD_DIR:-${hybridge_repo_root}/../AMGX-build-cuda13}}"
+amgx_install_root="${HYBRIDGE_AMGX_INSTALL_ROOT:-${hybridge_repo_root}/../AMGX-install-cuda13}"
 cuda13_lib_root="${cuda13_root}/targets/x86_64-linux/lib"
 
 if [[ ! -x "${cuda13_root}/bin/nvcc" ]]; then

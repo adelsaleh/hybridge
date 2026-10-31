@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17` |
+| Data directory | `run_outputs/solver_studies/adr_scaling_2026_09_17` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 75.9 GiB |
 | Files / immediate subdirectories | 8394 / 4 |

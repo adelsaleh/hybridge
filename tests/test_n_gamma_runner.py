@@ -160,6 +160,8 @@ def _steps(path):
 
 
 def test_host_preset_smoke_reuses_caches_and_postprocesses(tmp_path):
+    import numba
+
     pytest.importorskip('gmsh')
     pytest.importorskip('pypardiso')
     out = tmp_path/'host'
@@ -169,7 +171,9 @@ def test_host_preset_smoke_reuses_caches_and_postprocesses(tmp_path):
     summary = json.loads((directory/'transient_baseline_main_summary.json').read_text())
     row = summary['tables']['temporal'][0]
     assert not row['rejected'] and np.isfinite(row['n_post_l2']) and np.isfinite(row['Gamma_post_l2'])
-    assert summary['summary']['threads']['numba'] == runner.available_cpus()
+    expected_numba_threads = min(runner.available_cpus(), numba.config.NUMBA_NUM_THREADS)
+    assert summary['summary']['threads']['numba'] == expected_numba_threads
+    assert numba.get_num_threads() == expected_numba_threads
     runs = json.loads((directory/'transient_baseline_main_runs.json').read_text())
     assert runs['temporal'][0]['threads']['pardiso'] == min(runner.available_cpus(), 8)
     steps = [r for r in _steps(directory/'transient_baseline_main_steps.csv') if r['run'] == 'time_dt0.05']

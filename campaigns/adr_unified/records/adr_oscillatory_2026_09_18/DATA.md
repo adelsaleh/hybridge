@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial` |
+| Data directory | `run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 3.1 MiB |
 | Files / immediate subdirectories | 7 / 1 |

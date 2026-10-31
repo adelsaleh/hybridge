@@ -555,6 +555,7 @@ def evaluate_trace_error(
             raise ValueError("face_weight must be nonnegative")
 
     def norm(values):
+        """Integrate the weighted squared trace values and return their nonnegative L2 norm."""
         squared = values * values if pointwise is None else values * values * pointwise
         return float(xp.sqrt(xp.maximum(xp.einsum("e,eq,q->", edge_weight, squared, weights), 0.0)))
 

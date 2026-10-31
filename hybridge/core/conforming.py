@@ -148,6 +148,7 @@ class _IdentityCache:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty cache keyed by retained object identities."""
         self._entries: dict[tuple, object] = {}
 
     def get(self, owner, extra, build: Callable[[], object]):
@@ -229,6 +230,7 @@ class ContinuousField:
                               space._field_like(target, qy, name=f"{label}_y")), name=label)
 
     def _apply(self, matrix):
+        """Apply a reference-element matrix to cell values on their current backend."""
         values = self.element_values()
         xp = array_module(values)
         return values @ self.space._matrix_on(xp, matrix, values)
@@ -247,6 +249,7 @@ class ContinuousLagrangeSpace:
     _instances = _IdentityCache()
 
     def __init__(self, mesh: DGMesh, degree: int) -> None:
+        """Build continuous nodal numbering, reference tables and empty device caches."""
         mesh = as_dg_mesh(mesh)
         k = int(degree)
         if k < 1:
@@ -322,6 +325,7 @@ class ContinuousLagrangeSpace:
         return cls._instances.get(mesh, int(degree), lambda: cls(mesh, int(degree)))
 
     def __repr__(self) -> str:
+        """Describe the polynomial degree and global field and mesh sizes."""
         return (
             f"ContinuousLagrangeSpace(degree={self.degree}, num_dofs={self.num_dofs}, "
             f"num_elements={self.mesh.num_tri})"
@@ -342,6 +346,7 @@ class ContinuousLagrangeSpace:
     def evaluation_matrix(self, source: DGSpace) -> np.ndarray:
         """Matrix ``E`` with element nodal values ``= coeffs @ E`` for ``source`` fields."""
         def build():
+            """Tabulate the source DG basis at continuous-space reference nodes."""
             matrix = np.ascontiguousarray(source.basis_at(self.reference_nodes).T, dtype=REAL_DTYPE)
             matrix.setflags(write=False)
             return matrix
@@ -357,6 +362,7 @@ class ContinuousLagrangeSpace:
             )
 
         def build():
+            """Build the reference-element L2 projection from continuous nodal values to DG."""
             reference = target.quad_data
             lagrange = self.lagrange_basis_at(reference.Krf_quads)
             matrix = lagrange.T @ reference.weighted_phi @ reference.MKrf_inv
@@ -375,6 +381,7 @@ class ContinuousLagrangeSpace:
             )
 
         def build():
+            """Build the two reference-derivative L2 projections into the target DG space."""
             reference = target.quad_data
             gradients = self.lagrange_gradients_at(reference.Krf_quads)
             projector = reference.weighted_phi @ reference.MKrf_inv
@@ -389,6 +396,7 @@ class ContinuousLagrangeSpace:
 
     # --------------------------------------------------------- residency glue
     def _device_table(self, device_id: int, key: str, host_array):
+        """Cache a host table on the selected device and return its CuPy array."""
         cupy = require_cupy()
         tables = self._device_tables.setdefault(int(device_id), {})
         value = tables.get(key)
@@ -400,29 +408,35 @@ class ContinuousLagrangeSpace:
 
     @staticmethod
     def _device_id(array) -> int:
+        """Return the array device index, defaulting to zero when none is attached."""
         return int(getattr(getattr(array, "device", None), "id", 0))
 
     def _cell_dofs_on(self, xp, like):
+        """Return cell-to-global degree-of-freedom indices on the requested backend."""
         if xp is np:
             return self.cell_dofs
         return self._device_table(self._device_id(like), "cell_dofs", self.cell_dofs)
 
     def _multiplicity_on(self, xp, like):
+        """Return nodal sharing counts on the requested backend."""
         if xp is np:
             return self.multiplicity
         return self._device_table(self._device_id(like), "multiplicity", self.multiplicity)
 
     def _boundary_dofs_on(self, xp, like):
+        """Return boundary degree-of-freedom indices on the requested backend."""
         if xp is np:
             return self.boundary_dofs
         return self._device_table(self._device_id(like), "boundary_dofs", self.boundary_dofs)
 
     def _inverse_transpose_on(self, xp, like):
+        """Return inverse-transposed affine maps on the requested backend."""
         if xp is np:
             return self.mesh.inv_aff_mats_t
         return self._device_table(self._device_id(like), "inv_aff_mats_t", self.mesh.inv_aff_mats_t)
 
     def _matrix_on(self, xp, matrix: np.ndarray, like):
+        """Return a host matrix or cache its device copy while retaining its identity."""
         if xp is np:
             return matrix
         cupy = require_cupy()
@@ -437,6 +451,7 @@ class ContinuousLagrangeSpace:
         return entry[1]
 
     def _field_like(self, target: DGSpace, coefficients, *, name: str) -> DGField:
+        """Wrap coefficients as a DG field without changing their host or device residency."""
         if array_module(coefficients) is np:
             return target.field(np.ascontiguousarray(coefficients, dtype=REAL_DTYPE), name=name)
         from hybridge.core.device import field_from_cupy_coefficients

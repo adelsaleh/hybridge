@@ -254,7 +254,7 @@ OMP_NUM_THREADS=16 .venv/bin/python -m pytest -q \
   tests/test_n_gamma_manufactured.py tests/test_n_gamma_geometry.py \
   tests/test_n_gamma_coefficients.py tests/test_n_gamma_stepper.py \
   tests/test_n_gamma_diagnostics.py tests/test_n_gamma_runner.py \
-  tests/test_guiding_center_star_hole.py tests/test_mesh_cache.py
+  tests/test_mesh_cache.py
 ```
 
 On 2026-09-29 the n–Gamma tests passed (61 in the six `test_n_gamma_*` files, no skips),

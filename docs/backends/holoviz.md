@@ -1,7 +1,7 @@
 # Holoviz plotting
 
 `hybridge.io.holoviz` provides NVIDIA Holoviz panels for any scalar DG field.
-The guiding-center runner uses them for live updates; the static helpers
+The BDF2 turbulence showcase uses them for live updates; the static helpers
 mirror the PyVista functions in `hybridge.io.plot`:
 
 | PyVista (`hybridge.io.plot`) | Holoviz (`hybridge.io.holoviz`) |
@@ -26,11 +26,11 @@ numerical and exact panels share one range and the error panel starts at zero.
 The ADR runner selects it with `--plot --plot-backend holoviz`
 (`--plot-width`/`--plot-height` per panel).
 
-## Guiding-center runs
+## BDF2 showcase
 
-The guiding-center runner supports NVIDIA Holoviz through Holoscan's Python
-`HolovizOp`. Select it with `--plot-backend holoviz`; PyVista remains the default.
-The Holoscan import is lazy, so other backends do not require it.
+Run `python -m scripts.guiding_center.showcase` for live density and potential
+panels. See the [showcase guide](../getting_started/gpu_showcase.md) for the
+positive case and MP4 output. Holoscan is imported only for live display.
 
 ## Installation
 
@@ -54,25 +54,13 @@ compatible CUDA 13 runtime/toolkit. See NVIDIA's
 An X11 or Wayland display is required for a window; headless rendering still
 requires the NVIDIA Vulkan driver.
 
-## Runner options
+## Viewer options
 
-Append these options to an existing guiding-center invocation:
-
-```text
---plot --plot-backend holoviz --plot-every 10
---plot-width 1024 --plot-height 1024 --plot-max-fps 10
-```
-
-`--plot` enables updates if a cadence has not been set. `--plot-every N` offers
-an update every N accepted steps. `--plot-both` displays density and
-potential side by side; width and height are per panel. `--no-plot-mesh`
-hides the mesh overlay. `--plot-resolution` applies only to PyVista.
-
-Add `--screenshot-dir DIR` to save each requested frame as PNG. Saving waits
-for rendering and downloads only the completed RGBA image. It bypasses the
-live FPS cap so requested screenshots are not dropped. `--plot-off-screen`
-renders without opening a window. A missing display also selects headless
-rendering, but Holoviz does **not** implicitly enable saving.
+The shared `HolovizScalarPanels` API accepts panel dimensions, labels, color
+limits and a frame-rate cap. `update_fields(...)` samples resident fields;
+`close()` drains accepted frames. The BDF2 showcase exposes `--every` and
+`--fps`; ADR uses `--plot --plot-backend holoviz` with its own plotting flags.
+Use each runner's `--help` for its supported options.
 
 ## Device and sampling contract
 
@@ -107,58 +95,14 @@ reduce pixel dimensions if this limit is exceeded. Pixel count, rather than
 mesh-node count, controls the per-frame sampling work. Fixed-grid sampling
 can miss structures smaller than a pixel.
 
-## Static smoke checks
+## Static checks
 
-Run from the HYBRIDGE repository. These checks use tiny, changing synthetic DG
-coefficient tables and do not run a PDE solve or time integrator:
-
-```bash
-env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/viewers/smoke_holoviz.py
-
-env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/viewers/smoke_holoviz.py \
-  --save-dir artifacts/holoviz_smoke
-```
-
-Use the CUDA toolkit path appropriate to your installation. Add `--window`
-to exercise a visible window. The default smoke check forbids new Numba/CUDA
-compilation, runs CPU kernels as Python, and permits only cached GPU binaries.
-It fails if a required CuPy specialization is absent. To allow normal JIT
-compilation when running the check yourself, add `--allow-compilation`.
-`--precision float32` checks a separate set of CuPy specializations.
-
-The check forbids field downloads and allows `cupy.asnumpy` only for explicitly
-saved RGBA framebuffers. Saved images are compared against colours from an
-independent CPU evaluation of the known synthetic inputs. Success requires
-changing coefficients to change most pixels and repeated input to reproduce
-the same image. These guards and content checks do not replace a CUDA transfer
-trace or a performance benchmark of a complete solver run.
-
-CPU regression coverage lives in `tests/test_holoviz.py`: polynomial accuracy
-for all three DG bases, discontinuities, holes, memory limits, device mismatch,
-backend selection, CLI configuration, and explicit saving behavior.
+`tests/test_holoviz.py` covers polynomial sampling, discontinuities, holes,
+memory limits, device checks and explicit saving with synthetic data.
+The archived manual GPU smoke and animation scripts are maintained with the
+research viewer documentation (`../../../guiding-center-cg-hdg/docs/backends/holoviz.md`).
 
 ## Window focus and workspace switching
-
-For a small moving scene that uses the same GPU field sampler and viewer, run:
-
-```bash
-env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/viewers/animate_holoviz.py \
-  --duration 60 --fps 20 --size 512
-```
-
-This animates seeded moving blobs and waves on a small DG mesh, without solving
-a PDE. It uploads synthetic coefficients and samples/renders them on the GPU.
-The scene follows wall-clock time, with a time/frame counter and periodic
-rendered-FPS reports; late updates are skipped instead of building a backlog.
-Compare `--fps 10` and `--fps 30`, or `--size 256` and `--size 1024`, to assess
-motion and window interaction. Close the window or press Ctrl-C to stop early.
-The printed completion times are renderer acknowledgments, not measured
-end-to-end client display latency. This uses the current `DISPLAY`, so select
-the working desktop or SSH compatibility display before running it. As with
-the static check, new compilation is disabled by default.
 
 The source ticks independently of simulation updates. It re-presents the last
 completed GPU image while the solver is busy and retries an unacknowledged
@@ -175,7 +119,7 @@ queried without blocking the rendering thread on the solver's CUDA stream.
 This addresses the queue deadlock; it cannot guarantee responsiveness during
 a driver stall or a native solver operation holding Python's GIL. Workspace
 switching, minimizing/restoring, and close behavior still require a desktop
-check. For unattended screenshots, use `--plot-off-screen --screenshot-dir DIR`.
+check. For unattended showcase output, use `--movie PATH`.
 A plot-close failure during solver-error cleanup is logged separately and
 does not replace the original solver exception.
 
@@ -235,10 +179,8 @@ The installed wheel statically incorporates GLFW without exporting its
 `glfwPollEvents` symbol. Loading another system GLFW library from Python
 would not process Holoviz's window and is not a valid workaround.
 
-Until a patched native library is installed, select `--plot-backend pyvista`
-for live windows, or `--plot-off-screen --screenshot-dir DIR` for Holoviz PNG
-capture without a desktop window. These are workarounds, not validation of
-the native patch.
+The showcase's `--movie PATH` uses the raster recorder without opening a
+live window. A native Holoviz patch still requires separate desktop testing.
 
 Sources:
 - [Holoviz operator](https://github.com/nvidia-holoscan/holoscan-sdk/blob/main/src/operators/holoviz/holoviz.cpp)
@@ -246,8 +188,7 @@ Sources:
 
 Live density and potential panels (including saved screenshots) show the displayed
 simulation time `t`, time-step size `dt`, and accepted iteration `n/N`. The count
-is the integration step, not the number of rendered frames. Use `--plot-both`
-to show Density and Potential side by side with either plotting backend.
+is the integration step, not the number of rendered frames. The showcase displays Density and Potential side by side.
 Holoviz frame-specific captions use the SDK [dynamic input specifications](https://docs.nvidia.com/holoscan/sdk-user-guide/operators/visualization).
 
 ## Holoviz over SSH: session-local compatibility launcher
@@ -257,9 +198,7 @@ From a live `ssh -Y` terminal, preserve the original SSH `DISPLAY` and
 
 ```bash
 .venv/bin/python -m hybridge.io.holoviz_ssh -- \
-  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
-  @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \
-  --verbosity 3 --plot-backend holoviz --plot-every 1
+  .venv/bin/python -m scripts.guiding_center.showcase --every 1
 ```
 
 The launcher checks the upstream display and its authorization before starting
@@ -286,8 +225,8 @@ The movie includes all panels and overlays. H.264 B-frames are disabled so decod
 `close()` drains the encoder and writes a standard fast-start MP4 index for
 player compatibility. An abrupt process kill before finalization can leave an
 unplayable file.
-The runner exposes `--save-movie` / `--no-save-movie`, `--movie-path`, and
-`--movie-fps`. Movie capture requires Holoviz and a positive plotting cadence.
+This framebuffer API is available to application callers. The simple showcase
+uses `--movie` with the separate raster recorder; `--fps` sets its frame rate.
 
 Holoviz color ranges start with 10% padding and remain unchanged while all
 sampled field values fit. An exceeded bound expands with fresh padding; ranges

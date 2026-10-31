@@ -40,6 +40,7 @@ def polygon_area(points) -> float:
 
 
 def _clean_closed_polyline(points, *, tolerance=1e-12):
+    """Validate the planar polyline and remove adjacent and closing duplicate vertices."""
     p = np.asarray(points, dtype=float)
     if p.ndim != 2 or p.shape[1] != 2 or len(p) < 4 or not np.all(np.isfinite(p)):
         raise ValueError("polyline must be a finite (n >= 4, 2) array")
@@ -103,6 +104,7 @@ class BandCoordinates:
     _tree: cKDTree = field(init=False, repr=False)
 
     def __post_init__(self):
+        """Build the vertex search tree used to locate nearby band segments."""
         self._tree = cKDTree(self.vertices)
 
     @classmethod
@@ -147,6 +149,7 @@ class BandCoordinates:
 
     @property
     def count(self) -> int:
+        """Return the number of distinct vertices around the closed band."""
         return len(self.vertices)
 
     def tangents(self) -> np.ndarray:
@@ -155,6 +158,7 @@ class BandCoordinates:
         return t / np.linalg.norm(t, axis=1)[:, None]
 
     def outward_normals(self) -> np.ndarray:
+        """Rotate the unit tangents clockwise to obtain outward normals."""
         t = self.tangents()
         return np.column_stack([t[:, 1], -t[:, 0]])
 
@@ -212,6 +216,7 @@ class SmoothBandCoordinates(BandCoordinates):
     """
 
     def __post_init__(self):
+        """Build the periodic cubic spline, its derivatives and the vertex search tree."""
         from scipy.interpolate import CubicSpline
         super().__post_init__()
         self._curve = CubicSpline(
@@ -221,6 +226,7 @@ class SmoothBandCoordinates(BandCoordinates):
 
     @classmethod
     def from_coordinates(cls, coordinates, *, spacing, max_mode=None):
+        """Resample the band at the requested spacing, optionally filtering Fourier modes."""
         if not np.isfinite(spacing) or spacing <= 0:
             raise ValueError("positive finite spline spacing required")
         count = max(32, int(np.ceil(coordinates.length/spacing)))
@@ -238,10 +244,12 @@ class SmoothBandCoordinates(BandCoordinates):
                    coordinates.length, coordinates.period, coordinates.reversed_input)
 
     def tangents(self):
+        """Return normalized spline derivatives at the stored band vertices."""
         tangent = self._first(self.s[:-1])
         return tangent/np.linalg.norm(tangent, axis=1)[:, None]
 
     def evaluate(self, points, *, max_distance=np.inf, workers=-1):
+        """Find spline footpoints and band coordinates within the requested normal distance."""
         x = np.asarray(points, dtype=float).reshape(-1, 2)
         spacing = self.length/len(self.vertices)
         theta, eta, s, foot, normal = super().evaluate(
@@ -288,6 +296,7 @@ class HamiltonianDisplacement:
     """
 
     def __init__(self, x, y, chi):
+        """Prepare cubic spline coefficients for the stream function on a uniform grid."""
         from scipy.ndimage import spline_filter
 
         self.x, self.y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
@@ -305,6 +314,7 @@ class HamiltonianDisplacement:
 
     @staticmethod
     def _basis(t, xp):
+        """Return the four cubic B-spline weights and their first derivatives."""
         t2, t3 = t * t, t * t * t
         u = 1.0 - t
         values = ((u * u * u) / 6.0, (3.0 * t3 - 6.0 * t2 + 4.0) / 6.0,
@@ -313,6 +323,7 @@ class HamiltonianDisplacement:
         return values, derivatives
 
     def _evaluate(self, points, kind):
+        """Evaluate requested spline values or derivatives on host or device, zero outside the grid."""
         xp = np
         if hasattr(points, "__cuda_array_interface__"):
             import cupy as xp
@@ -345,6 +356,7 @@ class HamiltonianDisplacement:
         return [xp.where(inside, value * scale[name], 0.0) for value, name in zip(out, kind)]
 
     def stream(self, points):
+        """Return the interpolated stream function at the supplied physical points."""
         p = points.reshape(-1, 2) if hasattr(points, "__cuda_array_interface__") else \
             np.asarray(points, dtype=float).reshape(-1, 2)
         return self._evaluate(p, ("value",))[0]
@@ -395,6 +407,7 @@ def wall_distance_function(polygon, *, spacing):
     tree, path = cKDTree(dense), Path(poly)
 
     def evaluate(points):
+        """Return nearest sampled-wall distances and polygon containment flags."""
         p = np.asarray(points, dtype=float).reshape(-1, 2)
         return tree.query(p, workers=-1)[0], path.contains_points(p)
 

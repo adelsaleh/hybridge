@@ -11,7 +11,7 @@ import operator
 # fine blocks for any b, and the scalar p = 0 AMGX cycle is degree-independent,
 # so the range is set by the compiled block sizes and by the need for at least
 # one coarsening step (p >= 1). Validated performance evidence exists for
-# p = 4..6 only (``scripts/guiding_center/runtime/fast_profiles``).
+# p = 4..6 only (the external research application profiles).
 FB_HP_MG_MIN_DEGREE = 1
 FB_HP_MG_MAX_DEGREE = 9
 FB_HP_MG_DEGREES = range(FB_HP_MG_MIN_DEGREE, FB_HP_MG_MAX_DEGREE + 1)

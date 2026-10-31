@@ -106,5 +106,5 @@ The next experiments should therefore focus on reducing polynomial work:
 4. integrate current master raw-CUDA local assembly/reconstruction before
    comparing complete HDG time again.
 
-Raw JSON and the temporary benchmark harness remain under
-`/tmp/codex-diffusion-microbench/` and `/tmp/hdg-face-microbench/`.
+Raw JSON and the temporary benchmark harness were recorded outside the source
+checkout. The measurements summarized here retain their original scope.

@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17` |
+| Data directory | `docs/research/solver_studies/adr_scaling_2026_09_17` |
 | Status at collection | Published local synthesis; original bytes retained. |
 | Total regular-file size | 10.3 MiB |
 | Files / immediate subdirectories | 69 / 6 |

@@ -172,9 +172,8 @@ documentation issues are outside this capacity-handling qualification.
 
 This qualifies Python failure handling with deterministic fault injection.
 It does not assert a GPU memory ceiling, reproduce native allocator exhaustion,
-or rerun the 807,453-triangle guiding-center case. Native resource-stability
-and larger-case evidence remain owned by the
-[guiding-center failure regression](../../TODO.md#driver-time-integration-and-validation).
+or rerun the large application case. Native resource-stability and larger-case
+evidence remain in the research investigations (`../../../guiding-center-cg-hdg/docs/README.md`).
 
 This is bounded contract evidence, not exhaustive numerical parity across
 every backend, matrix class, order, mesh, preconditioner, or runtime.

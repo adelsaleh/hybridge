@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_unified_l5_plan_audit",
+  "data_directory": "run_outputs/solver_studies/adr_unified_l5_plan_audit",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 1208146,

@@ -1,1 +1,0 @@
-"""Sharper equilibrium continuation."""

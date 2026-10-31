@@ -714,7 +714,7 @@ Keep CPU and CUDA geometry kernels mathematically identical where possible so th
 
 ---
 
-## 16. Validation tests Codex must add
+## 16. Validation tests to add
 
 ### Geometry/intersection tests
 

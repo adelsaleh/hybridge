@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.reports.adr_report_labels import PMG_TEX, pmg_names, prose
+from campaigns.adr_solver_reports_20260917.adr_report_labels import PMG_TEX, pmg_names, prose
 
 
 @pytest.mark.parametrize("legacy", [
@@ -35,7 +35,7 @@ def test_report_sources_and_templates_use_canonical_pmg_display_names():
     root = Path(__file__).resolve().parents[1]
     report = root / "docs/research/solver_studies/adr_scaling_2026_09_17"
     sources = list(report.rglob("*.tex"))
-    sources.extend(root / "scripts/reports" / name for name in (
+    sources.extend(root / "campaigns/adr_solver_reports_20260917" / name for name in (
         "adr_results_section.tex.in", "adr_synthesis_section.tex.in",
         "oscillatory_scaling_subsection.tex.in", "oscillatory_adr_section.tex.in",
     ))

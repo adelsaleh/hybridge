@@ -13,7 +13,7 @@ point; none is an H100/H200 result.
 | Output directory | `run_outputs/campaigns/h100_solvers` locally; `$WORK/hybridge/campaigns/h100_solvers` on the cluster |
 | Output selection | Future launcher: `--out` or `HYBRIDGE_CAMPAIGN_OUT`; ADR drivers already take `--output` |
 | Inputs | Portable ADR inventory and meshes, archived matrices where available, Poisson mesh/source specifications |
-| Records | Local baseline snapshots under `adr_unified/records`, `adr_pardiso/records`, `adr_stress/records`, `solver_records/records`; no target-machine records yet |
+| Records | Local baseline snapshots under `adr_unified/records`, `adr_pardiso/records`, `adr_stress/records`; no target-machine records yet |
 
 ## Trial matrix
 
@@ -44,10 +44,10 @@ Performance trials use an exclusive GPU. Accuracy preparation may share it when 
   regular-file sizes. The full expanded ADR matrix cache was estimated at **840 GiB** in the
   dossier; this is storage, not device memory, and must be checked against the selected tasks.
 - [Unified ADR campaign](../adr_unified/README.md), [PyPardiso reference](../adr_pardiso/README.md),
-  [stress campaign](../adr_stress/README.md), and [other solver records](../solver_records/README.md).
-- [Poisson local comparison](../../docs/research/solver_studies/poisson_300k_solver_comparison_2026_09_22.md),
-  [Poisson pMG degree campaign](../gc_poisson_pmg_degrees/README.md), and
-  [pMG/AMG audit](../../docs/research/solver_studies/poisson_pmg_amg_audit_2026_10_16.md).
+  [stress campaign](../adr_stress/README.md), and [guiding-center replay records](../../../guiding-center-cg-hdg/guiding_center_cg_hdg/campaigns/gc_solver_records/README.md).
+- [Poisson local comparison](../../../guiding-center-cg-hdg/docs/research/solver_studies/poisson_300k_solver_comparison_2026_09_22.md),
+  [Poisson pMG degree campaign](../../../guiding-center-cg-hdg/guiding_center_cg_hdg/campaigns/gc_poisson_pmg_degrees/README.md), and
+  [pMG/AMG audit](../../../guiding-center-cg-hdg/docs/research/solver_studies/poisson_pmg_amg_audit_2026_10_16.md).
 
 The node's actual free memory determines the largest trial. H100/H200 comparisons must record
 which device was used and use identical problem sizes before reporting hardware ratios.
@@ -60,14 +60,12 @@ Inspect options without starting solves:
 .venv/bin/python campaigns/adr_unified/run_adr_unified_campaign.py --help
 .venv/bin/python campaigns/adr_pardiso/run_adr_pardiso_campaign.py --help
 .venv/bin/python campaigns/adr_stress/run_closed_loop_stress.py --help
-.venv/bin/python scripts/diffusion_reaction/benchmark_poisson_pmg_degrees.py --help
-.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_poisson_backends --help
-.venv/bin/python -m scripts.guiding_center.studies.magnetron.run_poisson_cg_vs_hdg --help
 ```
 
 The ADR drivers have plan/inventory modes by default and require `--execute` to start their runs;
-see their READMEs for the exact inputs and flags. The Poisson drivers start solves when invoked
-without an inspection option. They are building blocks, not the missing combined cluster launcher.
+see their READMEs for the exact inputs and flags. Research Poisson comparisons
+and their launch commands live in the sibling `guiding-center-cg-hdg` repository.
+The combined cluster launcher remains to be implemented.
 
 ## Preparation still required
 

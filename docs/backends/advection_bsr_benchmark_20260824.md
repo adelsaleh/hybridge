@@ -6,9 +6,9 @@ Date: 2026-08-24
 
 - GPU: Quadro RTX 6000, 24 GiB, compute capability 7.5.
 - AMGX: local `hdg-cuda13-integration` checkout rebuilt with CUDA 13.0.1; PyAMGX
-  resolved `/tmp/AMGX-build-cuda13.0.1/libamgxsh.so`.
+  resolved `../AMGX-build-cuda13/libamgxsh.so`.
 - CUDA libraries: cuBLAS 13 and cuSPARSE/cuSOLVER 12 from
-  `/tmp/cuda-13.0.1`; CuPy 14.2.0 reported runtime 13.2 and driver 13.0.
+  `${CUDA_HOME}`; CuPy 14.2.0 reported runtime 13.2 and driver 13.0.
 - Solver: unpreconditioned `BICGSTAB`, `bsr_spmv_backend=cusparse_generic`,
   relative tolerance `1e-11`, maximum 1500 iterations, external row scaling.
 - Assembly: raw CUDA, fused local assembly, cooperative LU, zero-flux square
@@ -184,19 +184,8 @@ cells were repeated with wrapper `rtol=1.01e-10`; AMGX's own tolerance remained
 
 ## Raw artifacts
 
-The detailed JSONL/logs and Nsight reports are temporary workspace artifacts:
-
-- `/tmp/codex-adv-csr-bsr-cuda13-patched-n64-r5.{jsonl,log}`
-- `/tmp/codex-adv-csr-bsr-cuda13-patched-n128-r3.{jsonl,log}`
-- `/tmp/codex-adv-csr-bsr-cuda13-patched-n256-r3.{jsonl,log}`
-- `/tmp/codex-amgx-bicgstab-{bsr,csr}-p2-cuda13-patched.nsys-rep`
-- `/tmp/codex-test2-match-ms0{20,10,05,02,01}.{jsonl,log}`
-- `/tmp/codex-test2-retry-ms{002-p5-bic-csr,001-p2-bic-bsr}.{jsonl,log}`
-- `/tmp/codex-test2-pbic-safe-screen-ms002-p6.jsonl`
-- `/tmp/codex-test2-dilu-screen-ms002-p1-4.{jsonl,log}`
-- `/tmp/codex-test2-dilu-confirm-ms001-p1-4.{jsonl,log}`
-- `/tmp/codex-test2-dilu-p5-6-smoke.jsonl`
-- `/tmp/codex-test2-dilu-p5-6-{scaled,minmax}-smoke.jsonl`
+Detailed JSONL/logs and Nsight captures were recorded outside the source
+checkout. The numerical comparisons above summarize that recorded run.
 
 After the AMGX shared library and native launcher were rebuilt,
 `KrylovBsrSpmvBackend`, `DeviceMemoryStats`, `GMRESReliableResidual`,

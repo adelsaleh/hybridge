@@ -1,6 +1,6 @@
 # Oscillatory ADR: three diffusion classes
 
-This [subsection](subsection.tex) extends the [combined ADR results section](../README.md).
+This [subsection](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/subsection.tex) extends the [combined ADR results section](../README.md).
 It uses the same oscillatory exact solution, cellular velocity and reaction in
 three distinct classes, so the change in diffusion can be compared directly.
 The earlier uniformly weak anisotropy remains an additional stress test.
@@ -76,7 +76,7 @@ On the finest annular transport case, AMG/FGMRES and AMG/BiCGSTAB take 16.39 and
 Separate annular profiles give complete ASM+PP application means of **21.57 ms (high), 21.53 ms (low), and 42.61 ms (directional)**. Preconditioning accounts for **92.6–96.1%** of attributed GPU operation time. These are instrumented diagnostics, not ranked solve measurements.
 
 [scaling.csv](scaling.csv) contains every configuration, including failures;
-[scaling.data.json](scaling.data.json) preserves samples, effective settings,
+[scaling.data.json](../../../../../docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json) preserves samples, effective settings,
 assembly checks, profiles and the complete initial stress-study data.
 [validation.json](validation.json) audits the common inputs, source/binary hashes,
 independent CPU references, physical residuals, solution agreement and mesh topology.

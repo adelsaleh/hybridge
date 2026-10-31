@@ -30,7 +30,7 @@ package reorganization moved them without re-export shims.
   GMRES path with block-Jacobi/ASM and polynomial preconditioning, including
   its precise CuPy/cuBLAS ownership and independence from AMGX.
 - [`face_hp_mg_pcg.md`](face_hp_mg_pcg.md): supported p=4--6 native
-  face-BSR Poisson hierarchy, cache/fallback contract, guiding-center policy,
+  face-BSR Poisson hierarchy, cache/fallback behavior, solver policies,
   and periodic raw-CUDA `RT_p` electric-field postprocessing.
 - [`raw_cuda.md`](raw_cuda.md): raw-CUDA kernel ownership, launch policy,
   discontinuous-advection audit, and diffusion setup ownership.
@@ -171,7 +171,7 @@ The hard-coded fused tensor Test 7 adapter and kernels live under
 - Keep experiments under `scripts/<equation>/experiments/`, with focused tests
   for reusable numerical logic.
 - Keep optional imports lazy. Importing `hybridge` must not require CUDA, AMGX,
-  PETSc, PARDISO, Gmsh, or DOLFINx.
+  PETSc, PARDISO, or Gmsh.
 - Do not infer residency from a filename. Use the checked capability record and
   transfer instrumentation.
 - Keep dated performance conclusions in [`../research/`](../research/), not in

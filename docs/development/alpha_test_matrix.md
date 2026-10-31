@@ -12,11 +12,11 @@ against documentation drift by `tests/test_alpha_test_matrix.py`.
 
 | Lane | Cadence | Release blocking | Runtime | Trace bases | Coverage |
 |---|---|---|---|---|---|
-| host-fast | every change | yes | Python 3.10+; NumPy, SciPy, Numba, pytest | not basis-specific | Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests |
+| host-fast | every change | yes | Python 3.10+; NumPy, SciPy, Numba, pytest | not basis-specific | Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, and quadrature tests |
 | install-smoke | every release candidate | yes | Python 3.10+; pip, setuptools, wheel; installed NumPy/SciPy/Numba | not basis-specific | Offline wheel build, isolated target install, installed-package import, public sparse solve, and DG mesh/space smoke |
 | cpu-parity | every pull request and release candidate | yes | host NumPy/Numba | legacy-lagrange, legendre-modal | Representative p=2 advection/diffusion solve parity plus diffusion p=1,3,6 reconstruction parity |
 | gpu-smoke | opt-in on GPU changes; required before release tag | yes | CUDA, CuPy/Cupyx, PyAMGX, Numba | legacy-lagrange, legendre-modal | CuPy/raw-CUDA parity, explicit Cupyx transfers, zero-flux advection, direct CSR AMGX solves, device diffusion/ADR postprocessing, and guiding-center diagnostic reductions |
-| scheduled-evidence | scheduled before release candidates and performance changes | no | production GPU node plus Gmsh-enabled host reference environment | legacy-lagrange, legendre-modal | Extended device and Gmsh geometry parity, explicit launch-size sweeps, and guiding-center temporal convergence |
+| scheduled-evidence | scheduled before release candidates and performance changes | no | production GPU node plus Gmsh-enabled host reference environment | legacy-lagrange, legendre-modal | Extended device and Gmsh geometry parity, explicit launch-size sweeps |
 
 Known gaps:
 - The matrix is representative, not exhaustive over polynomial order, mesh, coefficient type, backend, or sparse solver.
@@ -24,7 +24,6 @@ Known gaps:
 - The default install smoke reuses already installed numerical dependencies; dependency resolution is checked separately with --with-dependencies in a networked clean environment.
 - Gmsh is optional but highly recommended because most production scripts and configurations use it; ordinary lanes may skip it, while scheduled-evidence requires it and runs the opt-in geometry parity cases.
 - Optional Matplotlib tests may skip when its runtime is absent; every skip must be recorded and reviewed.
-- Guiding-center high-mode AMGX recovery, long-time convergence, and FEniCS/DOLFINx comparison studies remain separate open work.
 
 <!-- END GENERATED ALPHA TEST MATRIX -->
 

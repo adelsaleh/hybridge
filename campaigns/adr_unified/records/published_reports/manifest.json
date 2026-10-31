@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17",
+  "data_directory": "docs/research/solver_studies/adr_scaling_2026_09_17",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "Published local synthesis; original bytes retained.",
   "total_bytes": 10749801,
@@ -11,8 +11,10 @@
     {
       "path": "README.md",
       "copy": "README.md",
-      "bytes": 11894,
-      "sha256": "159a2b6c0fede8e72a6b4cd61d7a5a827776e603771717f5bd47a32de85a536c"
+      "bytes": 12406,
+      "sha256": "6fa0d9382b2c9c28f355a3316133b3e3ad13ae7e8dc40c83a376e02eb3ca35c2",
+      "original_bytes": 11894,
+      "original_sha256": "159a2b6c0fede8e72a6b4cd61d7a5a827776e603771717f5bd47a32de85a536c"
     },
     {
       "path": "artifact_validation.json",
@@ -23,8 +25,10 @@
     {
       "path": "closed_loop_stress/README.md",
       "copy": "closed_loop_stress/README.md",
-      "bytes": 5724,
-      "sha256": "459f567da0af9c219894348d7ce73a78f5c5e01df210eedd3e09b9bc14b5cef2"
+      "bytes": 6024,
+      "sha256": "f04e283046848899ba25f99590e95b182da95d32aafcce369f6bc13ffd2c3db7",
+      "original_bytes": 5724,
+      "original_sha256": "459f567da0af9c219894348d7ce73a78f5c5e01df210eedd3e09b9bc14b5cef2"
     },
     {
       "path": "comparison/results.csv",
@@ -77,8 +81,10 @@
     {
       "path": "oscillatory/README.md",
       "copy": "oscillatory/README.md",
-      "bytes": 9269,
-      "sha256": "d4e2c4d153310d1e24c3a8ebcbf7c72291a646f951f6ec7cc2101af84ca29fad"
+      "bytes": 9427,
+      "sha256": "4bfd862caa03b7509eee4049fefd2322840b09d8da9a938ed877cc55bfd89bf3",
+      "original_bytes": 9269,
+      "original_sha256": "d4e2c4d153310d1e24c3a8ebcbf7c72291a646f951f6ec7cc2101af84ca29fad"
     },
     {
       "path": "oscillatory/diagnostics.json",
@@ -95,8 +101,10 @@
     {
       "path": "oscillatory/initial/README.md",
       "copy": "oscillatory/initial/README.md",
-      "bytes": 11625,
-      "sha256": "0289aaf8be3e0830ab879ddb1a16c9ab84746b496861e4a8721b416c80246b4e"
+      "bytes": 11805,
+      "sha256": "6ff0e8063bb71c0d08601cb998c12f11cee8e8eed6fd29b57fad99bf3a0c2220",
+      "original_bytes": 11625,
+      "original_sha256": "0289aaf8be3e0830ab879ddb1a16c9ab84746b496861e4a8721b416c80246b4e"
     },
     {
       "path": "oscillatory/initial/comparison.csv",
@@ -203,5 +211,6 @@
       "bytes": 1294719
     }
   ],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

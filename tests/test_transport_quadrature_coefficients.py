@@ -324,6 +324,23 @@ def test_raw_cuda_single_valued_drift_solve_matches_numba(order):
                                atol=1e-10 * np.abs(expected.field.coeffs).max())
 
 
+@pytest.mark.parametrize("coefficient", ("beta_volume_values", "beta_normal_flux", "reaction_values"))
+def test_tensor_tsle_rejects_quadrature_coefficients_before_device_setup(monkeypatch, coefficient):
+    """Reject unsupported coefficient forms before loading CUDA or assembling."""
+    import hybridge.transport.tsle_tensor as tensor
+
+    def forbidden():
+        raise AssertionError("unsupported tensor input reached device setup")
+
+    monkeypatch.setattr(tensor, "require_cupy", forbidden)
+    inputs = dict(source_coeffs=None, beta_coeffs=None, reaction_coeffs=None,
+                  reaction_scalar=0.0, reaction_is_scalar=True, boundary_trace=None,
+                  cspace=None, trace_ref=None, advection_tensor=None)
+    inputs[coefficient] = object()
+    with pytest.raises(NotImplementedError, match="quadrature-point coefficients"):
+        tensor.assemble_projected_advection_trace_system_eliminated_tsle_tensor(**inputs)
+
+
 def test_raw_cuda_entry_rejects_tensor_operator_precomputed_and_cupy_assembly():
     """The device entry point rejects quadrature-point inputs before any device work."""
     from hybridge.transport.cuda import assemble_reduced_system_cuda

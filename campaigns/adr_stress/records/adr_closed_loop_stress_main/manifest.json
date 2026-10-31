@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_closed_loop_stress_main",
+  "data_directory": "run_outputs/solver_studies/adr_closed_loop_stress_main",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 15449010203,
@@ -17,14 +17,18 @@
     {
       "path": "manifest.json",
       "copy": "source/manifest.json",
-      "bytes": 33869,
-      "sha256": "eb2b83fc8494f3c2c344fc5515d55945f4266a9bb92ea8ff83c91d49f7d9d956"
+      "bytes": 30233,
+      "sha256": "c531d31cac2a845d1ce3e58e2c4a029db6809cdf88179cb627906a95b37bd914",
+      "original_bytes": 33869,
+      "original_sha256": "eb2b83fc8494f3c2c344fc5515d55945f4266a9bb92ea8ff83c91d49f7d9d956"
     },
     {
       "path": "profiles.json",
       "copy": "profiles.json",
-      "bytes": 295922,
-      "sha256": "75a3b409abb0a0301fe0de8a61e2961b175864a25b3038d265870f0b3e8c8386"
+      "bytes": 295334,
+      "sha256": "61e27029df3463160147bb6a055e5fe3bb2a8dad1584a31379123111543d7712",
+      "original_bytes": 295922,
+      "original_sha256": "75a3b409abb0a0301fe0de8a61e2961b175864a25b3038d265870f0b3e8c8386"
     }
   ],
   "too_large_or_nontext": [
@@ -33,5 +37,6 @@
       "bytes": 1242190
     }
   ],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

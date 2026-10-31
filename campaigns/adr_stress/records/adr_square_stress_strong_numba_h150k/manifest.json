@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k",
+  "data_directory": "run_outputs/solver_studies/adr_square_stress_strong_numba_h150k",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 19650154260,
@@ -17,20 +17,26 @@
     {
       "path": "events.jsonl",
       "copy": "events.jsonl",
-      "bytes": 136754,
-      "sha256": "54f8d3f5107b781d6bde71827c973420a7ac00ed421487f8a944a060f129ba2c"
+      "bytes": 132434,
+      "sha256": "3c3a4e7f45e29364d1e6ecef20b4c35b6b4ef551834d8f5c639faf14113bf1c0",
+      "original_bytes": 136754,
+      "original_sha256": "54f8d3f5107b781d6bde71827c973420a7ac00ed421487f8a944a060f129ba2c"
     },
     {
       "path": "manifest.json",
       "copy": "source/manifest.json",
-      "bytes": 39011,
-      "sha256": "8f0218a39bd6ea0707387c24c44146cbec8ebc92c488bf0c827aa52f9d3d8c2e"
+      "bytes": 35142,
+      "sha256": "95d7e013e46347a06c0b1e3b64bf5fcf2ae66cc48aa7b25ab85ba7345bd4f263",
+      "original_bytes": 39011,
+      "original_sha256": "8f0218a39bd6ea0707387c24c44146cbec8ebc92c488bf0c827aa52f9d3d8c2e"
     },
     {
       "path": "pardiso_checks.json",
       "copy": "pardiso_checks.json",
-      "bytes": 1924,
-      "sha256": "c605a2d784e1cfc3aa366217b79f5e0751cfb4946c2e935687ec96bb04da2e62"
+      "bytes": 1870,
+      "sha256": "61ddfc7261e79430bbc62c5b48738af0c610ac5bfd4fb0038b98e4be06c78a87",
+      "original_bytes": 1924,
+      "original_sha256": "c605a2d784e1cfc3aa366217b79f5e0751cfb4946c2e935687ec96bb04da2e62"
     }
   ],
   "too_large_or_nontext": [
@@ -39,5 +45,6 @@
       "bytes": 1444639
     }
   ],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

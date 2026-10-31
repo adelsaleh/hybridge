@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_unified_l5_plan_audit` |
+| Data directory | `run_outputs/solver_studies/adr_unified_l5_plan_audit` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 1.2 MiB |
 | Files / immediate subdirectories | 1 / 0 |

@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922` |
+| Data directory | `run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 14.6 GiB |
 | Files / immediate subdirectories | 218 / 7 |

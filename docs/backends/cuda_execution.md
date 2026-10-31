@@ -34,9 +34,9 @@ or PyAMGX.
   and matrix-format comparisons.
 - `scripts/gpu/benchmark_advection_tsle_bsr.py` compares fused and three-stage
   face-BSR assembly without including AMGX solve time.
-- `scripts/gpu/benchmark_advection_tsle_tensor.py` compares split3 with the
-  experimental tensorized TSLE configurations on the guiding-center showcase
-  transport step (assembly only).
+- research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py`) compares split3 with the
+  experimental tensorized TSLE configurations on a prescribed transport
+  state (assembly only).
 
 The standalone runners are diagnostic and benchmarking entry points. Normal
 application workflows should use the public solver classes or maintained case
@@ -75,8 +75,7 @@ The explicit `raw_local_assembly="split3"` selector chooses TSLE-BSR, which
 separates build, cooperative LU/solve, and Schur/BSR scatter so each stage can
 autotune its launch shape. It preserves the same HDG algebra, requires BSR and
 cooperative pivoted LU, and retains persistent intermediate workspaces.
-`raw_local_assembly="auto"` (implied for zero-flux raw-CUDA transport and used
-by the guiding-center GPU presets) selects TSLE-BSR from p=8 on and fused
+`raw_local_assembly="auto"` (implied for zero-flux raw-CUDA transport) selects TSLE-BSR from p=8 on and fused
 below, falling back to fused when face-BSR output, cooperative LU, or an
 operator-cache-free solve is unavailable. On an RTX PRO 5000 Blackwell
 (117k-triangle star mesh, zero-flux transport, bit-identical matrices) TSLE was
@@ -89,9 +88,7 @@ Fused and split3 assembly also take the advection field and the reaction as valu
 the quadrature points (`QuadratureVectorField`, `QuadratureScalar`, passed to
 `assemble_reduced_system_cuda` as `beta_values=` and `reaction`). They then use
 the quadrature volume operator, whatever `raw_volume_operator="auto"` would
-choose; `"tensor"` and the precomputed path reject them. The
-guiding-center exact-drift reference runs use this path
-(`--exact-drift-mode pointwise`). See [`raw_cuda.md`](raw_cuda.md) for the
+choose; `"tensor"` and the precomputed path reject them. See [`raw_cuda.md`](raw_cuda.md) for the
 kernel variants.
 
 ### Experimental tensorized TSLE
@@ -137,7 +134,7 @@ FP64 = 1/64 of FP32), driver 580.126.09, CUDA 13.0, CuPy 14.2.0, cuBLAS
 guiding-center star mesh, one BDF2 transport step, zero-flux boundaries,
 conflict-averaged upwind, and face-BSR output, measured on 2026-10-03. Values
 are median CUDA-event assembly times in ms, excluding pattern construction
-and AMGX. Reproduce them with `scripts/gpu/benchmark_advection_tsle_tensor.py`
+and AMGX. Reproduce them with research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py`)
 (`--native fused,split3` for the native columns).
 
 **FP64 on the baseline machine (its production precision):**

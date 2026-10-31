@@ -85,7 +85,7 @@ imports SymPy. Its coordinates are `x=R-3, y=Z`; use `stationary=True` to freeze
 the fields at zero phase and remove their time derivatives. Sources include
 the cylindrical divergence and take no timestep or numerical history inputs.
 
-PETSc/petsc4py, CUDA-specific CuPy wheels, PyAMGX/AMGX, and DOLFINx are not
+PETSc/petsc4py, CUDA-specific CuPy wheels, PyAMGX/AMGX are not
 declared as generic extras because they require ABI-, CUDA-, MPI-, or
 distribution-specific installation. Install those stacks in matched
 environments and use `docs/reference/backend_capabilities.md` to select a supported
@@ -177,5 +177,5 @@ python scripts/dev/clean_install_smoke.py --with-dependencies
 Before an alpha tag, run all release-blocking lanes and record exact results in
 `docs/releases/early_alpha.md`. The GPU lane must run on the production
 CUDA/PyAMGX machine with zero runtime skips. Passing the host install smoke does
-not qualify optional PETSc, CUDA, AMGX, DOLFINx, Gmsh, plotting, or pypardiso
+not qualify optional PETSc, CUDA, AMGX, Gmsh, plotting, or pypardiso
 paths; each optional runtime needs its own recorded check.

@@ -172,32 +172,6 @@ def test_add_field_preserves_mesh_return_and_can_return_actor(vtk):
     assert renderer.grids == 2
 
 
-def test_runner_adapter_preserves_vorticity_policy(monkeypatch):
-    import hybridge.io
-    from scripts.guiding_center.runtime.plotting import GuidingCenterPyVistaPanels
-
-    calls = []
-    class Viewer:
-        def __init__(self, panels, **options):
-            calls.append((panels, options))
-        def update(self, fields, **frame):
-            calls.append((fields, frame))
-        def close(self):
-            calls.append("closed")
-    monkeypatch.setattr(hybridge.io, "PyVistaFieldPanels", Viewer)
-    adapter = GuidingCenterPyVistaPanels(
-        "rho", "phi", resolution=4, title="case", show_mesh=False, off_screen=True,
-        screenshot_dir=None, screenshot_prefix="case", include_potential=True, density_is_vorticity=True,
-    )
-    panels, options = calls[0]
-    assert [p[0] for p in panels] == ["Density", "Potential"]
-    assert panels[0][2] == dict(scalar_name="density", cmap="RdBu_r", symmetric_clim=True,
-                                fixed_clim=True, robust_percentile=100.)
-    assert options["window_size"] == (1500, 650)
-    adapter.update("new rho", "new phi", step=3, time_value=.3)
-    assert calls[1] == (["new rho", "new phi"], dict(step=3, time_value=.3))
-    adapter.close()
-    assert calls[-1] == "closed"
 
 
 def test_symmetric_limits_handle_nonfinite_and_constant_samples():

@@ -1,1 +1,0 @@
-"""projects.diocotron.hdg.equilibrium."""

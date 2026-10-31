@@ -14,7 +14,7 @@
     "dofs": 1060556,
     "operator_sha256": "23328fa6ab229303b87e47d33c06f9a7e2fc84b4ce0bea42fbc9957993d93293",
     "campaign_hash_checked": true,
-    "spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/specs/assemble_stress_square_main_trap_t100000_p6.json",
+    "spec": "run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/specs/assemble_stress_square_main_trap_t100000_p6.json",
     "spec_sha256": "ac226bbae5c12a611f51b1c7d0bb190b4b57602aa4f0854fd8741ac7ce64635f",
     "neighbors_sha256": "ac722dec8e4705a8e6e17407c3b89291a13e2e3c6209a9db3c370ab31211f121",
     "nnz": 37037532,
@@ -42,7 +42,7 @@
     "probe_relative_solution_error": 2.398606481959255e-10,
     "returncode": 0,
     "worker_wall_seconds": 7.524915882968344,
-    "diagnostic_output": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/pardiso/stress_square_main_trap_t100000_p6/attempt_1",
+    "diagnostic_output": "run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/pardiso/stress_square_main_trap_t100000_p6/attempt_1",
     "runner_wall_seconds": 7.533995034056716,
     "target_triangles": 100000,
     "p": 6

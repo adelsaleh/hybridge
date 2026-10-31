@@ -11,7 +11,6 @@ from hybridge.core.field_ops import vector_field_linear_combination
 from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
 from hybridge.linalg.results import LinearSolveConvergenceError
 from hybridge.runtime.precision import REAL_DTYPE
-from scripts.guiding_center.runtime import runner
 
 
 TOL = 5e-5 if REAL_DTYPE == np.float32 else 2e-12
@@ -95,45 +94,3 @@ def test_device_diagnostics_match_host_without_materializing_fields():
         if not key.endswith("backend"):
             assert actual[key] == pytest.approx(expected[key], abs=TOL, rel=TOL)
     assert all(not component.coefficients_materialized for component in device.components)
-
-
-@pytest.mark.parametrize("stage,scale", [("predictor", 0.01), ("corrector", 0.005)])
-def test_failed_stage_saves_its_beta_and_preserves_original_exception(tmp_path, stage, scale):
-    error = LinearSolveConvergenceError("exhausted retries")
-    error.amgx_attempts = ({"label": "robust-correction-2", "physical_relative_residual": 1.3e-4},)
-    error.matrix_diagnostics = {"matrix_zero_rows": 0}
-    beta = tangent_velocity(space())
-    class FailingSolver:
-        def solve(self, *, initial_guess):
-            assert initial_guess == "accepted trace"
-            raise error
-    path = tmp_path / "failed_stage.json"
-    with pytest.raises(LinearSolveConvergenceError) as caught:
-        runner._solve_transport_stage(
-            FailingSolver(), initial_guess="accepted trace", beta=beta, step=555,
-            time_value=5.55, stage=stage, beta_scale=scale, failure_path=path,
-        )
-    assert caught.value is error
-    report = json.loads(path.read_text())
-    assert report["stage"] == stage and report["step"] == 555
-    assert report["beta_scale"] == scale
-    assert report["matrix_diagnostics"]["matrix_zero_rows"] == 0
-    assert report["attempts"][0]["physical_relative_residual"] == 1.3e-4
-    assert report["beta_diagnostics"]["velocity_boundary_normal_linf"] < TOL
-
-
-def test_diagnostic_failure_does_not_replace_solve_failure(tmp_path, monkeypatch):
-    error = LinearSolveConvergenceError("original solve failure")
-    def fail(**kwargs):
-        raise error
-    def fail_diagnostics(*args):
-        raise RuntimeError("unavailable diagnostic")
-    monkeypatch.setattr(runner, "transport_velocity_diagnostics", fail_diagnostics)
-    path = tmp_path / "failure.json"
-    with pytest.raises(LinearSolveConvergenceError) as caught:
-        runner._solve_transport_stage(
-            SimpleNamespace(solve=fail), initial_guess=None, beta=None,
-            step=1, time_value=0.01, stage="predictor", beta_scale=0.01, failure_path=path,
-        )
-    assert caught.value is error
-    assert "unavailable diagnostic" in json.loads(path.read_text())["diagnostics_error"]

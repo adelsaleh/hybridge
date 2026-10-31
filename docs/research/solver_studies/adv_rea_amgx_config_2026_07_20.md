@@ -10,7 +10,7 @@
 This note records focused AMGX configuration tests for the then-current runner run_adv_rea_gpu4_hdg.py after the raw fused CUDA assembly work. The primary target was the existing production-style p6 advection-reaction case:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib \
 HYBRIDGE_GPU4_AMGX_MONITOR=0 \
 .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py --case test2_legacy_gpu3 \
   -o 6 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \

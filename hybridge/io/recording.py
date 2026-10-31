@@ -32,6 +32,7 @@ class RasterMovieRecorder:
     def __init__(self, space, path, *, panels, width=1024, height=1024, size=(1600, 800), fps=10.,
                  title="", boundary_mesh=None, device=None, font_size=14, ticks=False,
                  save_first_frame=True):
+        """Create cached field samplers, persistent raster panels and an MP4 writer."""
         from hybridge.io.matplotlib import MatplotlibRasterPanels
         from hybridge.io.movie import MovieWriter
         from hybridge.io.raster import RasterGeometry
@@ -115,8 +116,10 @@ class RasterMovieRecorder:
         self.panels.close()
 
     def __enter__(self):
+        """Return this recorder for context-managed frame recording."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        """Close the recorder while allowing any exception to propagate."""
         self.close()
         return False

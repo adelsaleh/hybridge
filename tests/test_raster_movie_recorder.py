@@ -46,27 +46,3 @@ def test_recorder_samples_fields_of_another_degree_on_its_mesh(tmp_path):
         assert len(recorder._other_samplers) == 1  # one cached sampler per other space
         with pytest.raises(ValueError, match="same mesh"):
             recorder.sample(DGSpace(rectangle_mesh(4, 4), 3, basis_type="dub_orth").project_callable(exact))
-
-
-def test_diocotron_movie_observer_normalizes_the_perturbation(tmp_path):
-    from scripts.guiding_center.runtime.observers import MovieObserver, Observers
-
-    space = DGSpace(rectangle_mesh(3, 3), 2, basis_type="dub_orth")
-    equilibrium = space.project_callable(lambda x, y: 1 - x * x - y * y)
-    observer = MovieObserver(tmp_path / "run.mp4", interval=0.5, dt=0.1, density_scale=1.0,
-                              label="test", raster=48, fps=5.)
-    observer_calls = []
-    combined = Observers(observer, observer_calls.append, None)
-    for step in range(1, 13):
-        t = 0.1 * step
-        snapshot = SimpleNamespace(
-            time=t, space=space, accepted_density=space.project_callable(lambda x, y: 0.5 + 0 * x),
-            poisson_result=SimpleNamespace(field=space.project_callable(
-                lambda x, y, t=t: 1 - x * x - y * y + 1e-6 * np.exp(t) * x)),
-            equilibrium_potential=equilibrium)
-        combined(snapshot)
-    observer.close()
-    assert len(observer_calls) == 12
-    # Frames at t = 0.5 and 1.0 (the first call builds the recorder at t = 0.1 >= 0).
-    assert observer.recorder.frames == 3
-    assert (tmp_path / "run.mp4").stat().st_size > 0

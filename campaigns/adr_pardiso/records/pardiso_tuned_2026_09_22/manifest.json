@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22",
+  "data_directory": "run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 479195240,
@@ -11,26 +11,34 @@
     {
       "path": "confirmed_timings.csv",
       "copy": "confirmed_timings.csv",
-      "bytes": 174747,
-      "sha256": "39e4db0f51ce9229a03abd9b675af54e415987a2ee5836aa40288daf479ce449"
+      "bytes": 162693,
+      "sha256": "df653dbfadc116c4bfdcac52881a3839e6f7b038d7a912673409243601380a6d",
+      "original_bytes": 174747,
+      "original_sha256": "39e4db0f51ce9229a03abd9b675af54e415987a2ee5836aa40288daf479ce449"
     },
     {
       "path": "events.jsonl",
       "copy": "events.jsonl",
-      "bytes": 707899,
-      "sha256": "6698ecbdd499fb757e64afe8c4fee0095d3d4f55b04033a60fac65095017f5d5"
+      "bytes": 684787,
+      "sha256": "e9e08e0a139005abffbf01745865004687fdb4af3df600e13d69c97930ef7be6",
+      "original_bytes": 707899,
+      "original_sha256": "6698ecbdd499fb757e64afe8c4fee0095d3d4f55b04033a60fac65095017f5d5"
     },
     {
       "path": "thread_selection.json",
       "copy": "thread_selection.json",
-      "bytes": 661926,
-      "sha256": "536aeaa3b0b141a231f07c5b9cb1ab63e7f140ee16348fc19c9351a5092bdf55"
+      "bytes": 638814,
+      "sha256": "654b78f5d96b6344876a79b818368bf1916cd90df1189d16176d928a7349c6b5",
+      "original_bytes": 661926,
+      "original_sha256": "536aeaa3b0b141a231f07c5b9cb1ab63e7f140ee16348fc19c9351a5092bdf55"
     },
     {
       "path": "tuning.csv",
       "copy": "tuning.csv",
-      "bytes": 980127,
-      "sha256": "0e077e8077f1c535b6deaf342bf6b7e0f00d550402d1aa0ac80b2e09acc56b9f"
+      "bytes": 909687,
+      "sha256": "793d7c3d41f356499dcfa27a946facec27a809d203772c4004ea938f610bcc5e",
+      "original_bytes": 980127,
+      "original_sha256": "0e077e8077f1c535b6deaf342bf6b7e0f00d550402d1aa0ac80b2e09acc56b9f"
     }
   ],
   "too_large_or_nontext": [
@@ -55,5 +63,6 @@
       "bytes": 1154470
     }
   ],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

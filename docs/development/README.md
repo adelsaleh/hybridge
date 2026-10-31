@@ -13,10 +13,8 @@
 
 ## Qualification And Release Evidence
 
-- [`transport_boundary_diagnostics.md`](transport_boundary_diagnostics.md): transport
-  tangency conditions, localized vortex gas, scaling and optional device QR fallback.
-- [`fp32_guiding_center.md`](fp32_guiding_center.md): experimental FP32 GPU
-  pipeline, smaller-mesh benchmark command, residual tolerances and precision scope.
+- Guiding-center investigations (`../../../guiding-center-cg-hdg/docs/README.md`):
+  transport failures, precision studies, and their preserved numerical evidence.
 
 - [`alpha_test_matrix.md`](alpha_test_matrix.md): executable release lanes,
   scope, skip policy, and acceptance requirements.

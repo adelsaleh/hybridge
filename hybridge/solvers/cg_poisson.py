@@ -59,6 +59,7 @@ class CGPoissonSolver:
 
     def __init__(self, space: DGSpace, *, boundary_condition: Callable | None = None,
                  options: CGPoissonOptions | None = None, flux_space: DGSpace | None = None) -> None:
+        """Configure source and flux spaces, boundary data and reusable solver state."""
         self.space = space
         self.options = options or CGPoissonOptions()
         self.degree = int(self.options.degree or space.order + 1)
@@ -77,6 +78,7 @@ class CGPoissonSolver:
 
     @property
     def xp(self):
+        """Return the array module selected by the solver backend."""
         if not self.device:
             return np
         from hybridge.runtime.optional import require_cupy
@@ -122,6 +124,7 @@ class CGPoissonSolver:
         return self.setup_seconds
 
     def _sync(self) -> None:
+        """Wait for pending device work when the solver uses CUDA."""
         if self.device:
             self.xp.cuda.Device().synchronize()
 

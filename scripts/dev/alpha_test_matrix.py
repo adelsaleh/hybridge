@@ -47,8 +47,6 @@ HOST_FAST_TARGETS = (
     "tests/test_discontinuous_advection_trace.py",
     "tests/test_diffusion_reaction_test7_fused_experiment.py",
     "tests/test_face_dense.py",
-    "tests/test_guiding_center_cases.py",
-    "tests/test_guiding_center_time_schemes.py",
     "tests/test_hdg_gram.py",
     "tests/test_mesh_cache.py",
     "tests/test_packaging_contract.py",
@@ -100,7 +98,7 @@ ALPHA_TEST_LANES = (
         cadence="every change",
         release_blocking=True,
         runtime="Python 3.10+; NumPy, SciPy, Numba, pytest",
-        coverage="Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests",
+        coverage="Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, and quadrature tests",
         commands=(_pytest_command(HOST_FAST_TARGETS),),
     ),
     AlphaTestLane(
@@ -135,7 +133,7 @@ ALPHA_TEST_LANES = (
         cadence="scheduled before release candidates and performance changes",
         release_blocking=False,
         runtime="production GPU node plus Gmsh-enabled host reference environment",
-        coverage="Extended device and Gmsh geometry parity, explicit launch-size sweeps, and guiding-center temporal convergence",
+        coverage="Extended device and Gmsh geometry parity, explicit launch-size sweeps",
         commands=(
             (
                 "{python}",
@@ -170,25 +168,6 @@ ALPHA_TEST_LANES = (
                 "--log-dir",
                 "artifacts/alpha/diffusion-launch",
             ),
-            (
-                "{python}",
-                "-m",
-                "scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence",
-                "--scheme",
-                "both",
-                "--final-time",
-                "0.2",
-                "--dts",
-                "0.05,0.025,0.0125",
-                "--mesh-size",
-                "0.15",
-                "--order",
-                "2",
-                "--output-dir",
-                "artifacts/alpha/guiding-center-temporal",
-                "--prefix",
-                "early_alpha",
-            ),
         ),
         trace_bases=PRODUCTION_TRACE_BASES,
         requires_gpu=True,
@@ -206,7 +185,6 @@ KNOWN_GAPS = (
     "The default install smoke reuses already installed numerical dependencies; dependency resolution is checked separately with --with-dependencies in a networked clean environment.",
     "Gmsh is optional but highly recommended because most production scripts and configurations use it; ordinary lanes may skip it, while scheduled-evidence requires it and runs the opt-in geometry parity cases.",
     "Optional Matplotlib tests may skip when its runtime is absent; every skip must be recorded and reviewed.",
-    "Guiding-center high-mode AMGX recovery, long-time convergence, and FEniCS/DOLFINx comparison studies remain separate open work.",
 )
 
 

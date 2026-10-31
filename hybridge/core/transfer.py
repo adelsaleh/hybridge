@@ -577,6 +577,7 @@ class CellwiseEvaluator:
     """
 
     def __init__(self, node_coords: np.ndarray, triangles: np.ndarray, order: int, basis_type: str = "bernstein"):
+        """Prepare affine cell maps, neighbor links and polynomial evaluation data."""
         nodes = np.asarray(node_coords, dtype=np.float64)
         self.triangles = np.ascontiguousarray(triangles, dtype=np.int64)
         vertices = nodes[self.triangles]

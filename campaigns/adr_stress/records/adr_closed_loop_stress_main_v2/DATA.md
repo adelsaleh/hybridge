@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_closed_loop_stress_main_v2` |
+| Data directory | `run_outputs/solver_studies/adr_closed_loop_stress_main_v2` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 3.6 GiB |
 | Files / immediate subdirectories | 253 / 7 |

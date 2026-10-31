@@ -38,19 +38,3 @@ def test_truncated_request_stops():
 def test_invalid_big_request_length_stops():
     with pytest.raises(ValueError):
         _request(FragmentedSocket(struct.pack("<BBHI", 98, 0, 0, 1)), "<")
-
-
-def test_dio_bdf2_fast_policy_preserves_safeguards():
-    from scripts.guiding_center.cases.guiding_center_presets import PRESETS
-    from hybridge.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
-
-    preset = PRESETS["diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"]
-    source = PRESETS["diocotron_gaussian_m64_ark3_p6_h008_dt005_t70"]
-    assert preset.poisson_fb_hp_mg_preconditioner_policy == "fast"
-    policy = face_hp_mg_preconditioner_parameters(preset.poisson_fb_hp_mg_preconditioner_policy)
-    assert policy["schedule"] == "direct-to-zero"
-    assert policy["chebyshev_order"] == 1
-    assert preset.poisson_solver_atol == source.poisson_solver_atol
-    assert preset.poisson_retry_policy == source.poisson_retry_policy
-    assert preset.time_scheme == "si-bdf2"
-    assert (preset.dt, preset.num_steps) == (0.5, 800)

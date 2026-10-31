@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import StressParameters, exact_data, polar_points, diffusion_data, make_case
-from scripts.reports import make_closed_loop_stress_figures as figures
+from campaigns.adr_stress import make_closed_loop_stress_figures as figures
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT/"docs/research/solver_studies/adr_scaling_2026_09_17"
@@ -100,7 +100,7 @@ def test_both_documents_include_the_same_stress_section_and_generator_preserves_
         main = (REPORT/name).read_text()
         assert main.count(inclusion) == 1
         assert main.index(inclusion) < main.index(r"\end{document}")
-    tree = ast.parse((ROOT/"scripts/reports/make_adr_synthesis_section.py").read_text())
+    tree = ast.parse((ROOT/"campaigns/adr_solver_reports_20260917/make_adr_synthesis_section.py").read_text())
     literal = next(node.value for node in tree.body if isinstance(node, ast.Assign)
                    and any(isinstance(target, ast.Name) and target.id == "MAIN" for target in node.targets))
     assert ast.literal_eval(literal) == (REPORT/"main_synthesis.tex").read_text()

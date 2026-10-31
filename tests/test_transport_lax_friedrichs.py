@@ -14,9 +14,6 @@ from hybridge.transport.numba import (
 )
 from hybridge.transport.raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
 from hybridge.transport.diagnostics import transport_rank_failure_details
-from scripts.guiding_center.runtime.arguments import build_parser
-from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
-from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 
 DATA=json.loads((Path(__file__).parent/'data/recovered_drift_rank_failures.json').read_text())
 
@@ -69,15 +66,6 @@ def test_raw_source_specializes_both_assembly_and_reconstruction():
         _kernel_source(_RAW_FUSED_TEMPLATE,nel=28,ntr=7,ncols=22,nqf=13,advection_stabilization='typo')
 
 
-@pytest.mark.parametrize('variant',['rt','l2_closest'])
-def test_only_recovered_presets_select_new_flux_and_cli_can_restore_upwind(variant):
-    name=f'euler_vortex_gas_si_bdf2_p6_poisson_p5_{variant}_p6'
-    config=preset_by_key(name)
-    assert config.transport_advection_stabilization=='conflict-averaged-upwind'
-    _validate_config(config)
-    args=build_parser().parse_args([name,'--transport-advection-stabilization','upwind','--dry-run'])
-    assert _runtime_config(config,args).transport_advection_stabilization == "upwind"
-    assert preset_by_key('euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr').transport_advection_stabilization is None
 
 
 def test_inflow_only_rank_claim_does_not_trigger_lf_poisson_retry():
@@ -150,12 +138,6 @@ def test_invalid_upwind_factor(factor):
         ScaledUpwind(factor)
 
 
-def test_cli_multiplier_overrides_preset():
-    name = "euler_vortex_gas_si_bdf2_p6_poisson_p5_rt_p6"
-    args = build_parser().parse_args([name, "--transport-upwind-factor", "1.25", "--dry-run"])
-    config = _runtime_config(preset_by_key(name), args)
-    assert config.transport_advection_stabilization == ScaledUpwind(1.25)
-    _validate_config(config)
 
 
 @pytest.mark.parametrize("factor", [1., 1.25, 3.5])

@@ -854,62 +854,6 @@ def test_convergence_contract_is_available_from_public_packages() -> None:
     assert issubclass(LinearSolveConvergenceError, RuntimeError)
 
 
-@pytest.mark.parametrize("accepted_attempt", range(4))
-@pytest.mark.parametrize("failure", ("breakdown", "physical-residual"))
-def test_guiding_center_retries_precondition_bicgstab_before_dilu(
-    monkeypatch, accepted_attempt, failure
-) -> None:
-    import hybridge.linalg.amgx.device_solver as raw_amgx
-    import hybridge.linalg.amgx.device_solver as amgx_device_solver
-    from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-    from scripts.guiding_center.runtime.configuration import _make_transport_options
-
-    options = _make_transport_options(
-        preset_by_key("euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr"), "zero-flux"
-    )
-    assembly = _FakeAmgxAssembly()
-    calls = []
-    guess = np.ones(2)
-
-    def fake_attempt(solve_assembly, **kwargs):
-        assert solve_assembly is assembly
-        index = len(calls)
-        calls.append(kwargs)
-        if index < accepted_attempt and failure == "breakdown":
-            raise RuntimeError("BiCGSTAB breakdown")
-        # AMGX's success and small solver residual must not hide physical failure.
-        result = _diagnostic_result(
-            solver_residual=1.0e-13, solver_target=1.0e-11,
-            physical_residual=1.0e-13 if index == accepted_attempt else 1.0,
-            physical_target=1.0e-11,
-        )
-        finalize_solve_result(result, backend="pyamgx-device", backend_success=True)
-        return result, np.ones(2)
-
-    monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", fake_attempt)
-    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
-        assembly, config=options.amgx_config, retry_attempts=options.amgx_retry_attempts,
-        initial_guess=guess, check_rtol=options.solver_rtol, atol=options.solver_atol,
-    )
-
-    assert result.converged
-    assert len(calls) == result.amgx_attempt_count == accepted_attempt + 1
-    expected = (
-        ("BICGSTAB", None), ("PBICGSTAB", "JACOBI_L1"),
-        ("PBICGSTAB", "BLOCK_JACOBI"), ("FGMRES", "MULTICOLOR_DILU"),
-    )
-    for index, call in enumerate(calls):
-        solver = call["config"]["solver"]
-        assert (solver["solver"], solver.get("preconditioner", {}).get("solver")) == expected[index]
-        assert call["scalarize_bsr"] is (index == 3)
-        assert call["scale_system"] == "left"
-        assert call["initial_guess"] is (guess if index == 0 else None)
-        assert call["check_rtol"] == options.solver_rtol
-        assert call["atol"] == options.solver_atol
-        if index in (1, 2):
-            assert call["reusable_solver"] is None
-            assert call["replace_reusable_coefficients"] is False
 
 
 def test_raw_amgx_divergence_advances_retry_and_records_exit(monkeypatch, capsys) -> None:

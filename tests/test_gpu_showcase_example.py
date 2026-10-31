@@ -66,41 +66,6 @@ def test_published_showcase_media_match_their_record(name):
     assert "/home/" not in json.dumps(metadata) and "~/" not in json.dumps(metadata)
 
 
-def _segment(tmp_path, name, steps, *, every=16, checkpoint=None, resumed=None):
-    """A completed synthetic recording segment whose JSONL rows sit at ``steps``."""
-    import hashlib
-    import json
-
-    movie = tmp_path / f"{name}.mp4"
-    movie.write_bytes(name.encode())
-    metadata = dict(status="completed", every=every, last_rendered_step=steps[-1], checkpoint_step=checkpoint,
-                    resumed_from_step=resumed, rendered_frames=len(steps),
-                    mp4_sha256=hashlib.sha256(movie.read_bytes()).hexdigest())
-    (tmp_path / f"{name}.json").write_text(json.dumps(metadata))
-    (tmp_path / f"{name}.jsonl").write_text("".join(json.dumps(dict(step=s)) + "\n" for s in steps))
-    return tmp_path / name
-
-
-@pytest.mark.parametrize("second, skipped", [((48, 64), 0), ((41, 48, 64), 1)])
-def test_publish_joins_continuations_dropping_a_restart_frame(tmp_path, second, skipped):
-    """A continuation may start one frame later, or with its off-cadence restart frame."""
-    from scripts.reports.publish_gpu_showcase import load_segments
-
-    first = _segment(tmp_path, "first", (0, 16, 32), checkpoint=41)
-    following = _segment(tmp_path, "second", second, resumed=41)
-    segments = load_segments([first, following], partial=False)
-    assert [skip for *_, skip in segments] == [0, skipped]
-
-
-def test_publish_rejects_a_continuation_that_skips_frames(tmp_path):
-    from scripts.reports.publish_gpu_showcase import load_segments
-
-    first = _segment(tmp_path, "first", (0, 16, 32), checkpoint=41)
-    following = _segment(tmp_path, "second", (64, 80), resumed=41)
-    with pytest.raises(SystemExit, match="not one frame after"):
-        load_segments([first, following], partial=False)
-
-
 def test_documentation_ships_no_gif_animations():
     """Animations are published as MP4 with PNG posters; GIFs stay out of the repository."""
     assert not sorted((ROOT / "docs").rglob("*.gif"))

@@ -46,7 +46,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from scripts.guiding_center.paths import REPO_ROOT
+from campaigns.common.paths import REPO as REPO_ROOT
 
 HYBRIDGE = REPO_ROOT
 PYTHON = Path(os.environ.get("HYBRIDGE_PYTHON", HYBRIDGE / ".venv" / "bin" / "python"))

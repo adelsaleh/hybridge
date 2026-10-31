@@ -5,10 +5,8 @@ package behavior.
 
 - [`solver_studies/`](solver_studies/): dated advection-reaction, diffusion,
   combined ADR, and solver/preconditioner investigations.
-- [`diocotron_benchmark/`](diocotron_benchmark/): plan for a geometry-dependent
-  diocotron benchmark on noncircular domains.
-- [`torsion_initialized_equilibrium/`](torsion_initialized_equilibrium/):
-  residual accounting and closed-loop/reduced-space optimization derivations.
+- Guiding-center research (`../../../guiding-center-cg-hdg/docs/README.md`):
+  equilibrium construction, convergence studies, solver experiments and saved data.
 - `run_logs/` (local, untracked): raw benchmark logs and variability studies;
   the July 2026 AMGX and raw-CUDA findings notes are dated records in
   [`solver_studies/`](solver_studies/).

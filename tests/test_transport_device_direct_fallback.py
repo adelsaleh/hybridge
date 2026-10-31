@@ -11,8 +11,6 @@ from hybridge.linalg.results import (
     SolveResult,
     finalize_solve_result,
 )
-from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from scripts.guiding_center.runtime import runner
 
 
 @dataclass
@@ -85,28 +83,6 @@ def test_device_qr_solves_nonsymmetric_scaled_rows_without_host_solution(cp, fmt
     cp.testing.assert_array_equal(assembly.data, original)
 
 
-def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypatch):
-    import hybridge.transport.cuda as backend
-    import hybridge.linalg.amgx.device_solver as amgx_device_solver
-    assembly, dense, exact, rtol = system(cp, "bsr")
-    config = replace(preset_by_key("euler_vortex_gas_localized_p6_50k_dt001_t50_raw_cuda_bsr"),
-                     transport_direct_fallback="cusolver-qr")
-    options = runner._make_transport_options(config, "zero-flux")
-    calls = []
-    def reject(assembly, **kwargs):
-        calls.append(kwargs)
-        return rejection(cp, assembly)
-    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", reject)
-    result, solution = amgx_device_solver.solve_reduced_system_amgx_device(
-        assembly, retry_attempts=options.amgx_retry_attempts,
-        check_rtol=rtol, materialize_host_solution=False,
-    )
-    assert len(calls) == 6
-    assert result.amgx_attempt_count == 7 and result.converged
-    assert result.amgx_attempts[-1]["label"] == "direct-qr"
-    assert all(not entry["success"] for entry in result.amgx_attempts[:-1])
-    assert result.amgx_attempts[-1]["physical_relative_residual"] <= rtol
-    np.testing.assert_allclose(cp.asnumpy(solution), exact, atol=rtol*5, rtol=rtol*5)
 
 
 def test_direct_retry_is_not_called_after_an_accepted_solve(cp, monkeypatch):
@@ -163,26 +139,3 @@ def test_exhausted_direct_retry_reports_matrix_scales(cp, monkeypatch):
     assert error.matrix_diagnostics["matrix_zero_rows"] == 0
     assert error.matrix_diagnostics["matrix_row_l1_min"] == pytest.approx(np.abs(dense).sum(axis=1).min(), rel=1e-6)
     assert error.matrix_diagnostics["matrix_row_l1_max"] == pytest.approx(np.abs(dense).sum(axis=1).max(), rel=1e-6)
-
-
-@pytest.mark.parametrize("scaling", [False, True])
-def test_jacobi_and_fgmres_retries_share_configured_scaling(scaling):
-    config = replace(preset_by_key("euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr"),
-                     transport_scale_system=scaling, transport_direct_fallback="cusolver-qr")
-    runner._validate_config(config)
-    retries = runner._make_transport_options(config, "zero-flux").amgx_retry_attempts
-    assert len(retries) == 6
-    assert all(attempt["scale_system"] == scaling for attempt in retries[:-1])
-    assert retries[-1]["backend"] == "cusolver-qr"
-    assert retries[-1]["scale_system"] is False
-
-
-@pytest.mark.parametrize("updates", [
-    {"transport_retry_policy": "none"}, {"transport_solver": "direct"},
-    {"transport_assembly_backend": "numpy"}, {"transport_direct_fallback": "invalid"},
-])
-def test_invalid_direct_fallback_config_is_rejected(updates):
-    config = replace(preset_by_key("euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr"),
-                     transport_direct_fallback="cusolver-qr")
-    with pytest.raises(ValueError, match="direct"):
-        runner._validate_config(replace(config, **updates))

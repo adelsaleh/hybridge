@@ -17,13 +17,13 @@ The diagnostic APIs return ordinary Python numbers suitable for JSONL/CSV.
 
 `guiding_center_field_diagnostics` reduces mass, squared density L2 norm,
 standard/recovered flux norms, density/potential extrema, equilibrium error
-norms, and three density harmonic amplitudes. The runner derives energy,
+norms, and three density harmonic amplitudes. Applications derive energy,
 enstrophy, and conservation drifts from these scalar values. Its velocity
 diagnostics also reduce boundary-normal flux, interior normal jumps,
 divergence, and speed estimates. Growth fits and active-mode rankings consume
 the recorded scalar amplitudes rather than full field histories.
 
-The core runner downloads two vectors per record: the field diagnostics and
+A caller requesting both helpers downloads two vectors per record: the field diagnostics and
 velocity diagnostics. Manufactured density and potential errors add one
 four-scalar vector each. Optional positivity and polar Fourier diagnostics
 add their respective vectors. These counts remain independent of mesh size
@@ -57,47 +57,21 @@ These are sampled maxima, not certified polynomial bounds. Positivity
 diagnostics separately distinguish sampled violations from Bernstein bounds.
 
 `evaluate_scalar_error` downloads plotting samples only when
-`include_samples=True`. The runner explicitly requests `False`. The shared
+`include_samples=True`. Use `False` when only the reduced metrics are needed. The shared
 scalar-packing helper rejects unreduced arrays before a download. Plotting,
 screenshots, failure snapshots, and explicitly requested host fields have
 their own transfer policies.
 
 ## Validation
 
-`tests/test_device_diagnostics.py` uses prescribed fields on small rectangular
-meshes. It covers degrees 0, 2, 3, and 6; orthogonal and Bernstein element
-bases; different density/potential orders; recovered fluxes; equilibrium
-norms and harmonics; scalar exact-error metrics; optional positivity and
-polar diagnostics; and the runner's JSONL/CSV recording with residual
-summaries. It counts download shapes/bytes and forbids host coefficient
-access, including repeated reports and two mesh sizes. Solver vectors and
-matrices are guarded against access while residual summaries are recorded.
-No PDE solve or time integration is needed.
+`tests/test_device_diagnostics.py` exercises the public reductions with
+prescribed fields on small meshes; it covers host/device parity and compact
+transfer counts without PDE time integration. The corresponding checks in
+`tests/test_cupy_backend.py` and `tests/test_transport_velocity_diagnostics.py`
+cover field, velocity, and error diagnostics. GPU checks require the optional
+CUDA environment.
 
-The suite is included in `gpu-smoke`. Reproduce it with:
-
-```bash
-NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -q \
-  tests/test_device_diagnostics.py \
-  tests/test_cupy_backend.py::test_guiding_center_field_diagnostics_stays_on_device_and_matches_host \
-  tests/test_transport_velocity_diagnostics.py::test_device_diagnostics_match_host_without_materializing_fields
-```
-
-On 2026-09-25, all 19 GPU checks above passed in 1.89 seconds with CuPy 14.2.0
-and one CUDA device. CuPy runtime JIT was explicitly authorized under the
-workspace compilation rule; CPU Numba JIT remained disabled. The checks
-verified numerical parity and compact transfer counts using prescribed
-fields, including repeated runner records.
-
-On 2026-09-25, 17 focused host/modal/velocity and test-manifest checks passed
-with Numba JIT disabled; all changed documentation links resolve. The broader
-host diagnostic selection passed 16 checks and exposed one existing
-vector-error tolerance failure: an error of `3.55e-15` against `atol=3e-15`
-for a constant-vector sampled maximum. That vector calculation and its
-helpers are unchanged from `HEAD`; it is separate from these scalar/device
-reductions.
-
-Full guiding-center stage residency, time integration, performance sweeps,
-multiple devices, and the imported DOLFINx equilibrium remain separate
-[TODO items](../../TODO.md#device-residency-and-diagnostics). This diagnostic
-contract does not qualify those workflows.
+Historical runner-recording validation, its exact test commands, and the dated
+results remain in the research diagnostic report (`../../../guiding-center-cg-hdg/docs/reference/device_diagnostics.md`).
+Application stage residency, integration, and campaign performance are assessed
+in that repository independently of these public reduction APIs.

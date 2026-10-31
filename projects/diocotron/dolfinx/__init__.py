@@ -1,1 +1,0 @@
-"""DOLFINx diocotron equilibrium runners."""

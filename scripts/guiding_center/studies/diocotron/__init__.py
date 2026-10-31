@@ -1,1 +1,0 @@
-"""Guiding-center diocotron study."""

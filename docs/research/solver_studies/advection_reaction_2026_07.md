@@ -112,7 +112,7 @@ Weaknesses and caveats:
 Example:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib \
 .venv/bin/python scripts/gpu/run_advection_reaction_cuda.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \

@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_closed_loop_stress_main_v2",
+  "data_directory": "run_outputs/solver_studies/adr_closed_loop_stress_main_v2",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 3880945885,
@@ -17,28 +17,37 @@
     {
       "path": "events.jsonl",
       "copy": "events.jsonl",
-      "bytes": 68747,
-      "sha256": "b18afb86a5d346fa3a94321b83d8423057f2587968268ddf77b117ed72e98b6b"
+      "bytes": 64805,
+      "sha256": "98b54e68c650e1601b5b9e6128f42b10a73d7be47c71700b3f2618729dc55faa",
+      "original_bytes": 68747,
+      "original_sha256": "b18afb86a5d346fa3a94321b83d8423057f2587968268ddf77b117ed72e98b6b"
     },
     {
       "path": "manifest.json",
       "copy": "source/manifest.json",
-      "bytes": 34066,
-      "sha256": "0459d58c86bc32dba6e6fafefe6cf1e53f9a1f8b14a23c0ef22cd9db01180d5a"
+      "bytes": 30403,
+      "sha256": "403f4a95c750efb1b0db2ff3a791f23ea0bbb4c20edee12fed3ea14fe3f28658",
+      "original_bytes": 34066,
+      "original_sha256": "0459d58c86bc32dba6e6fafefe6cf1e53f9a1f8b14a23c0ef22cd9db01180d5a"
     },
     {
       "path": "profiles.json",
       "copy": "profiles.json",
-      "bytes": 175080,
-      "sha256": "c699d84f26ec7dfbfb7f4307804ff3d59eb33a198b82177794d12d72975be413"
+      "bytes": 174884,
+      "sha256": "d76ff009bca2e6a2911b035f742062c7d78665b4d5823e7b719e1f05580f2f7e",
+      "original_bytes": 175080,
+      "original_sha256": "c699d84f26ec7dfbfb7f4307804ff3d59eb33a198b82177794d12d72975be413"
     },
     {
       "path": "summary.json",
       "copy": "summary.json",
-      "bytes": 772568,
-      "sha256": "2d9fc101f13b4d9c82d24ceb34cf12480b632cb0bf3b8b7921b70d3ba1e1780d"
+      "bytes": 772298,
+      "sha256": "86b14c3f587a0cf1b98593bdba8811be85bfce5182d6d6924d807967fdb9f0f5",
+      "original_bytes": 772568,
+      "original_sha256": "2d9fc101f13b4d9c82d24ceb34cf12480b632cb0bf3b8b7921b70d3ba1e1780d"
     }
   ],
   "too_large_or_nontext": [],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

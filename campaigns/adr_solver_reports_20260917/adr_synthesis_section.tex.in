@@ -1,0 +1,299 @@
+% Concise block-preconditioner comparison with complete pMG--AMG coverage.
+\providecommand{\ADRResultsPath}{docs/research/solver_studies/adr_scaling_2026_09_17}
+\providecommand{\ADRResultsFigurePath}{run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+\section{Block-preconditioned solvers for stationary advection--diffusion--reaction}
+\label{sec:adr-polynomial-synthesis}
+
+We compare block additive Schwarz (ASM) and block Jacobi (BJ), combined with
+polynomial preconditioning of degree $d$, denoted ASM+PP($d$) and BJ+PP($d$),
+against block algebraic multigrid (AMG) and face-block modal polynomial
+multigrid with an AMGX coarse hierarchy ($p$MG--AMG). The family shorthand
+$(\mathrm{ASM}\mid\mathrm{BJ})+\mathrm{PP}$ denotes either block
+variant with a case-dependent polynomial degree; numerical labels give
+the actual $d$. The finite-element degree $p_{\mathrm{FE}}$ is independent
+of $d$. The comparison emphasizes convergence, iteration growth and solve
+time as the mesh and degree increase.
+
+ASM+PP, BJ+PP and $p$MG--AMG use the generalized minimal
+residual method (GMRES). AMG denotes AMGX's classical block hierarchy,
+with parallel modified independent-set coarsening, distance-two
+interpolation, strength threshold $0.25$ and a direct coarse solve.
+Its V-cycle has one pre/post sweep of BJ or multicolor block diagonal
+incomplete lower--upper factorization (DILU), under flexible GMRES (FGMRES, F) or the
+stabilized biconjugate-gradient method (BiCGSTAB, B).
+$p$MG--AMG coarsens the symmetric part in modal coordinates on the same
+mesh, with scalar AMG at degree zero and GMRES on the full operator.
+Its standard policy (S) transfers directly to degree zero with degree-two
+Chebyshev smoothing and one pre/post sweep; its robust policy (R) halves
+the degree, with degree-four smoothing and two pre/post sweeps.
+
+GPU measurements use 64-bit arithmetic on one RTX PRO 5000 Blackwell,
+a zero initial guess, physical relative residual at most $10^{-10}$,
+internal target $10^{-11}$ and a 1,000-iteration cap.
+\emph{Fresh} time is the median setup-plus-first-solve time;
+\emph{reused} time is the mean second-solve time with the same preconditioner.
+Three independent setups follow one discarded trial (two setups for the
+initial degree-four controls); timings cover only preconditioner setup and
+linear solves, with validation outside the timer.
+Each family retains its fastest passing configuration separately for
+fresh and reused time. The associated $k$ is its mean outer iteration
+count for that solve, rounded to an integer. Iterations of GMRES and
+BiCGSTAB have different costs and are not interchangeable work units.
+NC means no tested configuration in that family converged; a dash means
+untested. Neither receives a ranked time.
+
+\input{\ADRResultsPath/pardiso_lu/protocol.tex}
+
+\subsection{Oscillatory cases favoring ASM+PP}
+For the following classes, $\Omega$ is either $[-1,1]^2$ or the five-lobed
+annulus $\{(r,\theta):0.58<r<1+0.35\cos(5\theta)\}$, with common fields
+\begin{equation}
+ \begin{aligned}
+ u_\star&=\sin(6\pi x)\sin(5\pi y)+0.35\sin(11\pi x)\sin(9\pi y),\\
+ \boldsymbol\beta_{\rm osc}&=\bigl(1+4\sin(7\pi x)\cos(7\pi y),\;
+                   \tfrac12-4\cos(7\pi x)\sin(7\pi y)\bigr)^T.
+ \end{aligned}
+ \label{eq:adr-synth-common-osc}
+\end{equation}
+The square mesh ladder has 2,048, 8,192, 32,768 and 99,458 triangles;
+the annular ladder has 2,043, 8,039, 33,174 and 99,984. The degree sweep
+uses $p_{\mathrm{FE}}=1,2,3,4,6$ on each second mesh. Here $u_\star$ is the
+manufactured exact solution, $f$ its matching source and $R(\theta)$ the
+planar rotation through $\theta$. Polygonal boundaries receive the exact
+Dirichlet data; the velocity need not be tangent to the walls.
+
+\paragraph{Oscillatory transport dominance.}
+\begin{equation}
+ \begin{aligned}
+ -10^{-5}\Delta u+\nabla\cdot(\boldsymbol\beta_{\rm osc}u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star.
+ \end{aligned}
+ \label{eq:adr-synth-osc-low}
+\end{equation}
+ASM+PP(24) is the fastest tested GPU method on both finest meshes, where both $p$MG--AMG
+policies fail and the passing AMG configurations approach the iteration
+cap. Its lower iteration counts support both the time advantage and the
+larger convergence margin. Some lower-degree systems have no passing AMG
+configuration, while ASM+PP(24) still converges.
+The LU baseline is faster: on the finest annulus, $\PLU{16}$ takes
+4.232\,s fresh and 0.689\,s reused, versus 13.773 and 12.369\,s for ASM+PP(24).
+
+\paragraph{Weak anisotropy on the original annulus.}
+\begin{equation}
+ \begin{aligned}
+ -\nabla\cdot(K_{\rm weak}\nabla u)+\nabla\cdot(\boldsymbol\beta_{\rm osc}u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star,\\
+ K_{\rm weak}&=R(\pi/6)\operatorname{diag}(10^{-4},10^{-6})R(\pi/6)^T.
+ \end{aligned}
+ \label{eq:adr-synth-initial-weak}
+\end{equation}
+At 22,825 annular triangles and $p_{\mathrm{FE}}=6$, ASM+PP(24) takes
+150 iterations and 0.759\,s reused, versus 230 iterations and 1.851\,s
+for the fastest AMG configuration (FGMRES); both $p$MG--AMG policies fail.
+Replacing $K_{\rm weak}$ by $10^{-5}I$ on this mesh leaves ASM+PP(24)
+convergent in 300 iterations, while every tested AMG, stand-alone DILU
+and $p$MG--AMG configuration fails. This control therefore retains an
+ASM+PP(24) robustness advantage beyond its timing advantage.
+
+\paragraph{Oscillatory directional anisotropy.}
+\begin{equation}
+ \begin{aligned}
+ -\nabla\cdot(K_{\rm dir}\nabla u)+\nabla\cdot(\boldsymbol\beta_{\rm osc}u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star,\\
+ K_{\rm dir}&=R(\pi/6)\operatorname{diag}(1,10^{-3})R(\pi/6)^T.
+ \end{aligned}
+ \label{eq:adr-synth-osc-directional}
+\end{equation}
+ASM+PP and $p$MG--AMG each converge on all 16 systems, whereas
+all 32 tested AMG configurations fail. A stronger DILU-smoothed W-cycle
+with three pre/post sweeps also fails at 85,120 unknowns: relative residual
+$5.72$ after 1,000 FGMRES iterations. ASM+PP thus outperforms
+these AMG configurations in robustness; $p$MG--AMG is faster at the
+largest sizes.
+
+\begin{table}[!htbp]
+ \centering\small
+ \resizebox{\linewidth}{!}{\input{\ADRResultsPath/synthesis/directional_tuned_table.tex}}
+ \caption{Directional endpoints near one million unknowns at
+ $p_{\mathrm{FE}}=6$. Apply is the mean duration of a separately profiled
+ complete preconditioner application; setup is a median. Bold marks each
+ geometry's minimum time in the last three columns. Here $k$ is the reused
+ iteration count. LU cells give their thread count; CPU setup uses the
+ fresh-selected count. LU has no preconditioner-application or Krylov count.}
+ \label{tab:adr-synth-directional-tuned}
+\end{table}
+
+Iteration counts alone favor neither hierarchy uniformly. On the finest
+square, ASM+PP(20) and $p$MG--AMG(S) have identical iteration and
+application counts. On the annulus, ASM+PP(29) needs fewer of both, yet
+$p$MG--AMG(S) is faster because its complete correction is much cheaper.
+The robust policy reduces iterations but increases time on both geometries.
+These measurements demonstrate a cost advantage of the tested
+$p$MG--AMG correction, without establishing that ASM+PP is optimal.
+
+\subsection{Crossovers under refinement and increasing degree}
+The $(\mathrm{ASM}\mid\mathrm{BJ})+\mathrm{PP}$ vs AMG ranking
+depends on problem size and on fresh versus reused timing. The following
+cases separate iteration growth from the cost of each correction.
+\paragraph{Oscillatory high diffusion.}
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+\nabla\cdot(\boldsymbol\beta_{\rm osc}u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star.
+ \end{aligned}
+ \label{eq:adr-synth-osc-high}
+\end{equation}
+Among GPU methods, ASM+PP(24) wins on coarse meshes, but its iteration count grows faster
+than AMG's under refinement. On the annulus, the nearly constant
+$p$MG--AMG(S) iteration count supports the lowest finest-mesh reused
+time; its setup cost leaves AMG preferable fresh. Both geometry and
+iteration growth therefore matter to the crossover.
+At L4 on the annulus, AMG's 0.806\,s fresh and $p$MG--AMG's 0.133\,s
+reused also beat $\PLU{24}$ (3.915 and 0.697\,s).
+
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/oscillatory_local_advantage.pdf}
+ \caption{Oscillatory mesh scaling at $p_{\mathrm{FE}}=6$: reused time.
+ Levels L1--L4 correspond to the mesh ladders above. Curve annotations
+ give the polynomial degree, including the tuned directional endpoints;
+ numbers beside the neutral LU curve give its MKL thread count.
+ Crosses above the axes mark NC for the corresponding family.}
+ \label{fig:adr-synth-oscillatory}
+\end{figure}
+
+\paragraph{Smooth anisotropic diffusion.}
+\begin{equation}
+ \begin{aligned}
+ -\nabla\cdot\!\left(\operatorname{diag}(1,10^{-2})\nabla u\right)
+ +(1,\tfrac12)^T\cdot\nabla u+u&=f,\\
+ u|_{\partial[-1,1]^2}&=u_\star,\qquad
+ u_\star=\sin(\pi x)\sin(\pi y).
+ \end{aligned}
+ \label{eq:adr-synth-smooth-anisotropic}
+\end{equation}
+ASM+PP(48) beats AMG throughout the fixed-mesh degree sweep. Under mesh
+refinement its iteration count grows markedly, whereas AMG's stays nearly
+constant and AMG becomes faster. $p$MG--AMG converges everywhere; at the
+finest mesh, its robust policy reduces $k$ from 225 to 150 but increases
+reused time from 1.03 to 2.52\,s. A stronger correction can cost more than
+the iterations it saves.
+
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/smooth_anisotropic.pdf}
+ \caption{Smooth anisotropic diffusion: reused time under mesh refinement
+ and degree variation. Iteration counts and fresh times appear in
+ Figures~\ref{fig:adr-synth-mesh-overview}--\ref{fig:adr-synth-degree-overview}.}
+ \label{fig:adr-synth-smooth-anisotropic}
+\end{figure}
+
+\paragraph{Smooth transport dominance.}
+\begin{equation}
+ \begin{aligned}
+ -10^{-3}\Delta u+(1,\tfrac12)^T\cdot\nabla u+u&=f,\\
+ u|_{\partial[-1,1]^2}&=u_\star,\qquad
+ u_\star=\sin(\pi x)\sin(\pi y).
+ \end{aligned}
+ \label{eq:adr-synth-smooth-transport}
+\end{equation}
+On the fixed mesh, BJ+PP(12) has lower fresh cost than ASM+PP(18), despite
+requiring more iterations; ASM+PP(18) wins reused. Refinement favors AMG,
+whose iteration growth is milder than BJ+PP(12)'s. At the million-unknown
+endpoints, $p$MG--AMG remains convergent but needs far more iterations
+than the polynomial methods. Stand-alone DILU is marked where it has
+the lowest time.
+
+\paragraph{Variable velocity.}
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+(1+x,-\tfrac12+y)^T\cdot\nabla u+\tfrac12u&=f,\\
+ u|_{\partial[-1,1]^2}&=u_\star,\qquad u_\star=1+x^2+2y^2.
+ \end{aligned}
+ \label{eq:adr-synth-variable}
+\end{equation}
+BJ+PP(18) is attractive fresh on smaller systems; ASM+PP(18) usually
+wins reused between these two methods. Their iteration counts rise with
+refinement, while AMG and $p$MG--AMG remain much steadier. Consequently,
+AMG minimizes finest-mesh fresh time and $p$MG--AMG minimizes reused
+time, also at the $p_{\mathrm{FE}}=4$ million-unknown endpoint.
+
+\paragraph{Smooth high diffusion.}
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+(1,\tfrac12)^T\cdot\nabla u+u&=f,\\
+ u|_{\partial[-1,1]^2}&=u_\star,\qquad
+ u_\star=\sin(\pi x)\sin(\pi y).
+ \end{aligned}
+ \label{eq:adr-synth-smooth-high}
+\end{equation}
+The same crossover holds: ASM+PP(18) and BJ+PP(12) are competitive on
+small meshes, but BJ+PP(12) approaches the iteration cap under refinement.
+AMG's iteration counts stay modest and it is fastest on the finest mesh.
+$p$MG--AMG approaches AMG's reused time, but its setup cost prevents a
+fresh-time advantage.
+
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/focused_h_crossover.pdf}
+ \caption{Mesh refinement at $p_{\mathrm{FE}}=6$: fresh time above and
+ reused time below. ASM+PP and BJ+PP remain separate.
+ Stars mark an additional solver only when it is fastest overall.}
+ \label{fig:adr-synth-focused-h}
+\end{figure}
+
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/focused_p_crossover.pdf}
+ \caption{Degree sweep on 8,192 triangles: fresh time above and reused time
+ below, with the same configuration selection as the mesh sweep.}
+ \label{fig:adr-synth-focused-p}
+\end{figure}
+
+\begin{table}[!htbp]
+ \centering\scriptsize
+ \setlength{\tabcolsep}{2.5pt}
+ \resizebox{\linewidth}{!}{\input{\ADRResultsPath/synthesis/million_table.tex}}
+ \caption{Near-million-unknown endpoints at $p_{\mathrm{FE}}=3,4$, on
+ 167,042 and 134,162 triangles, respectively. Each cell gives time in
+ milliseconds, with configuration and $k$ below (LU gives threads, without $k$). Fresh and reused columns
+ select configurations independently; bold marks the fastest time.}
+ \label{tab:adr-synth-million}
+\end{table}
+
+\subsection{Practical interpretation}
+The $(\mathrm{ASM}\mid\mathrm{BJ})+\mathrm{PP}$ family provides a
+convergent GPU choice throughout the smooth and five-lobed cases: ASM+PP converges throughout,
+including weak-diffusion oscillatory systems on which AMG and $p$MG--AMG
+both fail. Directional anisotropy favors ASM+PP over the tested
+AMG configurations in convergence, while $p$MG--AMG has cheaper large-system
+corrections. On smooth problems, rising iteration counts limit
+$(\mathrm{ASM}\mid\mathrm{BJ})+\mathrm{PP}$ under mesh refinement;
+BJ+PP's smaller setup cost can nevertheless favor it fresh.
+LU grounds these GPU comparisons: a gain over AMG does not by itself
+establish an advantage over the CPU baseline. The nine-lobed stress
+cases below further delimit iterative robustness.
+
+\clearpage
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/solver_mesh_comparison.pdf}
+ \caption{Mesh refinement at $p_{\mathrm{FE}}=6$: fresh and reused time
+ with the corresponding iteration count. Each cell shows time in
+ milliseconds followed by $(k)$, with the selected degree, Krylov method
+ or policy below; LU instead gives $\PLU{n}$, with $n$ CPU threads.
+ Color measures time relative to the fastest passing
+ displayed family; its cell has a green border.}
+ \label{fig:adr-synth-mesh-overview}
+\end{figure}
+
+\begin{figure}[hbtp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/synthesis/solver_degree_comparison.pdf}
+ \caption{Degree sweep on 8,192 square or 8,039 annular triangles, using
+ the cell format of Figure~\ref{fig:adr-synth-mesh-overview}.
+ Separate family outcomes preserve the ASM+PP result wherever
+ AMG or $p$MG--AMG is NC.}
+ \label{fig:adr-synth-degree-overview}
+\end{figure}
+\clearpage

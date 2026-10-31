@@ -1,6 +1,6 @@
 # ADR results section
 
-[section.tex](section.tex) is the combined, insertable results section. It
+[section.tex](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/section.tex) is the combined, insertable results section. It
 progresses from smooth three-regime scaling through the focused variable-
 velocity, transport-dominated, and high-diffusion comparisons, then closes with
 the oscillatory cellular-geometry study. The focused comparisons report the
@@ -12,7 +12,7 @@ geometry/exact-solution figures and the preliminary strong-preset results of
 residual coverage and converged-only timing comparisons.
 Both integrate the confirmed PyPardiso LU baseline into the existing timing
 figures, overview grids, and endpoint/stress tables, using the brief shared
-[measurement protocol](pardiso_lu/protocol.tex). Its $\mathrm{P\!-\!LU}_n$
+[measurement protocol](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/pardiso_lu/protocol.tex). Its $\mathrm{P\!-\!LU}_n$
 alias gives the selected MKL thread count; curve-point numbers give $n$.
 The CPU campaign passed all 107 archived systems, including the four
 trapping/crossing systems with no passing GPU iterative solve. LU grounds
@@ -32,7 +32,7 @@ case, which was **not rerun**. Old oscillatory paths are compatibility symlinks.
 
 ## Contents
 
-- [Smooth reference data](scaling.data.json), [CSV](scaling.csv) and
+- [Smooth reference data](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json), [CSV](scaling.csv) and
   [audit](validation.json): 96 passing solver/system configurations on 24 systems.
 - [Oscillatory study](oscillatory/README.md): three classes on two geometries,
   the same eight mesh/order points and per-class solver coverage; 192 configurations
@@ -44,7 +44,7 @@ case, which was **not rerun**. Old oscillatory paths are compatibility symlinks.
   nine-lobed trapping, crossing circulation and perpendicular through-flow;
   all 60 residuals and the eight passing configurations' timings appear with
   the analytic figures in both `main.tex` and `main_synthesis.tex`.
-- [Focused comparison subsection](comparison/subsections.tex): 50 endpoint and
+- [Focused comparison subsection](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/comparison/subsections.tex): 50 endpoint and
   144 scaling configurations, with all solver families shown in three figures
   and the largest-system table.
 - Figures (`run_outputs/solver_studies/adr_scaling_2026_09_17/figures/`, local, untracked):
@@ -73,11 +73,11 @@ Keep the `oscillatory/` and `comparison/` subdirectories and table fragments
 beside `section.tex`.
 The fragment has one `\section`, no document class or preamble, and labels with
 the `adr-` prefix. The portable ZIP supplies relative paths. For just the smooth
-part, use [reference_section.tex](reference_section.tex).
+part, use [reference_section.tex](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/reference_section.tex).
 
 ## Standalone typesetting
 
-The standalone [main.tex](main.tex) supplies a compact 10-point A4 layout.
+The standalone [main.tex](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/main.tex) supplies a compact 10-point A4 layout.
 Typesetting has **not been run**, in accordance with the workspace no-compilation
 rule; the page count is unverified. To compile it yourself:
 
@@ -120,9 +120,9 @@ when the reports were merged. No native build or installation was performed.
 
 ## Concise ASM/BJ+PP synthesis
 
-[section_synthesis.tex](section_synthesis.tex) is an insertable companion that
+[section_synthesis.tex](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/section_synthesis.tex) is an insertable companion that
 keeps ASM+PP, BJ+PP, the fastest passing block-AMG result and the best
-passing native $hp$ policy in its main comparisons. [main_synthesis.tex](main_synthesis.tex) is the standalone wrapper.
+passing native $hp$ policy in its main comparisons. [main_synthesis.tex](../../../../docs/research/solver_studies/adr_scaling_2026_09_17/main_synthesis.tex) is the standalone wrapper.
 The original `section.tex` and `main.tex` remain the detailed version.
 
 To typeset the synthesis locally:

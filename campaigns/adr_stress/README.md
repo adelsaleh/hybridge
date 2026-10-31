@@ -38,3 +38,30 @@ HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cud
 - [adr_square_bsr_2m_short_20260922](records/adr_square_bsr_2m_short_20260922/DATA.md).
 - [adr_square_bsr_2m_short_mem90_20260922](records/adr_square_bsr_2m_short_mem90_20260922/DATA.md).
 - [adr_square_stress_strong_numba_h150k](records/adr_square_stress_strong_numba_h150k/DATA.md).
+
+## Consolidated sources
+
+Source paths below are relative to the workspace. Use the canonical file links for subsequent changes;
+old source entry paths forward here. Frozen reference files remain exact evidence and are not standalone
+entry points. Shared workers stay in their owning checkout.
+
+| File | Role | Original source |
+|---|---|---|
+| [make_closed_loop_stress_figures.py](make_closed_loop_stress_figures.py) | Preparation / campaign helper | `hybridge/scripts/reports/make_closed_loop_stress_figures.py` |
+
+Original source/data roots:
+
+- `hybridge/scripts/reports`
+
+Launch long-running stages detached using the existing arguments and completion/resume checks:
+
+```bash
+# OUT is the selected output directory; ENTRY and ARGS identify the stage above.
+mkdir -p "$OUT"
+setsid nohup "$ENTRY" "${ARGS[@]}" > "$OUT/driver_stdout.log" 2>&1 < /dev/null &
+pgid=$!
+# Stop the detached group when needed: kill -- -"$pgid"
+```
+
+For Python entry points, set `ENTRY` to the appropriate Python interpreter and put the canonical
+script path first in `ARGS`. Some modules are analysis libraries or saved source references, not CLI programs.

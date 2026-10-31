@@ -57,6 +57,7 @@ class CondensedCGPoissonOperator:
     """
 
     def __init__(self, source_space: DGSpace, degree: int, *, device: bool = False) -> None:
+        """Assemble and statically condense the CG Poisson operator on the source mesh."""
         k = int(degree)
         if k < 1:
             raise ValueError("the CG degree must be at least 1")
@@ -125,6 +126,7 @@ class CondensedCGPoissonOperator:
 
     # ----------------------------------------------------------------- device
     def _upload(self) -> None:
+        """Cache operator, load and reconstruction tables on the current CUDA device."""
         import cupyx.scipy.sparse as csparse
 
         from hybridge.runtime.optional import require_cupy
@@ -142,6 +144,7 @@ class CondensedCGPoissonOperator:
         }
 
     def _tables(self, xp):
+        """Return host tables or lazily upload and return their device counterparts."""
         if xp is np:
             return {"load": self._load, "jacobian": self._jacobian, "bubble_inverse": self._bubble_inverse,
                     "bubble_coupling": self._bubble_coupling, "scatter": self._scatter, "free": self.free,
@@ -197,6 +200,7 @@ class CondensedCGPoissonOperator:
 
     @staticmethod
     def _coefficients(field: DGField, xp):
+        """Return field coefficients on the requested NumPy or CuPy backend."""
         if xp is np:
             return np.asarray(field.coeffs, dtype=REAL_DTYPE)
         from hybridge.core.device import as_cupy_coefficients, as_cupy_space

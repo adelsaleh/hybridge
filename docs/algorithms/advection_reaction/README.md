@@ -43,15 +43,11 @@ defines the dependency structure used by upwind block-GS, but it is not itself
 a global sparse solver. A future dependency-driven SCC solve is a separate
 research algorithm and must not be inferred from the current ordering API.
 
-## Guiding-center time integration
+## Guiding-center examples and research
 
-- [H1-BDF3](h1_bdf3.md): AB3 prediction with one implicit BDF3 transport solve,
-  SI-Euler extrapolation startup, accepted-field HDG residuals and shared device caches.
-- [H2-BDF3](h2_bdf3.md): extrapolated-drift BDF3 prediction and a BDF3 correction,
-  with two transport and two Poisson solves per regular step.
-
-- [IMEX-ARK3](imex_ark3.md): three transport solves sharing a frozen operator,
-  four Poisson evaluations, and an embedded second-order error estimate.
+The [BDF2 showcase](../../getting_started/gpu_showcase.md) demonstrates the public
+solver APIs. Alternative time schemes and their derivations are maintained in
+the guiding-center research repository (`../../../../guiding-center-cg-hdg/docs/algorithms/advection_reaction/`).
 
 ## Implementation Anchors
 

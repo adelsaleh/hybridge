@@ -637,6 +637,7 @@ def edge_lattice_orientation(
     triangles = np.asarray(mesh.triangles)
 
     def inside(points):
+        """Select points strictly inside the optional orientation-sampling box."""
         if box is None:
             return np.ones(points.shape[0], dtype=bool)
         (x0, x1), (y0, y1) = box
@@ -1260,6 +1261,7 @@ def gmsh_vane_anode_mesh(
     half = math.pi * fraction / count
 
     def build(gmsh):
+        """Construct the vane-anode surface and requested local mesh-size fields in Gmsh."""
         occ = gmsh.model.occ
         domain = [(2, occ.addDisk(0.0, 0.0, 0.0, rb, rb))]
         domain, _ = occ.cut(domain, [(2, occ.addDisk(0.0, 0.0, 0.0, rc, rc))])
@@ -1496,6 +1498,7 @@ def gmsh_polygon_mesh(
 
     domain = PolygonDomain(vertices)
     def build(gmsh):
+        """Create the polygon surface and configure boundary mesh-size extension."""
         surface = _gmsh_polygon_surface(gmsh, domain.vertices, mesh_size)
         _set_required_gmsh_number_option(gmsh, "Mesh.MeshSizeExtendFromBoundary", int(extend_from_boundary))
         return surface

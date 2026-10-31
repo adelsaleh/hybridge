@@ -27,7 +27,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "configs" / "amgx"
 RUN_LOG_DIR = ROOT / "run_logs"
-TMP_CONFIG_DIR = Path("/tmp/hybridge/amgx_sweeps")
+TMP_CONFIG_DIR = ROOT / ".cache" / "amgx_sweeps"
 RUNNER_MODULE = "scripts.gpu.run_diffusion_reaction_cuda"
 DEFAULT_CONFIG = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json"
 
@@ -155,14 +155,7 @@ def runner_command(case: RunCase, config_path: Path, args: argparse.Namespace) -
 
 def env_with_amgx(args: argparse.Namespace) -> dict[str, str]:
     env = os.environ.copy()
-    paths = [
-        "/tmp/AMGX-build-cuda13.0.1",
-        "/tmp/AMGX-install-cuda13.0.1/lib",
-        "/tmp/cuda-13.0.1/targets/x86_64-linux/lib",
-    ]
-    if existing := env.get("LD_LIBRARY_PATH"):
-        paths.append(existing)
-    env["LD_LIBRARY_PATH"] = ":".join(paths)
+    # Inherit the activated stack, including any configured library search path.
     env["HYBRIDGE_CUDA_AMGX_MONITOR"] = "1"
     return env
 

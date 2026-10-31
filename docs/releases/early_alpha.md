@@ -115,7 +115,7 @@ The subsections below record the `0.1.0a1` evidence of 2026-08-05.
   solver compatibility shims.
 - Review: this is local Python 3.12 package evidence. It does not substitute
   for the first hosted Python 3.10/3.12 workflow run or qualify optional
-  PETSc/CUDA/DOLFINx ABI stacks.
+  PETSc/CUDA ABI stacks.
 
 ### CPU Parity
 
@@ -140,7 +140,7 @@ The subsections below record the `0.1.0a1` evidence of 2026-08-05.
 
 ### Broad Repository Suite
 
-- Command: `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib .venv/bin/python -m pytest -q`
+- Command: `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib .venv/bin/python -m pytest -q`
 - Result: 613 passed in 51.22 seconds on 2026-08-05; zero skips or pytest warnings.
 - Skip review: none; the recommended Gmsh geometry parity parameters ran.
 - Warning review: none. Deliberately singular discontinuous-beta fixtures are
@@ -149,7 +149,7 @@ The subsections below record the `0.1.0a1` evidence of 2026-08-05.
 ### Recommended Gmsh Geometry Qualification
 
 - Runtime: Gmsh 4.15.2; import and `gmsh.initialize()` succeeded.
-- Command: `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib .venv/bin/python -m pytest -q`
+- Command: `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib .venv/bin/python -m pytest -q`
   selecting both Gmsh geometry parity test functions.
 - Focused result: 4 passed in 6.94 seconds on 2026-08-05; zero skips or warnings.
 - Scope: 16 geometry/order combinations over rectangle, triangle, disc, and
@@ -197,14 +197,14 @@ The subsections below record the `0.1.0a1` evidence of 2026-08-05.
 - Review: this qualifies PARDISO SPD as the recommended tested host direct
   solver for assembled symmetric-positive-definite HDG Poisson systems on
   compatible Intel oneMKL machines. It is not a universal direct-solver
-  default, guiding-center transport evidence, a thread-count sweep, or PETSc
+  default, application transport evidence, a thread-count sweep, or PETSc
   and iterative-solver comparison evidence.
 
 ### Scheduled Evidence
 
 - Status: not run for this package/convergence-contract release change.
 - Required before a release candidate when launch defaults, performance
-  recommendations, or guiding-center convergence claims change.
+  recommendations, or supported numerical claims change.
 
 Use this template for subsequent lane executions:
 
@@ -229,17 +229,13 @@ Known deviations and tracking issue:
 - The default PyAMGX fork build accepts only float64 arrays. FP32 AMGX needs
   the mode-aware binding from `scripts/dev/build_pyamgx_precision.py`; the
   fp32 AMGX tests skip without it.
-- `projects/diocotron` ships as an application project outside the package
-  tests. Its DOLFINx and FreeFEM parts are not exercised in the release lanes.
 - PETSc has normalized API/failure handling but no dedicated numerical parity
-  case in the release lanes; optional PETSc, CUDA, DOLFINx, Gmsh, and plotting
+  case in the release lanes; optional PETSc, CUDA, Gmsh, and plotting
   installation stacks are not qualified by the base-wheel smoke.
 - PyAMGX attempts are blocking; stagnation is classified after an attempt
   returns rather than cancelled early.
-- Larger launch-policy, performance, and guiding-center convergence runs are
+- Larger launch-policy and performance runs are
   scheduled evidence, not part of the per-change host lane.
-- High-mode guiding-center transport failure recovery and the CG/SUPG/FEniCS
-  comparisons remain open research and validation work.
 - The default diffusion stabilization, `stabilization="global_length"`, sets
   τ = κ/L_Ω with L_Ω = 2|Ω|/|∂Ω|, so τ shrinks as the domain grows (0.25 for
   κ = 1 on [-4, 4]²). On large domains the HDG solution then loses accuracy,

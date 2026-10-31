@@ -16,10 +16,6 @@ from hybridge.core.space import DGSpace, VectorDGField
 from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
 from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.transport.residual import UpwindHDGTransportResidual
-from scripts.guiding_center.runtime.compatible_drift import (
-    CompatibleFluxPoissonSolver,
-    compatible_potential_source,
-)
 
 TOL = 5e-5 if REAL_DTYPE == np.float32 else 1e-10
 
@@ -180,39 +176,3 @@ class _CannedPoissonSolver:
         for key, value in overrides.items():
             setattr(self.options, key, value)
         return self
-
-
-@pytest.mark.parametrize("configured,requested", [("none", "primal"), ("flux", "both"), ("both", "both")])
-def test_wrapper_requests_primal_postprocessing_and_replaces_the_flux(configured, requested):
-    m = mesh()
-    density_space = DGSpace(m, 3, basis_type="dub_orth")
-    potential_space = DGSpace(m, 4, basis_type="dub_orth")
-    rng = np.random.default_rng(7)
-    raw_flux = VectorDGField(tuple(density_space.field(rng.standard_normal(density_space.shape))
-                                   for _ in range(2)))
-    canned = _CannedResult(field=density_space.field(rng.standard_normal(density_space.shape)),
-                           flux=raw_flux,
-                           postprocessed_field=potential_space.field(rng.standard_normal(potential_space.shape)))
-    solver = _CannedPoissonSolver(density_space, canned, hdg_postprocess=configured)
-    wrapped = CompatibleFluxPoissonSolver(solver, density_space, potential="postprocessed")
-    result = wrapped.solve(initial_guess=None)
-    assert solver.calls[-1]["hdg_postprocess"] == requested
-    assert result.raw_flux is raw_flux
-    drift = perpendicular_vector_field(result.flux, 1.0)
-    metrics = transport_velocity_diagnostics(drift, backend="host")
-    assert metrics["velocity_normal_jump_linf"] < TOL * metrics["velocity_speed_linf"]
-    # Attribute writes and option updates reach the wrapped solver (tau recovery).
-    wrapped.with_options(stabilization=8.0)
-    assert solver.options.stabilization == 8.0
-    wrapped.boundary_condition = 0.0
-    assert solver.boundary_condition == 0.0
-
-
-def test_potential_source_resolution():
-    assert compatible_potential_source("auto", "numba") == "postprocessed"
-    assert compatible_potential_source("auto", "raw-cuda") == "postprocessed"
-    assert compatible_potential_source("primal", "numba") == "primal"
-    # The raw-CUDA Poisson postprocesses the potential on the device.
-    assert compatible_potential_source("postprocessed", "raw-cuda") == "postprocessed"
-    with pytest.raises(ValueError, match="compatible potential"):
-        compatible_potential_source("exact", "raw-cuda")

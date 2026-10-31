@@ -27,9 +27,6 @@ ALGORITHM_CONTENTS = {
     },
     "advection_reaction": {
         "README.md",
-        "h1_bdf3.md",
-        "h2_bdf3.md",
-        "imex_ark3.md",
         "upwind_block_gauss_seidel.tex",
         "upwind_scc_ordering.tex",
     },
@@ -125,7 +122,13 @@ def test_local_markdown_links_resolve() -> None:
         text = source.read_text(encoding="utf-8")
         for match in MARKDOWN_LINK.finditer(text):
             target = _local_link_target(source, match.group(1))
-            if target is not None and not target.exists():
+            if target is None:
+                continue
+            if not target.resolve().is_relative_to(ROOT):
+                failures.append(
+                    f"{source.relative_to(ROOT)} -> {match.group(1)!r} (outside this checkout)"
+                )
+            elif not target.exists():
                 failures.append(
                     f"{source.relative_to(ROOT)} -> {match.group(1)!r}"
                 )
@@ -194,20 +197,6 @@ def test_advection_boundary_contract_covers_public_modes() -> None:
     assert "CuPy stabilization is rejected" not in manual
     assert "NumPy and CuPy accept" in manual
 
-
-def test_guiding_center_gpu_documentation_matches_current_retry() -> None:
-    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
-    assert "PBICGSTAB aggregation-DILU postsmooth2" not in manual
-    for required in (
-        "configs/amgx/adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json",
-        "configs/amgx/adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json",
-        "jacobi_l1_scalar_rows_for_blocks=1",
-        "configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json",
-        "FGMRES",
-        "`MULTICOLOR_DILU`",
-        "`legendre-modal`",
-    ):
-        assert required in manual, required
 
 
 def test_hybridge_functions_have_docstrings() -> None:

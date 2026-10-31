@@ -3,7 +3,7 @@
     "status": "error",
     "worker_kind": "profile",
     "error": "profiling warmup did not converge",
-    "traceback": "Traceback (most recent call last):\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 80, in main\n    result = dispatch(spec, common)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 56, in dispatch\n    return profile(dict(spec, rtol=spec[\"internal_rtol\"]))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem-gmres/scripts/adr_performance_worker.py\", line 307, in profile\n    if not warm.converged:raise RuntimeError('profiling warmup did not converge')\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: profiling warmup did not converge\n",
+    "traceback": "Traceback (most recent call last):\n  File \"scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 80, in main\n    result = dispatch(spec, common)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 56, in dispatch\n    return profile(dict(spec, rtol=spec[\"internal_rtol\"]))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"../hdgfem-gmres/scripts/adr_performance_worker.py\", line 307, in profile\n    if not warm.converged:raise RuntimeError('profiling warmup did not converge')\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: profiling warmup did not converge\n",
     "stress_parameters": {
       "variant": "trap",
       "epsilon": 1e-06,
@@ -2175,7 +2175,7 @@
       "gpu": "NVIDIA RTX PRO 5000 Blackwell"
     },
     "worker_sha256": "546f39f8301d0128e72ab011a2d660b261eabe526244a41dcc0cfd7cb9559595",
-    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_closed_loop_stress_main_v2/cache/stress_main_trap_t50000_p6",
+    "matrix_cache": "run_outputs/solver_studies/adr_closed_loop_stress_main_v2/cache/stress_main_trap_t50000_p6",
     "matrix_format": "bsr",
     "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
     "complete_preconditioner": {
@@ -2362,7 +2362,7 @@
     "status": "error",
     "worker_kind": "profile",
     "error": "profiling warmup did not converge",
-    "traceback": "Traceback (most recent call last):\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 80, in main\n    result = dispatch(spec, common)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 56, in dispatch\n    return profile(dict(spec, rtol=spec[\"internal_rtol\"]))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem-gmres/scripts/adr_performance_worker.py\", line 307, in profile\n    if not warm.converged:raise RuntimeError('profiling warmup did not converge')\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: profiling warmup did not converge\n",
+    "traceback": "Traceback (most recent call last):\n  File \"scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 80, in main\n    result = dispatch(spec, common)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 56, in dispatch\n    return profile(dict(spec, rtol=spec[\"internal_rtol\"]))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"../hdgfem-gmres/scripts/adr_performance_worker.py\", line 307, in profile\n    if not warm.converged:raise RuntimeError('profiling warmup did not converge')\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: profiling warmup did not converge\n",
     "stress_parameters": {
       "variant": "trap",
       "epsilon": 1e-06,
@@ -4534,7 +4534,7 @@
       "gpu": "NVIDIA RTX PRO 5000 Blackwell"
     },
     "worker_sha256": "546f39f8301d0128e72ab011a2d660b261eabe526244a41dcc0cfd7cb9559595",
-    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_closed_loop_stress_main_v2/cache/stress_main_trap_t50000_p6",
+    "matrix_cache": "run_outputs/solver_studies/adr_closed_loop_stress_main_v2/cache/stress_main_trap_t50000_p6",
     "matrix_format": "bsr",
     "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
     "complete_preconditioner": {

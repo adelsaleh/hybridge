@@ -7,8 +7,7 @@ advection-reaction runner, but ``--runner scripts/gpu/run_diffusion_reaction_cud
 now selects diffusion-reaction compatible arguments. Launch this with the
 project venv, for example:
 
-    LD_LIBRARY_PATH=/tmp/AMGX-build-cuda13.0.1:/tmp/AMGX-install-cuda13.0.1/lib:/tmp/cuda-13.0.1/targets/x86_64-linux/lib \
-      .venv/bin/python -m scripts.gpu.sweep_cuda_hdg --quick
+    scripts/gpu/run_cuda13.sh .venv/bin/python -m scripts.gpu.sweep_cuda_hdg --quick
 """
 
 from __future__ import annotations
@@ -30,11 +29,6 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNNER = ROOT / "scripts" / "gpu" / "run_advection_reaction_cuda.py"
 DEFAULT_LOG_DIR = ROOT / "run_logs"
-AMGX_LIBRARY_PATHS = (
-    "/tmp/AMGX-build-cuda13.0.1",
-    "/tmp/AMGX-install-cuda13.0.1/lib",
-    "/tmp/cuda-13.0.1/targets/x86_64-linux/lib",
-)
 DEFAULT_CASES = {"adv-rea": "test2_legacy_gpu3", "diff-rea": "trigonometric-poisson"}
 ADV_MESH_TYPES = {"rectangle", "structured-rectangle"}
 
@@ -541,11 +535,6 @@ def write_results(rows: list[dict[str, object]], args: argparse.Namespace) -> tu
 
 def build_env() -> dict[str, str]:
     env = os.environ.copy()
-    current = env.get("LD_LIBRARY_PATH", "")
-    pieces = list(AMGX_LIBRARY_PATHS)
-    if current:
-        pieces.append(current)
-    env["LD_LIBRARY_PATH"] = ":".join(unique_preserve_order(pieces))
     env.setdefault("PYTHONUNBUFFERED", "1")
     return env
 

@@ -141,7 +141,7 @@ fail during collection. After the user authorizes compilation, run the branch
 hook suite normally to validate the integrated path.
 
 The following commands explicitly compile/execute small coefficient kernels;
-they are provided for the user to run after the campaign, not executed by the agent:
+they are commands for a separate post-campaign check:
 
 ```bash
 # from the repository root

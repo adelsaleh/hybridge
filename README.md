@@ -11,7 +11,7 @@ HYBRIDGE aims to make hybridizable discontinuous Galerkin (HDG) methods
 ([Cockburn et al., 2009](https://doi.org/10.1137/070706616);
 [Nguyen et al., 2009](https://doi.org/10.1016/j.jcp.2009.01.030);
 [Cockburn et al., 2010](https://doi.org/10.1090/S0025-5718-10-02334-3))
-accessible to newcomers, in the spirit of FreeFEM and DOLFINx. Build a mesh,
+accessible to newcomers, in the spirit of FreeFEM. Build a mesh,
 define polynomial fields, and assemble and solve transport, diffusion, and
 coupled advection–diffusion–reaction problems on two-dimensional triangular
 meshes through one Python interface, on the CPU or entirely on the GPU.
@@ -280,16 +280,16 @@ development branch and is not part of this release.*
 
 </div>
 
-The [reproduction guide](docs/getting_started/gpu_showcase.md) gives the
-recording commands, the time-step, mesh, and stabilization checks behind both
-videos, and their measured diagnostics.
+The [BDF2 showcase guide](scripts/guiding_center/README.md) gives simple commands
+for both turbulence cases and movie recording. Full production recordings and
+their numerical studies live in the sibling guiding-center CG/HDG repository (`../guiding-center-cg-hdg/README.md`).
 
 ## Explore further
 
 The package is the reusable library; `examples/` holds small applications and
-`scripts/` fuller case runners and research studies, including manufactured
-solutions, convergence studies, guiding-center time integration, and GPU
-solver comparisons. Examples and runners are used from a checkout; the
+`scripts/` manufactured steady-problem runners, GPU solver comparisons, and
+a small BDF2 guiding-center turbulence showcase. Substantial guiding-center
+experiments and their outputs live in `guiding-center-cg-hdg`. Examples and runners are used from a checkout; the
 installed wheel contains the library.
 
 | Starting point | What you will find |
@@ -306,11 +306,11 @@ installed wheel contains the library.
   manufactured cases and named configurations; `--list-presets` and
   `--dry-run` show a configuration before running it.
 - **Unsteady problems.** Keep the solver objects between steps and update their
-  data, as in the example above; the guiding-center applications use the same
-  pattern at research scale.
-- **Diocotron equilibria.** A few optional studies use DOLFINx as a
-  continuous-Galerkin comparison, outside the HDG library; see the
-  [manual](MANUAL.md#optional-guiding-center-and-diocotron-equilibria).
+  data, as in the example above or the
+  [BDF2 turbulence showcase](scripts/guiding_center/README.md).
+- **Guiding-center research.** Convergence, alternative time schemes, equilibrium
+  construction and preservation, and full experiment analysis are maintained in
+  guiding-center-cg-hdg (`../guiding-center-cg-hdg/README.md`).
 
 ## Development status
 

@@ -37,6 +37,7 @@ class _Tables:
     """Bin-moment matrix and mode phases of one DG space."""
 
     def __init__(self, space, coordinates, *, bins, order, max_mode, backend):
+        """Build weighted angular-bin moments and Fourier phases on the selected backend."""
         mapped = space.mapped_quads()
         k_count, q_count = mapped.shape[:2]
         theta, weight = coordinates(mapped[:, :, 0].ravel(), mapped[:, :, 1].ravel())
@@ -81,6 +82,7 @@ class _Tables:
         return np.asarray(field.values(), dtype=float).ravel()
 
     def moments(self, values):
+        """Accumulate quadrature values into weighted angular-bin Taylor moments."""
         return self.matrix @ values
 
 
@@ -89,6 +91,7 @@ class BandModeSpectrum:
 
     def __init__(self, space, coordinates, *, max_mode=80, density_reference, potential_reference=None,
                  potential_space=None, backend="host", bins=2048, taylor_order=5, relative_threshold=1e-2):
+        """Prepare density and optional potential spectra relative to the reference fields."""
         if backend not in ("host", "device"):
             raise ValueError("backend must be 'host' or 'device'")
         if int(max_mode) < 1 or int(bins) < 16 or int(taylor_order) < 1:
@@ -122,6 +125,7 @@ class BandModeSpectrum:
         return float(moments[0::tables.order + 1].sum())
 
     def _spectrum(self, tables, values, reference, norm):
+        """Return normalized Fourier amplitudes of the departure from reference moments."""
         xp = tables.xp
         modes = tables.phases @ (tables.moments(values) - reference)
         amplitude = 2.0 * xp.abs(modes) / norm

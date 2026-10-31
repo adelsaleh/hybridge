@@ -433,8 +433,9 @@ contract. Device mismatch checks are tested with controlled device IDs;
 numerical GPU parity is scoped to one active CUDA device.
 
 The focused host command exercises metadata compatibility, repeated tau
-updates, native/AMGX resource cleanup, the guiding-center retry controller,
-and the existing small-matrix recovery reference:
+updates, native/AMGX resource cleanup and the existing small-matrix recovery
+reference. The original qualification also covered an application retry
+controller, whose test now lives in the research repository:
 
 ```bash
 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -q \

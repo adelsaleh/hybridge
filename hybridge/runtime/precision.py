@@ -131,10 +131,12 @@ def audit_arrays(stage: str, *objects) -> None:
     """Audit owned numerical arrays, including mirrors, factors and workspaces.
 
     Python control scalars and third-party implementation objects are excluded;
-    all NumPy/CuPy floating arrays reachable through hybridge objects are checked.
+    all NumPy/CuPy floating arrays reachable through hybridge objects or
+    application dataclass instances are checked.
     """
     if getenv('PRECISION_AUDIT', '1' if PRECISION == 'float32' else '0') != '1':
         return
+    from dataclasses import fields, is_dataclass
     visited = set()
     counts = {'host_arrays': 0, 'device_arrays': 0, 'host_bytes': 0, 'device_bytes': 0}
 
@@ -156,7 +158,10 @@ def audit_arrays(stage: str, *objects) -> None:
         elif isinstance(value, (list, tuple)):
             for index, item in enumerate(value):
                 visit(item, f'{path}[{index}]')
-        elif type(value).__module__.startswith(('hybridge.', 'scripts.guiding_center.')) and hasattr(value, '__dict__'):
+        elif is_dataclass(value) and not isinstance(value, type):
+            for field in fields(value):
+                visit(getattr(value, field.name), f'{path}.{field.name}')
+        elif type(value).__module__.startswith('hybridge.') and hasattr(value, '__dict__'):
             for key, item in vars(value).items():
                 visit(item, f'{path}.{key}')
 

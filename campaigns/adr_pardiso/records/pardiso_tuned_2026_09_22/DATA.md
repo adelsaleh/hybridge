@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Data directory | `/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22` |
+| Data directory | `run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22` |
 | Status at collection | recorded; completion not inferred |
 | Total regular-file size | 457.0 MiB |
 | Files / immediate subdirectories | 5182 / 2 |

@@ -52,14 +52,14 @@ The task builder will use these argument sets, with one process per precision an
 
 Local reference: [assembly baseline and precision findings](../../docs/research/solver_studies/advection_assembly_baseline_2026_10_03.md),
 [baseline JSON](../../docs/research/solver_studies/advection_assembly_baseline_2026_10_03.data.json), and
-[high-degree transport audit](../../docs/research/solver_studies/transport_assembly_audit_2026_10_16.md).
+high-degree transport audit (`../guiding-center-cg-hdg/docs/research/solver_studies/transport_assembly_audit_2026_10_16.md`; saved artifact).
 Record the exact baseline revision and match its mesh and options before calculating speedups.
 
 ## Preparation still required
 
 Build the task registry, safe list/plan commands, Slurm submission, per-task logs and done/failed
 markers, skip-completed resume, provenance, and comparison tables. Use the
-[convergence campaign](../gc_article_convergence/README.md) as the launcher pattern. Keep the
+convergence campaign (`../guiding-center-cg-hdg/guiding_center_cg_hdg/campaigns/guiding_center_convergence/gc_article_convergence/README.md`; saved artifact) as the launcher pattern. Keep the
 small records here and the profiler captures and large arrays in the output directory.
 
 The user prepares the target CUDA environment and any AMGX/MAGMA builds for sm_90. Follow the

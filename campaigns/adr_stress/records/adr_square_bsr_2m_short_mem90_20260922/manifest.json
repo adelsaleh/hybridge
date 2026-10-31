@@ -1,5 +1,5 @@
 {
-  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922",
+  "data_directory": "run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922",
   "collected": "2026-10-26T18:20:50+00:00",
   "status": "recorded; completion not inferred",
   "total_bytes": 15718178178,
@@ -17,22 +17,29 @@
     {
       "path": "events.jsonl",
       "copy": "events.jsonl",
-      "bytes": 38869,
-      "sha256": "9dfd27fd6fc6b2e02d7450a97709609141871b127a8ffb952cc58da8a7d4ddc0"
+      "bytes": 36844,
+      "sha256": "a32a2d69597932f0da47128a2218bfab5fa1fd23e23945de77aa1372ee11112b",
+      "original_bytes": 38869,
+      "original_sha256": "9dfd27fd6fc6b2e02d7450a97709609141871b127a8ffb952cc58da8a7d4ddc0"
     },
     {
       "path": "manifest.json",
       "copy": "source/manifest.json",
-      "bytes": 38535,
-      "sha256": "f8273eebc0c0bd6036273762464cae3679270da73e586341baf8b093cd35fb6c"
+      "bytes": 34639,
+      "sha256": "a2ec5815052684168dbf05c072680337e9dde545e3d5273b35503e686eab022f",
+      "original_bytes": 38535,
+      "original_sha256": "f8273eebc0c0bd6036273762464cae3679270da73e586341baf8b093cd35fb6c"
     },
     {
       "path": "summary.json",
       "copy": "summary.json",
-      "bytes": 53897,
-      "sha256": "97d110b6db2b06fb19a1539693244db76cfd38ced8e292df0583452e1d3f8a9b"
+      "bytes": 53681,
+      "sha256": "aa2d159dfbb79648abcd42dfc5911b9388a2cb18e5dcf0f08b10a5826cd53988",
+      "original_bytes": 53897,
+      "original_sha256": "97d110b6db2b06fb19a1539693244db76cfd38ced8e292df0583452e1d3f8a9b"
     }
   ],
   "too_large_or_nontext": [],
-  "inventory_errors": []
+  "inventory_errors": [],
+  "path_normalization": "Repository copies use portable paths; original fingerprints identify bytes preserved outside the repositories. See portable_records.jsonl in the repository campaign/provenance index."
 }

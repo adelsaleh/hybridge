@@ -4,7 +4,7 @@
 CPUs and NVIDIA GPUs.**
 
 HYBRIDGE aims to make hybridizable discontinuous Galerkin (HDG) methods
-accessible to newcomers, in the spirit of FreeFEM and DOLFINx. Build a mesh,
+accessible to newcomers, through a concise numerical interface. Build a mesh,
 define polynomial fields, and assemble and solve transport, diffusion, and
 coupled advection–diffusion–reaction problems on two-dimensional triangular
 meshes through one Python interface, on the CPU or entirely on the GPU.

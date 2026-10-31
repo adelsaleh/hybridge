@@ -12,6 +12,8 @@ import math
 from pathlib import Path
 import statistics
 
+from campaigns.common.locations import resolve_recorded_path
+
 ROOT = Path(__file__).resolve().parents[2]
 STUDY = ROOT / "run_outputs/solver_studies/adr_scaling_2026_09_17"
 NATIVE = STUDY / "native_hp_completion_2026_09_21"
@@ -20,7 +22,7 @@ CACHE_FILES = ("system_blocks.npy", "system_neighbors.npy", "system_rhs.npy")
 
 
 def read(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(resolve_recorded_path(path).read_text())
 
 
 def digest(path):
@@ -107,7 +109,7 @@ def inventory(native_campaign=NATIVE, stress_campaign=STRESS):
     """
     import numpy as np
 
-    native_campaign, stress_campaign = Path(native_campaign), Path(stress_campaign)
+    native_campaign, stress_campaign = resolve_recorded_path(native_campaign), resolve_recorded_path(stress_campaign)
     manifest_path = native_campaign / "manifest.json"
     manifest = read(manifest_path)
     systems = {s["system_id"]: {k: v for k, v in s.items() if k != "existing"}
@@ -115,10 +117,10 @@ def inventory(native_campaign=NATIVE, stress_campaign=STRESS):
     if len(systems) != len(manifest["systems"]):
         raise ValueError("Duplicate systems in completed coverage manifest")
     sources = {manifest_path, native_campaign / "all_native_results.json"}
-    sources.update(Path(o["source"]) for s in systems.values() for o in s["origins"])
+    sources.update(resolve_recorded_path(o["source"]) for s in systems.values() for o in s["origins"])
     # Retain published tuned endpoints and stronger hierarchy probes too.
     sources.update(p for p in (STUDY / "oscillatory/asm_optimality_audit").glob("*_raw_final.json"))
-    sources.update(Path(p) for p in manifest.get("source_artifacts", {})
+    sources.update(resolve_recorded_path(p) for p in manifest.get("source_artifacts", {})
                    if "/strong_probe/" in p and p.endswith(".json") and not p.endswith(".spec.json"))
     stress_summary = stress_campaign / "summary.json"
     sources.add(stress_summary)
@@ -149,7 +151,7 @@ def inventory(native_campaign=NATIVE, stress_campaign=STRESS):
         raise ValueError("Missing report or stress systems; refusing an incomplete campaign")
     by_cache = {}
     for system in systems.values():
-        cache = Path(system["cache"]).resolve(strict=True)
+        cache = resolve_recorded_path(system["cache"]).resolve(strict=True)
         system["cache"] = str(cache)
         by_cache[str(cache)] = system["system_id"]
         system["cache_files"] = {name: dict(size=(cache/name).stat().st_size,
@@ -169,7 +171,7 @@ def inventory(native_campaign=NATIVE, stress_campaign=STRESS):
         for row in result_rows(read(path)):
             identity = row.get("operator_sha256")
             if not identity and row.get("matrix_cache"):
-                identity = by_cache.get(str(Path(row["matrix_cache"]).resolve()))
+                identity = by_cache.get(str(resolve_recorded_path(row["matrix_cache"]).resolve()))
             if identity not in systems:
                 continue
             systems[identity]["comparators"].append(dict(
