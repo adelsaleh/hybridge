@@ -60,4 +60,25 @@ def sample_pointwise_values_kernel(function, x, y, t, values, params, out):
             out[element, q] = function(x[element, q], y[element, q], t, pointer)
 
 
-__all__ = ["VALUES_SIGNATURE", "XYT_SIGNATURE", "sample_pointwise_values_kernel", "sample_pointwise_xyt_kernel"]
+@njit(cache=True, parallel=True)
+def sample_pointwise_flat_xyt_kernel(function, x, y, t, chunk, out):
+    """``out[i] = function(x[i], y[i], t)`` on flat arrays, in parallel over chunks of ``chunk`` points."""
+    size = x.shape[0]
+    for block in prange((size + chunk - 1) // chunk):
+        for i in range(block*chunk, min(size, (block + 1)*chunk)):
+            out[i] = function(x[i], y[i], t)
+
+
+@njit(cache=True, parallel=True)
+def sample_pointwise_flat_params_kernel(function, x, y, t, params, chunk, out):
+    """``out[i] = function(x[i], y[i], t, params)`` on flat arrays, in parallel over chunks of ``chunk`` points."""
+    size = x.shape[0]
+    for block in prange((size + chunk - 1) // chunk):
+        buffer = params.copy()
+        pointer = _data_pointer(buffer)
+        for i in range(block*chunk, min(size, (block + 1)*chunk)):
+            out[i] = function(x[i], y[i], t, pointer)
+
+
+__all__ = ["VALUES_SIGNATURE", "XYT_SIGNATURE", "sample_pointwise_flat_params_kernel",
+           "sample_pointwise_flat_xyt_kernel", "sample_pointwise_values_kernel", "sample_pointwise_xyt_kernel"]

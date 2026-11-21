@@ -573,8 +573,8 @@ def trace_from_field_faces(field: DGField) -> np.ndarray:
         np.add.at(mass, edges[interior], face_mass[interior, face])
 
     trace = np.zeros((mesh.num_edg, q.edg_dof), dtype=REAL_DTYPE)
-    for edge in mesh.int_edges_inds:
-        trace[edge] = np.linalg.solve(mass[edge], rhs[edge])
+    interior = mesh.int_edges_inds
+    trace[interior] = np.linalg.solve(mass[interior], rhs[interior][..., None])[..., 0]
     return trace.reshape(-1)
 
 

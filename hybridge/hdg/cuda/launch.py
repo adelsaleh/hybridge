@@ -90,6 +90,36 @@ def resolve_raw_cuda_block_size(
     return block_size
 
 
+def record_kernel_resources(cupy, kernel, block_size: int, dynamic_shared_bytes: int, timings: dict,
+                            prefix: str) -> None:
+    """Record the launched kernel's resources and the CUDA occupancy model under ``prefix``.
+
+    Registers, local (spill) memory and static shared memory come from the compiled kernel
+    that is launched, and the resident blocks and warps per SM from the driver's occupancy
+    model for this block size and dynamic shared memory. They describe the kernel actually
+    timed, which a separate compilation cannot. Failures leave ``timings`` unchanged.
+    """
+    try:
+        function = getattr(kernel, 'kernel', kernel)
+        attributes = getattr(kernel, 'attributes', None)
+        if attributes is None:
+            # RawModule functions (cupy.cuda.function.Function) expose no ``attributes``.
+            driver = cupy.cuda.driver
+            attributes = {name: driver.funcGetAttribute(code, function.ptr) for name, code in (
+                ('max_threads_per_block', 0), ('shared_size_bytes', 1), ('local_size_bytes', 3), ('num_regs', 4))}
+        blocks = cupy.cuda.driver.occupancyMaxActiveBlocksPerMultiprocessor(
+            function.ptr, int(block_size), int(dynamic_shared_bytes))
+        entries = dict(block_size=int(block_size), dynamic_shared_bytes=int(dynamic_shared_bytes),
+                       num_regs=int(attributes['num_regs']), local_size_bytes=int(attributes['local_size_bytes']),
+                       static_shared_bytes=int(attributes['shared_size_bytes']),
+                       max_threads_per_block=int(attributes['max_threads_per_block']),
+                       blocks_per_sm=int(blocks), warps_per_sm=int(blocks) * int(block_size) // 32)
+    except Exception:
+        return
+    for key, value in entries.items():
+        timings[prefix + key] = float(value)
+
+
 def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
     """Compile a raw CUDA kernel and request its dynamic shared-memory budget."""
     kernel = real_raw_kernel(source, name, options=('--std=c++11',))

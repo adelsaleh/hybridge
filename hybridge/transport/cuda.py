@@ -43,7 +43,7 @@ from hybridge.runtime.logging import sync_elapsed
 from hybridge.core.device import mapped_quads_cupy
 
 
-RawLocalAssembly = Literal["precomputed", "fused", "split3"]
+RawLocalAssembly = Literal["precomputed", "fused", "split3", "tensor", "auto"]
 RawLuMode = Literal["safe", "coop"]
 CudaAdvectionAssemblyBackend = Literal["cupy", "raw-cuda"]
 
@@ -743,13 +743,13 @@ def assemble_reduced_system_cuda(
             reaction.check(cspace.host)
         else:
             reaction = _require_raw_dg_field(reaction, cspace, "reaction")
-        if raw_local_assembly not in {"precomputed", "fused", "split3"}:
-            raise ValueError("raw_local_assembly must be 'precomputed', 'fused', or 'split3'")
+        if raw_local_assembly not in {"precomputed", "fused", "split3", "tensor", "auto"}:
+            raise ValueError("raw_local_assembly must be 'precomputed', 'fused', 'split3', 'tensor', or 'auto'")
         if raw_lu_mode not in {None, "safe", "coop"}:
             raise ValueError("raw_lu_mode must be None, 'safe', or 'coop'")
         raw_lu_mode = resolve_raw_lu_mode(raw_lu_mode, raw_local_assembly)
         zero_boundary_flux = bool(zero_boundary_flux)
-        eliminated_local_assembly = raw_local_assembly in {"fused", "split3"}
+        eliminated_local_assembly = raw_local_assembly in {"fused", "split3", "tensor", "auto"}
         if zero_boundary_flux and not eliminated_local_assembly:
             raise NotImplementedError(
                 "raw-CUDA zero-flux assembly requires raw_local_assembly='fused' or 'split3'"
@@ -758,16 +758,24 @@ def assemble_reduced_system_cuda(
             raise ValueError(
                 "raw_lu_mode='coop' is supported only with raw_local_assembly='fused' or 'split3'"
             )
-        if raw_local_assembly == "split3" and raw_lu_mode != "coop":
-            raise ValueError("raw_local_assembly='split3' requires raw_lu_mode='coop'")
-        if raw_local_assembly == "split3":
+        if raw_local_assembly == "auto" and (raw_lu_mode != "coop" or raw_factor_workspace is not None
+                                              or str(raw_matrix_format).lower() in {"coo", "csr"}):
+            raw_local_assembly = "fused"
+        if raw_local_assembly in {"split3", "tensor"} and raw_lu_mode != "coop":
+            raise ValueError(f"raw_local_assembly={raw_local_assembly!r} requires raw_lu_mode='coop'")
+        if raw_local_assembly in {"split3", "tensor", "auto"}:
             normalized_matrix_format = str(raw_matrix_format).lower()
             if normalized_matrix_format == "auto":
                 raw_matrix_format = "bsr"
             elif normalized_matrix_format != "bsr":
                 raise ValueError(
-                    "raw_local_assembly='split3' requires raw_matrix_format='bsr'"
+                    f"raw_local_assembly={raw_local_assembly!r} requires raw_matrix_format='bsr'"
                 )
+        if raw_local_assembly == "tensor" and (pointwise_beta or pointwise_reaction or advection is not None):
+            raise NotImplementedError(
+                "raw_local_assembly='tensor' supports DG coefficients with the advection field in the "
+                "solution basis only; use raw_local_assembly='fused' or 'split3'"
+            )
         if eliminated_local_assembly:
             source_coeffs = source_coefficients_cupy(source, cspace, timings)
             if pointwise_reaction:
@@ -827,11 +835,44 @@ def assemble_reduced_system_cuda(
             )
             if pointwise_beta:
                 beta_dot_normal = common_raw_options["beta_normal_flux"]
+            selected_pipeline = tuning_report = None
+            if raw_local_assembly == "auto":
+                from hybridge.transport.pipeline_tuning import select_pipeline
+                selected_pipeline, tuning_report = select_pipeline(
+                    cp, common_raw_options, workspace=raw_tsle_workspace,
+                    response_workspace=raw_response_workspace)
+                raw_local_assembly = selected_pipeline.assembly
+                common_raw_options["block_size"] = selected_pipeline.block
             if raw_local_assembly == "split3":
                 raw = assemble_projected_advection_trace_system_eliminated_tsle_bsr(
                     **common_raw_options,
                     workspace=raw_tsle_workspace,
                 )
+            elif raw_local_assembly == "tensor":
+                from hybridge.transport.tsle_tensor import (
+                    RawAdvectionTsleTensorWorkspace,
+                    assemble_projected_advection_trace_system_eliminated_tsle_tensor,
+                    default_tensor_engines,
+                )
+                tensor_workspace = None
+                if raw_tsle_workspace is not None:
+                    if raw_tsle_workspace.tensor is None:
+                        raw_tsle_workspace.tensor = RawAdvectionTsleTensorWorkspace()
+                    tensor_workspace = raw_tsle_workspace.tensor
+                if selected_pipeline is None:
+                    contraction, tensor_solver = default_tensor_engines()
+                else:
+                    contraction, tensor_solver = selected_pipeline.contraction, selected_pipeline.local_solver
+                raw = assemble_projected_advection_trace_system_eliminated_tsle_tensor(
+                    **common_raw_options,
+                    workspace=tensor_workspace,
+                    precision="float64",
+                    contraction=contraction,
+                    local_solver=tensor_solver,
+                )
+                raw.timings["raw.tsle_tensor.cutensor"] = float(contraction == "cutensor")
+                raw.timings["raw.tsle_tensor.magma"] = float(tensor_solver == "magma")
+                raw.timings["raw.tsle_tensor.fused"] = float(tensor_solver == "fused")
             else:
                 raw = assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                     **common_raw_options,
@@ -839,6 +880,10 @@ def assemble_reduced_system_cuda(
                     local_response=raw_response_workspace,
                     factor_workspace=raw_factor_workspace,
                 )
+            if tuning_report is not None:
+                raw.timings["raw.pipeline.autotune.wall"] = tuning_report["wall_seconds"]
+                raw.timings["raw.pipeline.autotune.reused"] = float(tuning_report["reused"])
+                raw.timings["raw.pipeline.algorithm_id"] = float({"fused": 0, "split3": 1, "tensor": 2}[raw_local_assembly])
         else:
             if zero_boundary_flux:
                 raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")

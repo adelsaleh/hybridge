@@ -466,7 +466,7 @@ def profile_face_dense_operator(
     operator._validate_device_vector(x, name="x")
     operator._validate_device_vector(out, name="out")
 
-    if operator.implementation == "raw_fused":
+    if operator.implementation in ("raw_fused", "coalesced", "interleaved"):
         gather = _zero_cuda_timing(warmup=warmup, repeats=repeats)
         dense = _zero_cuda_timing(warmup=warmup, repeats=repeats)
     else:
@@ -494,7 +494,7 @@ def profile_face_dense_operator(
     itemsize = int(np.dtype(operator.dtype.name).itemsize)
     flops = int(2 * operator.num_rows * operator.block_size * operator.extended_size)
     matrix_bytes = int(operator.matrix_batches.size * itemsize)
-    if operator.implementation == "raw_fused":
+    if operator.implementation in ("raw_fused", "coalesced", "interleaved"):
         vector_bytes = int(2 * operator.num_dofs * itemsize)
     else:
         vector_bytes = int(

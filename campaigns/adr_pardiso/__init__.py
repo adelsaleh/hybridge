@@ -1,1 +1,0 @@
-"""ADR campaigns pardiso utilities."""

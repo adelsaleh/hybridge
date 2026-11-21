@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 from hybridge.hdg.cuda.pattern import build_reduced_csr_pattern_raw
-from hybridge.hdg.cuda.tuning import (
+from hybridge.runtime.cuda_tuning import (
     KernelConfiguration, device_signature, event_seconds, select_configuration,
 )
 from hybridge.hdg.trace_maps import _edge_to_solve_edge, _interior_side_index, _side_flux_offsets
@@ -42,6 +42,9 @@ class PoissonContext:
     local_factor_key: Any = None
     reports: dict = field(default_factory=dict)
     boundary_is_zero: bool = False
+    # Launch selections made in this process, and the status buffer every launch rewrites.
+    resolved: dict = field(default_factory=dict)
+    failures: Any = None
 
     @property
     def local_factor_bytes(self):
@@ -49,9 +52,18 @@ class PoissonContext:
         if self.policy == 'none':
             return 0
         arrays = (self.factors, self.pivots)
-        if self.policy == 'schur-cholesky':
+        if _keeps_responses(self.policy):
             arrays += (self.response, self.source_solution)
         return sum(a.nbytes for a in arrays)
+
+
+def _keeps_responses(policy):
+    """Reconstruction applies the trace responses assembly solved for, without a local solve."""
+    return policy in ('schur-cholesky', 'schur-lu+responses')
+
+
+def _keeps_lu(policy):
+    return policy in ('schur-lu', 'schur-lu+responses')
 
 
 def validate_block_size(requested, order):
@@ -74,10 +86,37 @@ def shared_bytes(nel, ntr, config, *, factor=True):
             +(3*nel+3*ntr)*config.columns)*REAL_ITEMSIZE + (nel+1)*4
 
 
+def _warp_solve(context, phase):
+    """Phases that apply stored LU factors solve on warps and read the factors in place."""
+    return phase > 0 and _keeps_lu(context.policy) and not (phase == 2 and _keeps_responses(context.policy))
+
+
 def _workspace_bytes(context, phase, config):
-    """Omit shared factor storage for response-based reconstruction."""
-    return shared_bytes(int(context.cspace.el_dof), int(context.cspace.edg_dof), config,
-                        factor=not (phase == 2 and context.policy == 'schur-cholesky'))
+    """Omit shared factor storage for response-based reconstruction and in-place LU factors."""
+    nel = int(context.cspace.el_dof)
+    warp = _warp_solve(context, phase)
+    return shared_bytes(nel, int(context.cspace.edg_dof), config,
+                        factor=not warp and not (phase == 2 and _keeps_responses(context.policy))) + (
+        nel*REAL_ITEMSIZE + nel*4 if warp else 0)  # Pivot reciprocals and the folded row permutation.
+
+
+def _failure_buffer(context, ne):
+    """One per-element status buffer per context; every launch writes all of it."""
+    cp = require_cupy()
+    if context.failures is None or int(context.failures.size) != ne:
+        context.failures = cp.empty(ne, dtype=cp.int32)
+    return context.failures
+
+
+def _check_failures(context, phase, ne, failures):
+    """Read the status back only when the launch factorized: stored factors cannot fail."""
+    if not ne or (phase > 0 and context.policy != 'none'):
+        return
+    cp = require_cupy()
+    if bool(cp.any(failures).item()):
+        element = int(cp.flatnonzero(failures)[0].item())
+        raise np.linalg.LinAlgError(f'Poisson local factorization failed in element {element}, '
+                                    f'status={int(failures[element].item())}')
 
 
 def _reference(cspace, trace_ref, d0, d1, face_mass):
@@ -105,7 +144,7 @@ def _reference(cspace, trace_ref, d0, d1, face_mass):
 def _context(cspace, trace_ref, d0, d1, face_mass, tau, policy, block_size, local_factor_key):
     """Allocate only the factor/response arrays requested by the cache policy."""
     cp = require_cupy()
-    if policy not in ('none', 'schur-lu', 'schur-cholesky'):
+    if policy not in ('none', 'schur-lu', 'schur-lu+responses', 'schur-cholesky'):
         raise ValueError('unsupported Poisson local-factor policy')
     if policy == 'schur-cholesky' and tau <= 0:
         raise ValueError('Schur-Cholesky caching requires strictly positive stabilization')
@@ -114,8 +153,8 @@ def _context(cspace, trace_ref, d0, d1, face_mass, tau, policy, block_size, loca
         float(tau), policy,
         cp.empty((ne,n,n) if policy != 'none' else 1, dtype=REAL_DTYPE),
         cp.empty((ne,n) if policy != 'none' else 1, dtype=cp.int32),
-        cp.empty((ne,n,3*nt) if policy == 'schur-cholesky' else 1, dtype=REAL_DTYPE),
-        cp.empty((ne,n) if policy == 'schur-cholesky' else 1, dtype=REAL_DTYPE),
+        cp.empty((ne,n,3*nt) if _keeps_responses(policy) else 1, dtype=REAL_DTYPE),
+        cp.empty((ne,n) if _keeps_responses(policy) else 1, dtype=REAL_DTYPE),
         block_size, local_factor_key)
 
 
@@ -134,11 +173,13 @@ def _compile(context, phase, fmt, config):
     key = (cp.cuda.runtime.getDevice(), n, nt, phase, fmt, context.policy,
            config.columns, config.retained_coupling, np.dtype(REAL_DTYPE).str)
     if key not in _KERNELS:
+        warp = _warp_solve(context, phase)
         constants = dict(NEL=n, NTR=nt, PHASE=phase, FORMAT={'coo':0,'csr':1,'bsr':2}[fmt],
-                         FACTOR_STORAGE=n*n if phase!=2 or context.policy!='schur-cholesky' else 0,
+                         FACTOR_STORAGE=0 if warp or (phase == 2 and _keeps_responses(context.policy)) else n*n,
+                         WARP_SOLVE=int(warp),
                          BATCH=config.columns, RETAIN=int(config.retained_coupling),
                          CHOLESKY=int(context.policy=='schur-cholesky'),
-                         RESPONSE=int(context.policy=='schur-cholesky'),
+                         RESPONSE=int(_keeps_responses(context.policy)),
                          USE_FACTORS=int(phase>0 and context.policy!='none'),
                          WRITE_FACTORS=int(phase==0 and context.policy!='none'),
                          SYMMETRY_RTOL=max(5.e-11, 32*np.finfo(REAL_DTYPE).eps))
@@ -152,6 +193,32 @@ def _compile(context, phase, fmt, config):
     return _KERNELS[key]
 
 
+FP64_RICH_PRIORS = 'fp64-rich-1'
+
+
+def _fp64_rich_priors_apply(phase, device, explicit):
+    """Return whether automatic assembly tuning ranks the FP64-rich priors first."""
+    ratio = device.get('fp32_fp64_ratio')
+    return phase == 0 and explicit is None and ratio is not None and ratio <= 4
+
+
+def _fp64_rich_assembly_priors(n, width):
+    """Assembly candidates for GPUs with full-rate FP64 (FP32:FP64 <= 4).
+
+    On an H200 NVL (100,352 triangles, thorough tuning, 2026-10-28) every
+    order's winner is among these four: all 3*NTR+1 columns in one batch, 32
+    threads up to NEL=15, 64 at NEL=21, 128 up to NEL=45 and 256 at NEL=55,
+    retained coupling up to NEL=28, and 256 threads x 16 retained columns for
+    the p>=7 Schur-Cholesky kernels. The quick tuner times only the first four
+    legal candidates; with the generic ranking it ran 1.1-4x slower.
+    """
+    threads = 32 if n <= 15 else 64 if n <= 21 else 128 if n <= 45 else 256
+    retain = n <= 28
+    return [KernelConfiguration(threads, width, retain), KernelConfiguration(threads, width, not retain),
+            KernelConfiguration(min(2*threads, 256), width, retain),
+            KernelConfiguration(256, min(16, width), True)]
+
+
 def configurations(context, phase, device, explicit=None):
     """Architecture priors only rank candidates; timings determine the winner."""
     n, nt = int(context.cspace.el_dof), int(context.cspace.edg_dof)
@@ -159,14 +226,16 @@ def configurations(context, phase, device, explicit=None):
     block = explicit or (32 if n<=6 else 64)
     first = KernelConfiguration(block, min(4,width) if explicit else 1, False)
     compute_limited = (device.get('fp32_fp64_ratio') or 1) >= 16
-    retain = compute_limited and not (phase>0 and context.policy=='schur-cholesky')
+    retain = compute_limited and not (phase>0 and _keeps_responses(context.policy))
     ranked = [first, KernelConfiguration(128,min(4,width),retain),
               KernelConfiguration(128,min(8,width),False),
               KernelConfiguration(256,min(8,width),retain)]
+    if _fp64_rich_priors_apply(phase, device, explicit):
+        ranked = _fp64_rich_assembly_priors(n, width) + ranked
     for threads in (32,64,128,256):
         for batch in sorted({1,2,4,8,16,width}):
             if batch<=width:
-                for coupling in ((False,) if phase>0 and context.policy=='schur-cholesky' else (False,True)):
+                for coupling in ((False,) if phase>0 and _keeps_responses(context.policy) else (False,True)):
                     ranked.append(KernelConfiguration(threads,batch,coupling))
     return list(dict.fromkeys(ranked))
 
@@ -227,6 +296,25 @@ def _launch(context, *, phase, fmt, source_rhs, trace, pattern=None, maps=None,
             optional(local,real),validation,failures)
     requested=validate_block_size(context.block_size,space.order)
     explicit=None if requested=='auto' else requested
+    resolve=not refresh and not thorough
+    selection=(phase,fmt,requested)
+    if resolve and selection in context.resolved:
+        # The selection holds for this context, phase and format for the rest of the process:
+        # skip the device query, candidate ranking and record lookup, which cost more than
+        # the launched kernel on small meshes (campaigns/poisson_element_cost, 2026-11-02).
+        config,kernel,report,shared,static=context.resolved[selection]
+        if phase!=2:
+            context.boundary_is_zero=not bool(cp.any(trace!=0).item())
+        failures=_failure_buffer(context,ne)
+        preparation_seconds=time.perf_counter()-preparation_start
+        launch_start=time.perf_counter()
+        elapsed=event_seconds(cp,lambda:kernel((ne,),(config.threads,),args(i64,0,ne,real,failures),
+                                            shared_mem=shared))
+        _check_failures(context,phase,ne,failures)
+        context.reports[('assembly','rhs','reconstruction')[phase]]=report
+        return dict(static,**{'raw.kernel.device':elapsed,'raw.kernel.wall':time.perf_counter()-launch_start,
+            'raw.kernel.jit':0.,'raw.kernel.prepare':preparation_seconds,
+            'raw.poisson.autotune.wall':0.,'raw.poisson.autotune.reused':1.})
     device=device_signature(cp)
     candidates=configurations(context,phase,device,explicit)
     # Tuning scratch is allocated lazily: cache hits and explicit launches do not
@@ -253,28 +341,30 @@ def _launch(context, *, phase, fmt, source_rhs, trace, pattern=None, maps=None,
         kernel((scratch['ids'].size,),(config.threads,),
             args(scratch['ids'],1,scratch['ids'].size,scratch['output'],scratch['failures']),
             shared_mem=_workspace_bytes(context,phase,config))
-        return scratch['output']
+        return scratch['output'], scratch['failures']
     identity=dict(family='poisson',source_version=SOURCE_VERSION,phase=phase,order=int(space.order),
         element_basis=space.host.reference.basis_type,trace_basis=context.trace_ref.kind,
         precision=np.dtype(REAL_DTYPE).str,format=fmt,policy=context.policy,
         volume_points=int(space.quad_data.Krf_w.size),
         boundary_nonzero=bool(cp.any(trace!=0).item()),
         workload_bucket=max(0,(ne-1).bit_length()))
+    if _fp64_rich_priors_apply(phase, device, explicit):
+        # Records tuned under the earlier ranking stay valid for it, not for these priors.
+        identity['candidate_priors'] = FP64_RICH_PRIORS
     if phase != 2:
         context.boundary_is_zero = not identity['boundary_nonzero']
     preparation_seconds = time.perf_counter() - preparation_start
     config,kernel,report=select_configuration(cupy=cp,identity=identity,candidates=candidates,
         shared_bytes=lambda c: _workspace_bytes(context,phase,c),compile_kernel=compile_candidate,
-        trial=trial,explicit=explicit,refresh=refresh,thorough=thorough)
+        trial=trial,explicit=explicit,refresh=refresh,thorough=thorough,
+        baseline=KernelConfiguration(32 if n<=6 else 64, 1, False),
+        validate=lambda output: not bool(cp.any(output[1]).item()))
     scratch.clear()
-    failures=cp.empty(ne,dtype=cp.int32)
+    failures=_failure_buffer(context,ne)
     launch_start = time.perf_counter()
     elapsed=event_seconds(cp,lambda:kernel((ne,),(config.threads,),args(i64,0,ne,real,failures),
                                         shared_mem=_workspace_bytes(context,phase,config)))
-    if ne and bool(cp.any(failures).item()):
-        element=int(cp.flatnonzero(failures)[0].item())
-        raise np.linalg.LinAlgError(f'Poisson local factorization failed in element {element}, '
-                                   f'status={int(failures[element].item())}')
+    _check_failures(context,phase,ne,failures)
     label=('assembly','rhs','reconstruction')[phase]
     context.reports[label]=report
     timings={'raw.kernel.device':elapsed,'raw.kernel.wall':time.perf_counter()-launch_start,
@@ -289,6 +379,8 @@ def _launch(context, *, phase, fmt, source_rhs, trace, pattern=None, maps=None,
         'raw.local_factors.reused':float(phase>0 and context.policy!='none')}
     for key,value in kernel.attributes.items():
         timings['raw.poisson.resource.'+key]=float(value)
+    if resolve:
+        context.resolved[selection]=(config,kernel,report,_workspace_bytes(context,phase,config),dict(timings))
     return timings
 
 
@@ -343,10 +435,10 @@ def assemble(*, source_rhs,boundary_trace,cspace,trace_ref,d0_reference,d1_refer
         boundary_trace=boundary_trace,d0_reference=d0_reference,d1_reference=d1_reference,
         face_element_mass=face_element_mass,timings=timings,indptr=indptr,indices=indices,
         matrix_format=fmt,csr_pattern=pattern,
-        schur_lu=context.factors if context.policy=='schur-lu' else None,
-        schur_pivots=context.pivots if context.policy=='schur-lu' else None,
+        schur_lu=context.factors if _keeps_lu(context.policy) else None,
+        schur_pivots=context.pivots if _keeps_lu(context.policy) else None,
         local_factor_key=local_factor_key,
-        local_factor_bytes=context.local_factor_bytes if context.policy=='schur-lu' else 0,
+        local_factor_bytes=context.local_factor_bytes if _keeps_lu(context.policy) else 0,
         local_factor_kind=context.policy,poisson_context=context)
 
 
@@ -374,10 +466,10 @@ def refresh_rhs(*,source_rhs,boundary_trace,cspace,trace_ref,d0_reference,d1_ref
         boundary_trace=boundary_trace,d0_reference=d0_reference,d1_reference=d1_reference,
         face_element_mass=face_element_mass,timings=timings,indptr=csr_pattern.indptr,
         indices=csr_pattern.indices,matrix_format=csr_pattern.matrix_format,csr_pattern=csr_pattern,
-        schur_lu=context.factors if context.policy=='schur-lu' else None,
-        schur_pivots=context.pivots if context.policy=='schur-lu' else None,
+        schur_lu=context.factors if _keeps_lu(context.policy) else None,
+        schur_pivots=context.pivots if _keeps_lu(context.policy) else None,
         local_factor_key=local_factor_key,
-        local_factor_bytes=context.local_factor_bytes if context.policy=='schur-lu' else 0,
+        local_factor_bytes=context.local_factor_bytes if _keeps_lu(context.policy) else 0,
         local_factor_kind=context.policy,poisson_context=context)
 
 

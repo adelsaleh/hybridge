@@ -11,6 +11,23 @@ import math
 from pathlib import Path
 
 
+def _reclaimable_file_bytes(path):
+    """Clean page cache charged to a cgroup, which the kernel reclaims before an OOM kill.
+
+    ``memory.current`` includes the cache filled by reading assembled matrices; counting it as
+    used excluded systems that fit (2026-10-28, unified campaign 21958). Dirty and writeback
+    pages are not immediately reclaimable and stay counted.
+    """
+    try:
+        stat = dict(line.split() for line in path.read_text().splitlines())
+    except (OSError, ValueError):
+        return 0
+    prefix = 'total_' if 'total_inactive_file' in stat else ''  # cgroup v1 hierarchical totals
+    pages = sum(int(stat.get(prefix+key, 0)) for key in ('inactive_file', 'active_file'))
+    pinned = sum(int(stat.get(key, 0)) for key in ('file_dirty', 'file_writeback', prefix+'dirty', prefix+'writeback'))
+    return max(0, pages-pinned)
+
+
 def host_available_bytes():
     """Linux live available RAM, restricted by the current cgroup allocation.
 
@@ -37,7 +54,8 @@ def host_available_bytes():
                                           ('memory.limit_in_bytes', 'memory.usage_in_bytes')):
                 limit, used = directory/limit_name, directory/used_name
                 if limit.exists() and used.exists() and limit.read_text().strip() != 'max':
-                    values.append(max(0, int(limit.read_text())-int(used.read_text())))
+                    values.append(max(0, int(limit.read_text())-int(used.read_text())
+                                      +_reclaimable_file_bytes(directory/'memory.stat')))
     except (OSError, ValueError):
         pass
     return min(values) if values else None

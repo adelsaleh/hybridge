@@ -45,7 +45,7 @@ Stages (one CUDA block per element in every stage)
    and RHS, applies trace orientation and boundary elimination, and writes the
    face-BSR ``data``/``rhs`` arrays in place.
 
-Device array layouts (all ``REAL_DTYPE`` = FP64, C order)
+Device array layouts (selected ``REAL_DTYPE``, FP64 by default, C order)
 ---------------------------------------------------------
 * ``local_operator``: ``(E, NEL, NEL)``, which holds ``A_e``.
 * ``local_response``: ``(E, NEL, NCOLS)`` with ``NCOLS = 3*NTR + 1``. Column
@@ -67,19 +67,24 @@ the fused-versus-TSLE timings behind the p>=7 recommendation.
 
 Launch sizes
 ------------
-``block_size="auto"`` tunes each stage independently over
-``_TSLE_BLOCK_CANDIDATES`` (see :func:`_select_launch_blocks`) and caches the
-winning triple per process in ``_TSLE_TUNING_CACHE``. Compiled kernels are
-cached in ``_TSLE_MODULE_CACHE``. :func:`clear_tsle_runtime_caches` resets
-both.
+``block_size="auto"`` uses persistent, correctness-checked stage selection.
+The shared default 30-second/eight-candidate budget is divided into 10 seconds
+and 3/3/2 candidates for build/solve/scatter, including each conservative
+baseline. Trials use at most 512 actual elements on a compact isolated mesh;
+there are no full-mesh finalist launches. Artificial cut boundaries use zero
+trace values. Cache hits skip all sample preparation and benchmarking.
+All stages share one elapsed deadline; an overrun leaves later stages at
+their legal conservative sizes. Unavailable trial memory also uses those
+sizes without persisting an unmeasured result.
+Compiled kernels remain cached in ``_TSLE_MODULE_CACHE``.
 """
 
 from __future__ import annotations
 
-from hybridge.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
+from hybridge.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module, cuda_source
 
 from dataclasses import dataclass
-import statistics
+import hashlib
 import time
 from typing import Any
 
@@ -110,18 +115,13 @@ _TSLE_KERNEL_NAMES = (
 # offered. Unlike the fused kernel, the TSLE solve sizes its pivot scratch by
 # blockDim.x rather than RAW_LU_SCRATCH_THREADS, which makes 256 legal here.
 _TSLE_BLOCK_CANDIDATES = (32, 64, 128, 256)
-# Screening launches process only the first min(E, _TSLE_TUNE_LIMIT) elements.
-# Elements are independent, so a prefix grid is a valid (partial) launch.
-_TSLE_TUNE_LIMIT = 32_768
-# CUDA-event samples per candidate: discarded warmups, then timed repeats
-# summarized by their median.
-_TSLE_TUNE_WARMUPS = 1
-_TSLE_TUNE_REPEATS = 3
+# Complete compact trial meshes keep conflict/gauge neighbor reads bounded.
+_TSLE_TUNE_LIMIT = 512
 
 
 @dataclass
 class RawAdvectionTsleWorkspace:
-    """Persistent FP64 element workspaces used by TSLE-BSR.
+    """Persistent selected-precision element workspaces used by TSLE-BSR.
 
     The arrays carry stage-to-stage data between the three kernels; see the
     module docstring for their layouts. Pass one instance to repeated
@@ -141,12 +141,18 @@ class RawAdvectionTsleWorkspace:
         quadrature tables, premultiplied by face Jacobian and weight.
     signature : tuple of int or None
         ``(device, E, NEL, NCOLS, NQF)`` of the current allocation.
+    tensor : RawAdvectionTsleTensorWorkspace or None
+        The workspace of ``raw_local_assembly="tensor"``
+        (:mod:`hybridge.transport.tsle_tensor`), created on first use, so the
+        solver's one workspace serves either TSLE path.
     """
 
     local_operator: Any | None = None
     local_response: Any | None = None
     face_flux: Any | None = None
     signature: tuple[int, ...] | None = None
+    tensor: Any | None = None
+    volume_gemm: Any | None = None
 
     def ensure(self, cupy, *, num_elements: int, nel: int, ncols: int, nqf: int) -> None:
         """Allocate stage arrays when their device/discrete signature changes."""
@@ -169,7 +175,7 @@ class RawAdvectionTsleWorkspace:
         """Return bytes owned by the persistent stage workspace."""
         return sum(
             int(getattr(array, "nbytes", 0))
-            for array in (self.local_operator, self.local_response, self.face_flux)
+            for array in (self.local_operator, self.local_response, self.face_flux, self.tensor, self.volume_gemm)
         )
 
     def clear(self) -> None:
@@ -178,6 +184,9 @@ class RawAdvectionTsleWorkspace:
         self.local_response = None
         self.face_flux = None
         self.signature = None
+        self.volume_gemm = None
+        if self.tensor is not None:
+            self.tensor.clear()
 
 
 @dataclass(frozen=True)
@@ -192,14 +201,12 @@ class _TsleKernels:
     solve: Any
     scatter: Any
     jit_seconds: float
+    source_identity: str = ""
 
 
 # (device, NEL, NTR, NQF, trace orientation, upwind factor, conflict-averaged
 # flag) -> compiled kernels. All of these are compile-time constants.
 _TSLE_MODULE_CACHE: dict[tuple[Any, ...], _TsleKernels] = {}
-# Tuning key built in assemble_projected_advection_trace_system_eliminated_tsle_bsr
-# -> (build, solve, scatter) block sizes.
-_TSLE_TUNING_CACHE: dict[tuple[Any, ...], tuple[int, int, int]] = {}
 
 
 # The template is appended to _RAW_FUSED_TEMPLATE and instantiated by
@@ -291,7 +298,13 @@ extern "C" __global__ void advection_tsle_build(
         zero_boundary_flux, num_elements, element);
 
     for (int idx = threadIdx.x; idx < NEL * NEL; idx += blockDim.x) {
+#if RAW_VOLUME_PRELOADED
+        // The volume pre-pass rewrites the volume operator before every build
+        // launch, so adding the face terms here stays idempotent.
+        element_operator[element * (NEL * NEL) + idx] += local_operator[idx];
+#else
         element_operator[element * (NEL * NEL) + idx] = local_operator[idx];
+#endif
     }
     for (int idx = threadIdx.x; idx < NEL * NCOLS; idx += blockDim.x) {
         element_response[element * (NEL * NCOLS) + idx] = local_response[idx];
@@ -543,8 +556,8 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
 
 
 # Shared-memory sizes mirror the layouts documented above each kernel. The
-# trailing 256 bytes are alignment slack. The kernels are written for
-# ``double``, so the hard-coded 8 equals REAL_ITEMSIZE.
+# trailing 256 bytes are alignment slack. Build/scatter conservatively reserve
+# their FP64 footprints even in an FP32 process; solve uses REAL_ITEMSIZE.
 
 
 def _shared_bytes_build(nel: int, ncols: int, nqf: int, nbeta: int | None = None) -> int:
@@ -579,16 +592,10 @@ def _shared_bytes_scatter(nel: int, ntr: int) -> int:
     return int((3 * ntr * nel + 3 * ntr * ntr) * 8 + 256)
 
 
-def _device_property(properties: dict, name: str, default: int) -> int:
-    """Read a CUDA property across CuPy string/byte-key variants."""
-    value = properties.get(name, properties.get(name.encode(), default))
-    return int(value)
-
-
 def _compile_kernels(
         cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: str, advection_stabilization=None,
         nbeta: int | None = None, nqv: int | None = None, pointwise_beta: bool = False,
-        pointwise_reaction: bool = False,
+        pointwise_reaction: bool = False, volume_preloaded: bool = False,
 ) -> _TsleKernels:
     """Compile or reuse the three kernels for one discrete CUDA signature.
 
@@ -619,10 +626,10 @@ def _compile_kernels(
     nbeta = int(nel) if nbeta is None else int(nbeta)
     key = (device_id, int(nel), int(ntr), int(nqf), str(trace_orientation), factor,
            is_conflict_averaged_upwind(advection_stabilization), nbeta, nqv, bool(pointwise_beta),
-           bool(pointwise_reaction))
+           bool(pointwise_reaction), bool(volume_preloaded))
     cached = _TSLE_MODULE_CACHE.get(key)
     if cached is not None:
-        return _TsleKernels(cached.build, cached.solve, cached.scatter, 0.0)
+        return _TsleKernels(cached.build, cached.solve, cached.scatter, 0.0, cached.source_identity)
 
     source = _kernel_source(
         _RAW_FUSED_TEMPLATE + "\n" + _TSLE_KERNEL_TEMPLATE,
@@ -638,6 +645,8 @@ def _compile_kernels(
         pointwise_beta=pointwise_beta,
         pointwise_reaction=pointwise_reaction,
     )
+    if volume_preloaded:
+        source = "#define RAW_VOLUME_PRELOADED 1\n" + source
     started = time.perf_counter()
     module = real_raw_module(
         code=source,
@@ -650,6 +659,7 @@ def _compile_kernels(
         module.get_function(_TSLE_KERNEL_NAMES[1]),
         module.get_function(_TSLE_KERNEL_NAMES[2]),
         time.perf_counter() - started,
+        hashlib.sha256(cuda_source(source).encode()).hexdigest(),
     )
     max_shared = max(
         _shared_bytes_build(nel, 3 * ntr + 1, nqf, nbeta),
@@ -665,237 +675,38 @@ def _compile_kernels(
     return kernels
 
 
-def _event_seconds(cupy, launch) -> float:
-    """Time one launch on the current stream with CUDA events."""
-    stream = cupy.cuda.get_current_stream()
-    begin = cupy.cuda.Event()
-    end = cupy.cuda.Event()
-    begin.record(stream)
-    launch()
-    end.record(stream)
-    end.synchronize()
-    return float(cupy.cuda.get_elapsed_time(begin, end)) / 1000.0
-
-
-def _candidate_median(
-        cupy,
-        prepare,
-        launch,
-        *,
-        warmups: int = _TSLE_TUNE_WARMUPS,
-        repeats: int = _TSLE_TUNE_REPEATS,
-) -> float:
-    """Return a prepared launch's median CUDA-event time."""
-    samples: list[float] = []
-    for repeat in range(warmups + repeats):
-        prepare()
-        elapsed = _event_seconds(cupy, launch)
-        if repeat >= warmups:
-            samples.append(elapsed)
-    return float(statistics.median(samples))
-
-
 def _select_launch_blocks(
-        cupy,
-        *,
-        requested: RawCudaBlockSize,
-        tune_key: tuple[Any, ...],
-        tune_elements: int,
-        num_elements: int,
-        kernels: _TsleKernels,
-        build_args: tuple[Any, ...],
-        solve_args: tuple[Any, ...],
-        scatter_args: tuple[Any, ...],
-        data,
-        rhs,
-        nel: int,
-        ntr: int,
-        ncols: int,
-        nqf: int,
-        timings: dict[str, float],
-        nbeta: int | None = None,
+        cupy, *, requested: RawCudaBlockSize, identity, kernels: _TsleKernels,
+        make_trial, nel: int, ntr: int, ncols: int, nqf: int,
+        timings: dict[str, float], nbeta: int | None = None,
 ) -> tuple[int, int, int]:
-    """Select explicit or sampled/full-mesh stage launch sizes.
-
-    An explicit ``requested`` block size is applied to all three stages. For
-    ``None``/``"auto"`` each stage is tuned independently, in pipeline order,
-    because a later stage needs the earlier stages' output as input:
-
-    1. **Screen** every candidate that fits ``maxThreadsPerBlock`` and the
-       opt-in shared-memory limit on the first ``tune_elements`` elements.
-    2. **Validate** the two fastest on the full mesh when it is larger than
-       the sample, since the ranking on the sample need not hold on the full
-       grid.
-    3. The winner feeds the ``prepare`` step of the next stage's trials.
-
-    Solve and scatter trials are destructive (the solve overwrites the
-    response in place, and the scatter accumulates atomically). Each trial is
-    therefore preceded by a ``prepare`` callback that rebuilds its inputs and,
-    for the scatter, zeroes ``data``/``rhs``. The prepare step runs outside
-    the CUDA-event window, so only the stage under test is timed. Tuning
-    leaves partial values in the workspace, ``data``, and ``rhs``. The caller
-    zero-fills and relaunches all three stages afterwards.
-
-    The result is cached in ``_TSLE_TUNING_CACHE`` under ``tune_key``. Tuning
-    diagnostics are written to ``timings`` as ``raw.tsle.autotune.*``
-    (per-candidate medians, ``wall``, and ``reused``).
-
-    Returns
-    -------
-    tuple of int
-        ``(build_block, solve_block, scatter_block)``.
-
-    Raises
-    ------
-    ValueError
-        If an explicit block size is not in ``_TSLE_BLOCK_CANDIDATES``.
-    RuntimeError
-        If no candidate fits the device.
-    """
+    """Select persistent stage sizes, or retain an explicit size without trials."""
     if not (requested is None or (isinstance(requested, str) and requested.lower() == "auto")):
         block_size = int(requested)
         if block_size not in _TSLE_BLOCK_CANDIDATES:
             raise ValueError("TSLE-BSR block size must be 'auto' or one of 32, 64, 128, 256")
         return block_size, block_size, block_size
+    from hybridge.transport.tsle_tuning import select_stage_blocks
+    return select_stage_blocks(cupy=cupy, identity=identity, kernels=kernels,
+        shared_bytes=_stage_shared_bytes(nel, ntr, ncols, nqf, nbeta),
+        make_trial=make_trial, nel=nel, timings=timings)
 
-    cached = _TSLE_TUNING_CACHE.get(tune_key)
-    if cached is not None:
-        timings["raw.tsle.autotune.reused"] = 1.0
-        return cached
 
-    properties = cupy.cuda.runtime.getDeviceProperties(cupy.cuda.runtime.getDevice())
-    max_threads = _device_property(properties, "maxThreadsPerBlock", 1024)
-    max_shared = _device_property(properties, "sharedMemPerBlockOptin", 0)
-    if max_shared <= 0:
-        max_shared = _device_property(properties, "sharedMemPerBlock", 48 * 1024)
-    candidates = [
-        value
-        for value in _TSLE_BLOCK_CANDIDATES
-        if value <= max_threads
-        and _shared_bytes_build(nel, ncols, nqf, nbeta) <= max_shared
-        and _shared_bytes_solve(nel, ncols, value) <= max_shared
-        and _shared_bytes_scatter(nel, ntr) <= max_shared
-    ]
-    if not candidates:
-        raise RuntimeError("no TSLE-BSR launch candidate fits this CUDA device")
+def _stage_shared_bytes(nel, ntr, ncols, nqf, nbeta):
+    """Keep production and calibration launch footprints identical."""
+    return dict(build=lambda block: _shared_bytes_build(nel, ncols, nqf, nbeta),
+                solve=lambda block: _shared_bytes_solve(nel, ncols, block),
+                scatter=lambda block: _shared_bytes_scatter(nel, ntr))
 
-    tune_start = time.perf_counter()
-    grid = (int(tune_elements),)
-    full_grid = (int(num_elements),)
-    validate_full = num_elements > tune_elements
 
-    build_times: dict[int, float] = {}
-    for block in candidates:
-        launch = lambda block=block: kernels.build(
-            grid, (block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-        )
-        build_times[block] = _candidate_median(cupy, lambda: None, launch)
-        timings[f"raw.tsle.autotune.build.{block}"] = build_times[block]
-    build_finalists = sorted(build_times, key=build_times.get)[:2]
-    if validate_full:
-        full_build_times: dict[int, float] = {}
-        for block in build_finalists:
-            launch = lambda block=block: kernels.build(
-                full_grid, (block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-            )
-            full_build_times[block] = _candidate_median(cupy, lambda: None, launch)
-            timings[f"raw.tsle.autotune.full.build.{block}"] = full_build_times[block]
-        build_block = min(full_build_times, key=full_build_times.get)
-    else:
-        build_block = build_finalists[0]
-
-    def prepare_solve() -> None:
-        """Rebuild sampled local systems before a destructive solve trial."""
-        kernels.build(
-            grid, (build_block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-        )
-
-    solve_times: dict[int, float] = {}
-    for block in candidates:
-        launch = lambda block=block: kernels.solve(
-            grid, (block,), solve_args,
-            shared_mem=_shared_bytes_solve(nel, ncols, block),
-        )
-        solve_times[block] = _candidate_median(cupy, prepare_solve, launch)
-        timings[f"raw.tsle.autotune.solve.{block}"] = solve_times[block]
-    solve_finalists = sorted(solve_times, key=solve_times.get)[:2]
-    if validate_full:
-        def prepare_solve_full() -> None:
-            """Rebuild full-mesh local systems before a solve finalist."""
-            kernels.build(
-                full_grid, (build_block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-            )
-
-        full_solve_times: dict[int, float] = {}
-        for block in solve_finalists:
-            launch = lambda block=block: kernels.solve(
-                full_grid, (block,), solve_args,
-                shared_mem=_shared_bytes_solve(nel, ncols, block),
-            )
-            full_solve_times[block] = _candidate_median(cupy, prepare_solve_full, launch)
-            timings[f"raw.tsle.autotune.full.solve.{block}"] = full_solve_times[block]
-        solve_block = min(full_solve_times, key=full_solve_times.get)
-    else:
-        solve_block = solve_finalists[0]
-
-    def prepare_scatter() -> None:
-        """Prepare sampled solved columns and zero scatter outputs."""
-        kernels.build(
-            grid, (build_block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-        )
-        kernels.solve(
-            grid, (solve_block,), solve_args,
-            shared_mem=_shared_bytes_solve(nel, ncols, solve_block),
-        )
-        data.fill(0.0)
-        rhs.fill(0.0)
-
-    scatter_times: dict[int, float] = {}
-    for block in candidates:
-        launch = lambda block=block: kernels.scatter(
-            grid, (block,), scatter_args,
-            shared_mem=_shared_bytes_scatter(nel, ntr),
-        )
-        scatter_times[block] = _candidate_median(cupy, prepare_scatter, launch)
-        timings[f"raw.tsle.autotune.scatter.{block}"] = scatter_times[block]
-    scatter_finalists = sorted(scatter_times, key=scatter_times.get)[:2]
-    if validate_full:
-        def prepare_scatter_full() -> None:
-            """Prepare full-mesh solved columns and zero scatter outputs."""
-            kernels.build(
-                full_grid, (build_block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
-            )
-            kernels.solve(
-                full_grid, (solve_block,), solve_args,
-                shared_mem=_shared_bytes_solve(nel, ncols, solve_block),
-            )
-            data.fill(0.0)
-            rhs.fill(0.0)
-
-        full_scatter_times: dict[int, float] = {}
-        for block in scatter_finalists:
-            launch = lambda block=block: kernels.scatter(
-                full_grid, (block,), scatter_args,
-                shared_mem=_shared_bytes_scatter(nel, ntr),
-            )
-            full_scatter_times[block] = _candidate_median(cupy, prepare_scatter_full, launch)
-            timings[f"raw.tsle.autotune.full.scatter.{block}"] = full_scatter_times[block]
-        scatter_block = min(full_scatter_times, key=full_scatter_times.get)
-    else:
-        scatter_block = scatter_finalists[0]
-
-    selected = (build_block, solve_block, scatter_block)
-    _TSLE_TUNING_CACHE[tune_key] = selected
-    cupy.cuda.get_current_stream().synchronize()
-    timings["raw.tsle.autotune.reused"] = 0.0
-    timings["raw.tsle.autotune.wall"] = time.perf_counter() - tune_start
-    return selected
+def _tuning_space_identity(space):
+    """Read basis/quadrature metadata from the public space's reference data."""
+    reference = space.reference
+    return dict(order=space.order, basis=reference.basis_type,
+                quadrature=dict(volume=reference.volume_quadrature,
+                                volume_1d=reference.volume_quad_1d,
+                                volume_degree=reference.volume_degree,
+                                edge_1d=reference.edge_quad_1d))
 
 
 def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
@@ -926,6 +737,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         beta_volume_values=None,
         beta_normal_flux=None,
         reaction_values=None,
+        _capture_tuning_inputs: bool = False,
 ) -> RawAdvectionAssemblyResult:
     """Assemble a reduced face-BSR system with the TSLE three-stage pipeline.
 
@@ -1078,6 +890,12 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     timings["raw.input_prepare"] = time.perf_counter() - wall_start
 
     trace_orientation = _raw_trace_orientation_mode(trace_ref)
+    from hybridge.transport import tsle_volume_gemm
+    volume = tsle_volume_gemm.volume_mode()
+    preloaded = volume != "inline" and tsle_volume_gemm.volume_prepass_applies(
+        nqv=nqv, pointwise_beta=pointwise_beta, pointwise_reaction=pointwise_reaction)
+    if preloaded and REAL_ITEMSIZE != 8:
+        raise ValueError("preloaded split3 volume assembly requires float64; use HYBRIDGE_RAW_SPLIT3_VOLUME=inline")
     kernels = _compile_kernels(
         cupy,
         nel=nel,
@@ -1089,6 +907,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         nqv=nqv,
         pointwise_beta=pointwise_beta,
         pointwise_reaction=pointwise_reaction,
+        volume_preloaded=preloaded,
     )
     timings["raw.tsle.jit"] = float(kernels.jit_seconds)
 
@@ -1137,6 +956,21 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         workspace.local_response,
         np.int64(num_elements),
     )
+    build_kernel = kernels.build
+    if preloaded:
+        # The build stage becomes "volume GEMM for the launched elements, then
+        # the build kernel adding the face terms" (tsle_volume_gemm).
+        workspace.volume_gemm = tsle_volume_gemm.prepare_volume_gemm(
+            cupy, mode=volume, operator=workspace.local_operator, existing=workspace.volume_gemm,
+            num_elements=num_elements, nel=nel, nbeta=nbeta, advection_tensor=advection_tensor,
+            mass_matrix=cspace.quad_data.MKrf, reaction_triples=cspace.quad_data.weighted_triple_phi_flat,
+            mass_is_diagonal=bool(mass_is_diagonal), beta_coeffs=beta_coeffs, aff_jacs=cspace.mesh.aff_jacs,
+            inv_aff_mats_t=cspace.mesh.inv_aff_mats_t, reaction_coeffs=reaction_coeffs,
+            reaction_scalar=float(reaction_scalar), reaction_is_scalar=bool(reaction_is_scalar), timings=timings)
+        kernels = _TsleKernels(tsle_volume_gemm.PreloadedBuild(build_kernel, workspace.volume_gemm),
+                               kernels.solve, kernels.scatter, kernels.jit_seconds, kernels.source_identity)
+        timings["raw.tsle.workspace.bytes"] = float(workspace.nbytes)
+    timings["raw.tsle.volume.preloaded"] = float(preloaded)
     scatter_args = (
         pattern.indptr,
         data,
@@ -1156,44 +990,70 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         np.int64(num_elements),
     )
 
-    # The tuned triple is keyed by the device and its compute capability,
-    # every compile-time dimension, the runtime branches that change the
-    # build kernel's work (sparse advection, diagonal mass, scalar reaction,
-    # zero-flux), and the sampled/full grid sizes. The stabilization policy
-    # is not part of the key: policies that compile to different kernels
-    # share one tuning result.
-    properties = cupy.cuda.runtime.getDeviceProperties(cupy.cuda.runtime.getDevice())
-    tuning_key = (
-        int(cupy.cuda.runtime.getDevice()),
-        _device_property(properties, "major", 0),
-        _device_property(properties, "minor", 0),
-        nel,
-        ntr,
-        nqf,
-        nbeta,
-        nqv,
-        trace_orientation,
-        bool(use_sparse_advection),
-        bool(mass_is_diagonal),
-        bool(reaction_is_scalar),
-        bool(zero_boundary_flux),
-        bool(pointwise_beta),
-        bool(pointwise_reaction),
-        min(num_elements, _TSLE_TUNE_LIMIT),
-        num_elements,
-    )
+    from hybridge.hdg.stabilization import upwind_factor, is_conflict_averaged_upwind
+    if _capture_tuning_inputs:
+        # Only the lazy trial factory uses this private preparation return.
+        # It owns a compact mesh and all mutable arrays; no trial executes on
+        # the production workspace, even for scatter or preloaded volume GEMM.
+        from hybridge.transport.tsle_tuning import StageTrial
+        return StageTrial(cupy, kernels,
+            dict(build=build_args, solve=solve_args, scatter=scatter_args),
+            _stage_shared_bytes(nel, ntr, ncols, nqf, nbeta), num_elements,
+            trace_orientation, is_conflict_averaged_upwind(advection_stabilization))
+
+    tuning_key = dict(adapter="transport-split3-stages-v1", source=kernels.source_identity,
+        precision=np.dtype(REAL_DTYPE).name, nel=nel, ntr=ntr, nqf=nqf, nbeta=nbeta, nqv=nqv,
+        **_tuning_space_identity(cspace.host), trace_orientation=trace_orientation,
+        stabilization=dict(factor=upwind_factor(advection_stabilization),
+            conflict_averaged=is_conflict_averaged_upwind(advection_stabilization)),
+        sparse_advection=bool(use_sparse_advection), diagonal_mass=bool(mass_is_diagonal),
+        scalar_reaction=bool(reaction_is_scalar), zero_boundary_flux=bool(zero_boundary_flux),
+        pointwise_beta=bool(pointwise_beta), pointwise_reaction=bool(pointwise_reaction),
+        elements_bucket=max(1, int(num_elements)).bit_length(),
+        sample_elements=min(num_elements, _TSLE_TUNE_LIMIT), sample_policy="element-prefix-zero-cut-boundary-v1",
+        volume=volume if preloaded else "inline",
+        volume_source=hashlib.sha256(tsle_volume_gemm._SOURCE.encode()).hexdigest() if preloaded else None)
+
+    def make_trial():
+        """Prepare bounded same-precision scratch only on a calibration miss."""
+        from hybridge.transport.tuning_sample import sample_raw_options
+        from hybridge.transport.tsle_tuning import TuningScratchUnavailable
+        # Account for stage storage, saved parity outputs, LU RHS restoration,
+        # dense-oracle copies, compact BSR data and coefficient/geometry tables.
+        # The check is lazy, so a cached calibration needs none of this memory.
+        estimated = min(num_elements, _TSLE_TUNE_LIMIT) * (
+            4 * (nel*nel + nel*ncols + 6*nqf) + 18*ntr*ntr
+            + 8*nel + 4*nbeta + 3*ntr + 256) * REAL_ITEMSIZE
+        free, _ = cupy.cuda.runtime.memGetInfo()
+        available = int(free) + int(cupy.get_default_memory_pool().free_bytes())
+        if estimated > available:
+            raise TuningScratchUnavailable("bounded split3 calibration scratch does not fit")
+        try:
+            options, _ = sample_raw_options(cupy, dict(
+                source_coeffs=source_coeffs, beta_coeffs=beta_coeffs,
+                reaction_coeffs=reaction_coeffs, reaction_scalar=reaction_scalar,
+                reaction_is_scalar=reaction_is_scalar, boundary_trace=boundary_trace,
+                cspace=cspace, trace_ref=trace_ref, advection_tensor=advection_tensor,
+                advection_sparse_offsets=advection_sparse_offsets, advection_sparse_modes=advection_sparse_modes,
+                advection_sparse_values0=advection_sparse_values0, advection_sparse_values1=advection_sparse_values1,
+                use_sparse_advection=use_sparse_advection, mass_is_diagonal=mass_is_diagonal,
+                block_size=32, matrix_format="bsr", zero_boundary_flux=zero_boundary_flux,
+                advection_stabilization=advection_stabilization, beta_face_basis=beta_face_basis,
+                volume_table=volume_table if nqv is not None else None,
+                beta_volume_values=beta_volume_values if pointwise_beta else None,
+                beta_normal_flux=beta_normal_flux if pointwise_beta else None,
+                reaction_values=reaction_values if pointwise_reaction else None), limit=_TSLE_TUNE_LIMIT)
+            return assemble_projected_advection_trace_system_eliminated_tsle_bsr(
+                **options, _capture_tuning_inputs=True)
+        except cupy.cuda.memory.OutOfMemoryError as exc:
+            raise TuningScratchUnavailable("split3 calibration allocation failed") from exc
+
     selected = _select_launch_blocks(
         cupy,
         requested=block_size,
-        tune_key=tuning_key,
-        tune_elements=min(num_elements, _TSLE_TUNE_LIMIT),
-        num_elements=num_elements,
+        identity=tuning_key,
         kernels=kernels,
-        build_args=build_args,
-        solve_args=solve_args,
-        scatter_args=scatter_args,
-        data=data,
-        rhs=rhs,
+        make_trial=make_trial,
         nel=nel,
         ntr=ntr,
         ncols=ncols,
@@ -1205,22 +1065,32 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     timings["raw.tsle.build.block_size"] = float(build_block)
     timings["raw.tsle.solve.block_size"] = float(solve_block)
     timings["raw.tsle.scatter.block_size"] = float(scatter_block)
+    from hybridge.hdg.cuda.launch import record_kernel_resources
+    for stage, kernel, block, shared in (
+            ("build", build_kernel, build_block, _shared_bytes_build(nel, ncols, nqf, nbeta)),
+            ("solve", kernels.solve, solve_block, _shared_bytes_solve(nel, ncols, solve_block)),
+            ("scatter", kernels.scatter, scatter_block, _shared_bytes_scatter(nel, ntr))):
+        record_kernel_resources(cupy, kernel, block, shared, timings, f"raw.tsle.{stage}.resource.")
     # The response reconstruction kernel retains the shared raw-CUDA public
     # launch policy (at most 128 threads). TSLE's independent stage choices are
     # recorded above and may legitimately select 256.
     timings["raw.block_size"] = float(min(build_block, 128))
 
-    # Production launch. Autotuning may have left partial values in data/rhs,
-    # and the scatter accumulates atomically, so both are cleared first. All
+    # Production launch. Scatter accumulates atomically, so both outputs are
+    # cleared first. Calibration used only its isolated compact mesh. All
     # three stages are queued back to back on the current stream; the four
     # events bracket each stage for the per-stage device timings.
     data.fill(0.0)
     rhs.fill(0.0)
     stream = cupy.cuda.get_current_stream()
     events = [cupy.cuda.Event() for _ in range(4)]
+    volume_done = cupy.cuda.Event()
     launch_wall_start = time.perf_counter()
     events[0].record(stream)
-    kernels.build(
+    if preloaded:
+        workspace.volume_gemm(num_elements)
+    volume_done.record(stream)
+    build_kernel(
         (num_elements,),
         (build_block,),
         build_args,
@@ -1243,6 +1113,8 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     events[3].record(stream)
     events[3].synchronize()
     timings["raw.tsle.build"] = cupy.cuda.get_elapsed_time(events[0], events[1]) / 1000.0
+    if preloaded:
+        timings["raw.tsle.volume"] = cupy.cuda.get_elapsed_time(events[0], volume_done) / 1000.0
     timings["raw.tsle.solve"] = cupy.cuda.get_elapsed_time(events[1], events[2]) / 1000.0
     timings["raw.tsle.scatter"] = cupy.cuda.get_elapsed_time(events[2], events[3]) / 1000.0
     timings["raw.tsle.device"] = cupy.cuda.get_elapsed_time(events[0], events[3]) / 1000.0
@@ -1323,14 +1195,14 @@ def split3_memory_sizes(space, trace_space, workspace: RawAdvectionTsleWorkspace
 
 
 def clear_tsle_runtime_caches() -> None:
-    """Clear process-local kernel/tuning caches for deterministic tests.
+    """Clear process caches, retaining persistent calibration records on disk.
 
-    The next assembly recompiles its kernels and, for ``block_size="auto"``,
-    reruns autotuning. Persistent ``RawAdvectionTsleWorkspace`` instances are
-    not affected.
+    Use HYBRIDGE_CUDA_TUNING=refresh to recalibrate. Existing numerical
+    workspaces are unaffected.
     """
+    from hybridge.runtime.cuda_tuning import clear_tuning_cache
     _TSLE_MODULE_CACHE.clear()
-    _TSLE_TUNING_CACHE.clear()
+    clear_tuning_cache()
 
 
 __all__ = [

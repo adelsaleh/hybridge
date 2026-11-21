@@ -5,10 +5,17 @@ RETAIN keeps the two coupling matrices when the device can profit from them.
 PHASE=0 assembles directly into COO/CSR/BSR; 1 refreshes the reduced RHS;
 2 reconstructs the full mixed field. SAMPLE writes isolated element responses.
 """
-from hybridge.hdg.cuda.raw_source import checked_warp_lu_source
+from hybridge.hdg.cuda.raw_source import RAW_WARP_COLUMN_SOLVES, checked_warp_lu_source
 
 
-SOURCE = checked_warp_lu_source('poisson_lu', 'NEL') + r'''
+# WARP_SOLVE: the phases that apply stored LU factors solve each local column on a warp and
+# read the factors in place instead of copying them to shared memory. The one-lane sweeps on
+# the shared copy took 57-59% of block cycles at p=7-9 (campaigns/poisson_element_cost,
+# 2026-11-02). Block size 1, allowed up to p=6, keeps the sub-warp column solve.
+SOURCE = r'''
+#define RAW_BATCH_COLS BATCH
+#define RAW_COOPERATIVE_ONLY (NEL > 28)
+''' + checked_warp_lu_source('poisson_lu', 'NEL') + RAW_WARP_COLUMN_SOLVES + r'''
 __device__ double poisson_coupling(int i, int j, int z, const double* d,
         const double* fm, const double* a, const double* scales, const double* normals) {
     double value = -a[2*z] * d[i*NEL+j] - a[2*z+1] * d[NEL*NEL+i*NEL+j];
@@ -46,8 +53,24 @@ extern "C" __global__ void poisson_local(
     double* qx=u+NEL*BATCH;
     double* qy=qx+NEL*BATCH;
     double* flux=qy+NEL*BATCH;
+#if WARP_SOLVE
+    double* inverse_diagonal=flux+3*NTR*BATCH;
+    int* pivots=reinterpret_cast<int*>(inverse_diagonal+NEL);
+#else
     int* pivots=reinterpret_cast<int*>(flux+3*NTR*BATCH);
+#endif
     int* status=pivots+NEL;
+#if WARP_SOLVE
+    int* permuted_rows=status+1;
+    const double* __restrict__ factor_view=factors+e*NEL*NEL;
+#endif
+#if PHASE == 1
+    // The refreshed trace holds boundary values only: an element without a boundary edge has a zero lift.
+    const bool has_boundary=solve_edges[edges[3*e]]<0 || solve_edges[edges[3*e+1]]<0
+        || solve_edges[edges[3*e+2]]<0;
+#else
+    const bool has_boundary=true;
+#endif
     if(tid==0) *status=0;
     __syncthreads();
 
@@ -55,7 +78,9 @@ extern "C" __global__ void poisson_local(
     for(int ij=tid; ij<NEL*NEL; ij+=blockDim.x) {
         const int i=ij/NEL, j=ij%NEL;
 #if USE_FACTORS
+#if !WARP_SOLVE
         s[ij]=factors[e*NEL*NEL+ij];
+#endif
 #else
         double value=0.;
         for(int f=0; f<3; ++f) value+=tau*scales[f]*fm[f*NEL*NEL+ij];
@@ -88,6 +113,9 @@ extern "C" __global__ void poisson_local(
 #if USE_FACTORS
     for(int i=tid; i<NEL; i+=blockDim.x) pivots[i]=all_pivots[e*NEL+i];
     __syncthreads();
+#if WARP_SOLVE
+    lu_solve_setup(factor_view,pivots,permuted_rows,inverse_diagonal);
+#endif
 #else
 #if CHOLESKY
     // Validate and symmetrize disjoint matrix pairs before in-place Cholesky.
@@ -160,7 +188,7 @@ extern "C" __global__ void poisson_local(
 #else
             value=source[e*source_stride+i];
 #endif
-            for(int f=0; f<3; ++f) {
+            if(has_boundary) for(int f=0; f<3; ++f) {
                 const long long edge=edges[3*e+f], of=oriented[3*e+f];
                 for(int t=0; t<NTR; ++t) {
                     const double g=trace[edge*NTR+t];
@@ -179,6 +207,7 @@ extern "C" __global__ void poisson_local(
         }
         __syncthreads();
 #if !RESPONSE || PHASE == 0
+        if(has_boundary) {
         for(int index=tid; index<NEL*BATCH; index+=blockDim.x) {
             const int i=index/BATCH, b=index%BATCH;
             if(b>=width) continue;
@@ -191,8 +220,11 @@ extern "C" __global__ void poisson_local(
             u[index]+=ji*value;
         }
         __syncthreads();
+        }
 #endif
-#if !(PHASE == 2 && RESPONSE)
+#if WARP_SOLVE
+        solve_lu_columns_warp(factor_view,permuted_rows,inverse_diagonal,u,width);
+#elif !(PHASE == 2 && RESPONSE)
         for(int b=tid; b<width; b+=blockDim.x) {
 #if !CHOLESKY
             for(int k=0; k<NEL; ++k) {
@@ -219,7 +251,7 @@ extern "C" __global__ void poisson_local(
         for(int i=tid; i<NEL; i+=blockDim.x) {
             if(!sample) source_solutions[e*NEL+i]=u[i*BATCH];
             double v=0.;
-            for(int f=0; f<3; ++f)
+            if(has_boundary) for(int f=0; f<3; ++f)
                 for(int t=0; t<NTR; ++t)
                     v+=responses[(e*NEL+i)*(3*NTR)+f*NTR+t]*trace[edges[3*e+f]*NTR+t];
             u[i*BATCH]+=v;

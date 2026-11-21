@@ -42,6 +42,15 @@ while 29.9% of the enstrophy is dissipated as filaments reach the grid.*
 
 ## Installation
 
+> **AMGX dependency requirement:** For versions after `v0.1.0a1`, clone our
+> [AMGX fork](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration) and
+> switch to `hdg-cuda13-integration`, and our
+> [PyAMGX fork](https://github.com/adelsaleh/pyamgx/tree/quality-of-life) and
+> switch to `quality-of-life`. The AMGX GPU backend requires these forks;
+> upstream builds do not provide the required interface. See the
+> [clone and build instructions](docs/getting_started/forked_amgx_stack.md).
+> CPU-only use does not require either dependency.
+
 From a checkout, with Python 3.10 or newer:
 
 ```bash

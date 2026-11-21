@@ -52,6 +52,12 @@ def _adr_postprocess_samples(
             face_basis = xp.asarray(field.space.basis_at(face_points)).reshape(
                 nqf, 3, field.space.el_dof
             ).transpose(1, 2, 0)
+            if xp is np:
+                from hybridge.mixed.postprocess import total_flux_numba as kernels
+                values = np.ascontiguousarray(coefficients(field), dtype=np.float64)
+                beta_volume[..., component] = kernels.values_at_points(values, np.ascontiguousarray(volume_basis))
+                beta_face[..., component] = kernels.values_on_faces(values, np.ascontiguousarray(face_basis))
+                continue
             beta_volume[..., component] = coefficients(field) @ volume_basis.T
             beta_face[..., component] = xp.einsum(
                 "Ki,fiq->Kfq", coefficients(field), face_basis, optimize=True
@@ -127,6 +133,23 @@ def _adr_postprocess_samples(
     )
 
 
+# The host recovery samples of the last solve: flux and primal recovery sample beta and the
+# stabilization on the same degree-p+1 rules, so the second call reuses the first's tables
+# (primal recovery, which runs last, releases them).
+_HOST_SAMPLES: dict = {}
+
+
+def _host_postprocess_samples(beta, prepared, space, post_space, advection_stabilization):
+    """``_adr_postprocess_samples`` on the host, computed once per (prepared, beta, rule, policy)."""
+    entry = _HOST_SAMPLES.get("last")
+    if (entry is not None and entry[0] is prepared and entry[1] is beta and entry[2] is post_space
+            and entry[3] is advection_stabilization):
+        return entry[4]
+    samples = _adr_postprocess_samples(beta, prepared, space, post_space, advection_stabilization)
+    _HOST_SAMPLES["last"] = (prepared, beta, post_space, advection_stabilization, samples)
+    return samples
+
+
 def _project_total_flux(
         local_unknowns: np.ndarray,
         prepared: ADRPreparedData,
@@ -139,6 +162,13 @@ def _project_total_flux(
         from hybridge.core.device import field_from_cupy_coefficients
         xp = require_cupy()
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
+    if xp is np:
+        from hybridge.mixed.postprocess import total_flux_numba as kernels
+        coeffs = kernels.project_total_flux(
+            np.ascontiguousarray(blocks, dtype=np.float64), np.ascontiguousarray(space.quad_data.bas_of_quads),
+            np.ascontiguousarray(prepared.beta_values), np.ascontiguousarray(space.quad_data.weighted_phi),
+            np.ascontiguousarray(space.quad_data.MKrf_inv))
+        return (space * space).field((coeffs[0], coeffs[1]), name="q_h_plus_beta_u_h")
     basis = xp.asarray(space.quad_data.bas_of_quads)
     beta_values = xp.asarray(prepared.beta_values)
     weighted_phi = xp.asarray(space.quad_data.weighted_phi)
@@ -214,6 +244,23 @@ def _postprocess_total_flux(
         local_trace = element_traces_cupy(trace, space, trace_space=trace_ref).reshape(
             space.mesh.num_tri, 3, trace_ref.edg_dof)
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
+    if xp is np and flux_space == "l2_closest":
+        from hybridge.mixed.postprocess import total_flux_numba as kernels
+        beta_volume, beta_face, tau_total = _host_postprocess_samples(
+            beta, prepared, space, post, advection_stabilization)
+        contiguous = lambda array: np.ascontiguousarray(array, dtype=np.float64)
+        base_coeffs, gap = kernels.total_flux_recovery_inputs(
+            contiguous(blocks), contiguous(local_trace), contiguous(base_face), contiguous(trace_basis),
+            contiguous(space.basis_at(qpost.Krf_quads)), contiguous(qpost.Krf_w), beta_volume, beta_face,
+            contiguous(tau_total), contiguous(space.mesh.normals), contiguous(space.quad_data.MKrf_inv),
+            contiguous(cache.base_to_post_mass), contiguous(qpost.MKrf_inv), contiguous(post_face),
+            contiguous(space.mesh.jacs_el_fc), contiguous(qpost.bas1d_of_ref_edg_qds), contiguous(qpost.weights_JGL))
+        coeffs = np.empty((2, space.mesh.num_tri, post.el_dof), dtype=np.float64)
+        solve_flux_min_distance_postprocess_kernel(
+            coeffs, base_coeffs, gap, contiguous(space.mesh.aff_jacs), contiguous(qpost.MKrf_inv),
+            cache.base_to_post_mass, cache.interior_low_to_base, cache.interior_low_to_post,
+            cache.flux_ainv_constraint_t, cache.flux_schur_lu, cache.flux_schur_pivots)
+        return (post * post).field((coeffs[0], coeffs[1]), name="total_flux_h_star")
     u_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 0], base_face, optimize=True)
     qx_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 1], base_face, optimize=True)
     qy_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 2], base_face, optimize=True)
@@ -333,9 +380,9 @@ def _postprocess_primal_from_total_flux(
             beta, prepared, space, post, advection_stabilization, xp=require_cupy())
         return postprocess_primal_cupy(local_unknowns, total_flux_star, space, cache,
                                       samples, diffusion)
-    beta_volume, beta_face, tau_total = _adr_postprocess_samples(
-        beta, prepared, space, post, advection_stabilization
-    )
+    beta_volume, beta_face, tau_total = _host_postprocess_samples(
+        beta, prepared, space, post, advection_stabilization)
+    _HOST_SAMPLES.clear()
     total_coeffs = np.ascontiguousarray(
         np.stack(
             (

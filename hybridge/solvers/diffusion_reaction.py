@@ -75,7 +75,7 @@ from hybridge.hdg.coefficients import _require_same_space_dg_field_for_backend
 AssemblyBackend = Literal["numpy", "numba", "auto"]
 TraceAssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda", "auto"]
 PostprocessingBackend = Literal["auto", "numba", "cupy", "raw-cuda"]
-LocalFactorCachePolicy = Literal["none", "schur-lu", "schur-cholesky"]
+LocalFactorCachePolicy = Literal["none", "schur-lu", "schur-lu+responses", "schur-cholesky"]
 ReturnKey = Literal[
     "result",
     "trace",
@@ -274,8 +274,8 @@ class DiffusionReactionHDGOptions:
 def _normalize_local_factor_cache_policy(value: str) -> LocalFactorCachePolicy:
     """Normalize the optional persistent element-factor cache policy."""
     normalized = str(value).strip().lower().replace("_", "-")
-    if normalized not in {"none", "schur-lu", "schur-cholesky"}:
-        raise ValueError("cache_local_factors must be 'none', 'schur-lu', or 'schur-cholesky'")
+    if normalized not in {"none", "schur-lu", "schur-lu+responses", "schur-cholesky"}:
+        raise ValueError("cache_local_factors must be 'none', 'schur-lu', 'schur-lu+responses', or 'schur-cholesky'")
     return normalized
 
 
@@ -288,6 +288,8 @@ def _validate_local_factor_cache_configuration(options, backend: str, *, statefu
         raise ValueError(f"cache_local_factors='{policy}' requires DiffusionReactionHDGSolver")
     if policy == "schur-lu" and backend not in {"numba", "raw-cuda"}:
         raise ValueError("cache_local_factors='schur-lu' requires assembly_backend='numba' or 'raw-cuda'")
+    if policy == "schur-lu+responses" and backend != "raw-cuda":
+        raise ValueError("cache_local_factors='schur-lu+responses' requires assembly_backend='raw-cuda'")
     if policy == "schur-cholesky" and backend not in {"numba", "cupy", "raw-cuda"}:
         raise ValueError(
             "cache_local_factors='schur-cholesky' requires assembly_backend='numba', 'cupy' or 'raw-cuda'"

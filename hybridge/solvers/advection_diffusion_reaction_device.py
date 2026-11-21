@@ -144,7 +144,8 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
             assembly, config=amgx_config, tolerance=options.solver_rtol, atol=options.solver_atol,
             maxiter=options.maxiter, initial_guess=options.initial_guess, scale_system=options.scale_system,
             reusable_solver=reusable, reuse_primary_preconditioner=reuse_preconditioner,
-            materialize_host_solution=options.materialize_host_solution, verbose=_solver_verbosity(verbosity))
+            materialize_host_solution=options.materialize_host_solution, verbose=_solver_verbosity(verbosity),
+            borrow_csr=bool(getattr(options, "amgx_borrow_csr", False)) and reusable is None)
 
     def solve():
         """Solve, reusing a cached AMGX solver per ``options.amgx_reuse``."""

@@ -165,6 +165,9 @@ class AdvectionDiffusionReactionHDGOptions:
     amgx_reuse: Literal["none", "solver", "preconditioner"] = "none"
     amgx_refresh_interval: int = 20
     amgx_refresh_iteration_growth: float = 2.0
+    # One-shot raw-CUDA CSR solves (``amgx_reuse="none"``): let AMGX borrow the assembled
+    # CSR arrays (attach_CSR) when they are canonical with explicit diagonals, else copy.
+    amgx_borrow_csr: bool = False
     reuse_static_coefficients: bool = True
     numba_reuse_local_columns: bool = False
     pardiso_reuse_analysis: bool = False

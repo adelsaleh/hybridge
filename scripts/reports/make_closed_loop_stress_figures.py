@@ -1,1 +1,0 @@
-../../campaigns/adr_stress/make_closed_loop_stress_figures.py

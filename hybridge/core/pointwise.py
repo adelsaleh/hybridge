@@ -51,6 +51,7 @@ from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.core.element_coefficients import ElementCoefficient
 from hybridge.core.field_ops import field_gradient_at_ref, field_values_at_ref
 
+_LAW_ROW = 64  # points per parallel chunk when a PointwiseLaw is evaluated
 _PROJECT_FIRST = ("Project it onto a DG space first (space.project_callable(...)) and pass the DGField, "
                   "or pass the plain Python callable, which is sampled with NumPy on the host.")
 
@@ -265,21 +266,22 @@ class PointwiseLaw:
             raise TypeError(f"pointwise law {self.name!r} is evaluated by host Numba kernels; the device "
                             "path needs a projected coefficient (space.project_callable(...)).")
         from hybridge.core.pointwise_kernels import (
-                    sample_pointwise_values_kernel,
-                    sample_pointwise_xyt_kernel,
+                    sample_pointwise_flat_params_kernel,
+                    sample_pointwise_flat_xyt_kernel,
                 )
         x, y = np.broadcast_arrays(np.asarray(x, dtype=REAL_DTYPE), np.asarray(y, dtype=REAL_DTYPE))
         shape = x.shape
+        # Flat views run in parallel over chunks of _LAW_ROW points whatever the input shape (1-D face
+        # samples, a few long rows). Uniformly strided inputs (coordinates sliced from mapped points)
+        # flatten without a copy; only broadcast or irregularly strided inputs are copied.
+        x, y = (a.reshape(-1) for a in (x, y))
+        out = np.empty(x.size, dtype=REAL_DTYPE)
         if x.size == 0:
-            return np.empty(shape, dtype=REAL_DTYPE)
-        rows = shape[0] if x.ndim > 1 else 1
-        x, y = np.ascontiguousarray(x).reshape(rows, -1), np.ascontiguousarray(y).reshape(rows, -1)
-        out = np.empty(x.shape, dtype=REAL_DTYPE)
+            return out.reshape(shape)
         if self.arity == 3:
-            sample_pointwise_xyt_kernel(self.function, x, y, self.time, out)
+            sample_pointwise_flat_xyt_kernel(self.function, x, y, self.time, _LAW_ROW, out)
         else:
-            values = np.empty((0,) + x.shape, dtype=REAL_DTYPE)
-            sample_pointwise_values_kernel(self.function, x, y, self.time, values, self.params, out)
+            sample_pointwise_flat_params_kernel(self.function, x, y, self.time, self.params, _LAW_ROW, out)
         return out.reshape(shape)
 
     def at_time(self, t: float) -> "PointwiseLaw":

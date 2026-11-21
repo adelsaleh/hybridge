@@ -199,9 +199,8 @@ _PYAMGX_DTYPE_SUPPORT: dict[str, bool] = {}
 def pyamgx_supports_real_dtype(dtype) -> bool:
     """Whether the loaded PyAMGX binding accepts ``dtype`` arrays in its matching mode.
 
-    The default build of the PyAMGX fork hard-codes float64 arrays, so FP32
-    (``dFFI``) needs the mode-aware binding from
-    ``scripts/dev/build_pyamgx_precision.py``. The probe uploads one tiny
+    The integrated PyAMGX fork supports mode-aware FP32/FP64 uploads; older
+    bindings can still hard-code float64 arrays. The probe uploads one tiny
     vector once per process per dtype, on the shared AMGX resources. Only
     the binding's dtype rejection counts as unsupported; any other failure
     propagates.

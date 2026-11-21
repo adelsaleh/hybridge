@@ -1,1 +1,0 @@
-../../campaigns/adr_solver_reports_20260917/make_adr_synthesis_section.py

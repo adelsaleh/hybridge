@@ -5,8 +5,9 @@ is exact on the discrete quadrature data: small nonzero couplings are retained.
 The resulting contiguous tables are suitable for host or device kernels.
 ``device=True`` samples, validates, classifies and inverts with CuPy (the
 array helpers follow their input's array module), so variable tensors never
-cross the host/device boundary. Host tables are processed in element chunks
-on the ``hybridge.core.host_threads`` pool (same arithmetic as the CuPy path).
+cross the host/device boundary. Host tables are stacked, validated, classified
+and inverted by the element-parallel kernels of ``coefficients_numba`` (same
+arithmetic, bitwise equal to the NumPy expressions kept for CuPy).
 """
 from __future__ import annotations
 
@@ -50,7 +51,13 @@ def sample_diffusion_tensor(diffusion, space, *, on_faces=False, trace_space=Non
     from hybridge.runtime.optional import array_module
     components = _diffusion_components(diffusion, space, on_faces=on_faces, trace_space=trace_space, device=device)
     xp = array_module(*components)
-    if isinstance(components[0], np.ndarray) and components[0].ndim >= 1:
+    if isinstance(components[0], np.ndarray) and components[0].ndim >= 2:
+        from hybridge.mixed import coefficients_numba
+        shape = np.broadcast_shapes(*(c.shape for c in components))
+        flat = [np.ascontiguousarray(np.broadcast_to(c, shape), dtype=np.float64).reshape(shape[0], -1)
+                for c in components]
+        values = coefficients_numba.stack_components(*flat).reshape(shape + (4,))
+    elif isinstance(components[0], np.ndarray) and components[0].ndim >= 1:
         from hybridge.runtime.threads import elementwise
         values = elementwise(lambda *parts: np.stack(parts, axis=-1).astype(np.float64, copy=False), *components)
     else:
@@ -80,13 +87,17 @@ def _worst_status(values, xp) -> int:
     return 0
 
 
+def _element_table(values):
+    """A contiguous ``(K, m, 4)`` float64 view of host samples, for the element-parallel kernels."""
+    return np.ascontiguousarray(values, dtype=np.float64).reshape(values.shape[0], -1, 4)
+
+
 def validate_diffusion_values(values):
     """Reject nonfinite tensors or non-positive symmetric parts (NumPy or CuPy input)."""
     from hybridge.runtime.optional import array_module
     if _on_host_chunks(values):
-        statuses = []
-        _element_blocks(lambda start, stop: statuses.append(_worst_status(values[start:stop], np)), values.shape[0])
-        status = max(statuses, default=0)
+        from hybridge.mixed import coefficients_numba
+        status = int(coefficients_numba.worst_status(_element_table(values)))
     else:
         status = _worst_status(values, array_module(values))
     if status == 2:
@@ -136,16 +147,11 @@ def inverse_diffusion_values(values):
     """Invert validated two-dimensional tensors with scale-aware arithmetic (NumPy or CuPy)."""
     from hybridge.runtime.optional import array_module
     if _on_host_chunks(values):
-        inverse, finite = np.empty(values.shape, dtype=np.float64), []
-
-        def invert(start, stop):
-            """Invert elements ``start:stop`` and record whether the result is finite."""
-            inverse[start:stop] = _inverse(values[start:stop], np)
-            finite.append(bool(np.all(np.isfinite(inverse[start:stop]))))
-        _element_blocks(invert, values.shape[0])
-        if not all(finite):
+        from hybridge.mixed import coefficients_numba
+        inverse, finite = coefficients_numba.inverse_values(_element_table(values))
+        if not finite:
             raise ValueError('inverse diffusion tensor samples must be finite')
-        return inverse
+        return inverse.reshape(values.shape)
     xp = array_module(values)
     inverse = _inverse(values, xp)
     if not bool(xp.all(xp.isfinite(inverse))):
@@ -225,13 +231,8 @@ def diffusion_kinds(values):
     from hybridge.runtime.optional import array_module
     if not _on_host_chunks(values):
         return _diffusion_kinds(values, array_module(values))
-    kinds = np.empty(values.shape[0], dtype=np.int64)
-
-    def classify(start, stop):
-        """Classify the diffusion kind of elements ``start:stop``."""
-        kinds[start:stop] = _diffusion_kinds(values[start:stop], np)
-    _element_blocks(classify, values.shape[0])
-    return kinds
+    from hybridge.mixed import coefficients_numba
+    return coefficients_numba.diffusion_kinds(_element_table(values))
 
 
 def _diffusion_kinds(values, xp):

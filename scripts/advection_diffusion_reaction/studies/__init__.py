@@ -1,1 +1,0 @@
-"""ADR studies utilities."""

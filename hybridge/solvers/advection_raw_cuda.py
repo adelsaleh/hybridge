@@ -76,7 +76,7 @@ def assemble_transport_raw_cuda(
         cuda_beta_coeffs = as_cupy_vector_coefficients(beta_h, cspace)
         cp.cuda.get_current_stream().synchronize()
         detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
-    raw_eliminated = raw_local_assembly in {"fused", "split3"}
+    raw_eliminated = raw_local_assembly in {"fused", "split3", "tensor", "auto"}
     normalized_solver = "" if solver is None else str(solver).lower()
     raw_cuda_device_amgx = (
         normalized_solver in {"amgx", "pyamgx"}
@@ -167,6 +167,9 @@ def assemble_transport_raw_cuda(
         if isinstance(value, (int, float)):
             detail_timings[f"raw.assembly.{key}"] = float(value)
     timings = cuda_assembly.timings
+    if raw_local_assembly == "auto":
+        raw_local_assembly = {0: "fused", 1: "split3", 2: "tensor"}.get(
+            int(timings.get("raw.pipeline.algorithm_id", 0)), "fused")
     if raw_local_assembly == "split3" and verbosity >= 3:
         tune_state = (
             "reused"
@@ -188,6 +191,17 @@ def assemble_transport_raw_cuda(
             "    "
             f"device={_format_seconds(timings.get('raw.tsle.device', 0.0))} | "
             f"workspace={workspace_gib:.3f} GiB | autotune={tune_state}",
+            flush=True,
+        )
+    if raw_local_assembly == "tensor" and verbosity >= 3:
+        print(
+            "  TSLE tensor "
+            f"({'cuTENSOR' if timings.get('raw.tsle_tensor.cutensor') else 'cuBLAS'}"
+            f"+{'MAGMA' if timings.get('raw.tsle_tensor.magma') else 'fused' if timings.get('raw.tsle_tensor.fused') else 'library/coop'} LU): "
+            + " | ".join(f"{stage}={_format_seconds(timings.get(f'raw.tsle_tensor.{stage}', 0.0))}"
+                         for stage in ("prepare", "build", "solve", "condense", "scatter"))
+            + f" | device={_format_seconds(timings.get('raw.tsle_tensor.device', 0.0))}"
+            f" | workspace={timings.get('raw.tsle_tensor.workspace.bytes', 0.0) / 1024.0 ** 3:.3f} GiB",
             flush=True,
         )
     if _detailed_logging(verbosity):

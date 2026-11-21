@@ -114,7 +114,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     cspace = as_cupy_space(owner.space)
     trace_ref = build_trace_reference(cspace, trace_basis)
     local_factor_policy = _normalize_local_factor_cache_policy(options.cache_local_factors)
-    cache_local_factors = local_factor_policy == "schur-lu"
+    cache_local_factors = local_factor_policy in {"schur-lu", "schur-lu+responses"}
     use_hybrid_cholesky = local_factor_policy == "schur-cholesky"
     local_factor_key = (
         id(owner.space),

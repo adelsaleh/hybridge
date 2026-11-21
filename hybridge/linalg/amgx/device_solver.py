@@ -7,6 +7,7 @@ import copy
 import weakref
 import numpy as np
 import time
+import types
 import warnings
 from hybridge.runtime.precision import AMGX_MODE, REAL_DTYPE, audit_arrays
 from typing import Any
@@ -113,8 +114,19 @@ def _validate_amgx_block_configuration(config, block_dim: int) -> None:
     if block_dim <= 1:
         return
 
-    def check(node, path: str) -> None:
-        """Reject ``CHEBYSHEV_POLY`` in a solver, preconditioner or smoother for block matrices."""
+    def scalar_rows_for_blocks(node) -> bool:
+        """The fork's ``jacobi_l1_scalar_rows_for_blocks`` switch, set anywhere in the tree."""
+        if isinstance(node, dict):
+            return bool(node.get("jacobi_l1_scalar_rows_for_blocks")) or any(
+                scalar_rows_for_blocks(value) for value in node.values())
+        return False
+
+    def check(node, path: str, expanded: bool = False) -> None:
+        """Reject scalar-only solvers (``CHEBYSHEV_POLY``, plain ``JACOBI_L1``) for block matrices.
+
+        ``expanded`` marks smoothers of an AMG hierarchy that scalar-expands its levels
+        (``classical_bsr_hierarchy: scalar_expand``): those see scalar rows and JACOBI_L1 is fine.
+        """
         solver_name = node.get("solver") if isinstance(node, dict) else node
         if isinstance(solver_name, str) and solver_name.upper() == "CHEBYSHEV_POLY":
             raise ValueError(
@@ -122,14 +134,127 @@ def _validate_amgx_block_configuration(config, block_dim: int) -> None:
                 f"block size {block_dim}; use CHEBYSHEV with a "
                 "block-compatible preconditioner or scalarize the matrix"
             )
+        if (isinstance(solver_name, str) and solver_name.upper() == "JACOBI_L1"
+                and not expanded and not scalar_rows_for_blocks(config)):
+            raise ValueError(
+                f"AMGX {path} uses JACOBI_L1 with block size {block_dim}; the fork rejects "
+                "block rows unless jacobi_l1_scalar_rows_for_blocks=1 is set (or use "
+                "BLOCK_JACOBI / MULTICOLOR_DILU, or scalarize the matrix)"
+            )
         if isinstance(node, dict):
             # These solvers act on the same matrix. A coarse_solver may act
             # on scalar-expanded levels, so its block size is not known here.
+            expands = str(node.get("classical_bsr_hierarchy", "")).lower() == "scalar_expand"
             for key in ("solver", "preconditioner", "smoother"):
                 if key in node:
-                    check(node[key], f"{path}.{key}")
+                    check(node[key], f"{path}.{key}", expanded or (expands and key == "smoother"))
 
     check(config, "config")
+
+
+def _csr_rows_are_canonical_with_diagonal(cp, indptr, indices, n):
+    """Device check of the fork's borrowed-CSR contract: strictly increasing columns in every
+    row and an explicit diagonal entry in every row. Returns ``(ok, reason)``."""
+    nnz = int(indices.size)
+    if int(indptr.size) != n + 1 or int(indptr[0]) != 0 or int(indptr[-1]) != nnz:
+        return False, "indptr does not describe the matrix"
+    lengths = cp.diff(indptr)
+    if nnz == 0 or bool((lengths < 1).any()):
+        return False, "a row has no entries"
+    if nnz > 1:
+        inner = cp.ones(nnz - 1, dtype=bool)
+        inner[indptr[1:-1] - 1] = False  # the last entry of a row is followed by the next row
+        if not bool((cp.diff(indices)[inner] > 0).all()):
+            return False, "columns are not strictly increasing within rows"
+    rows = cp.repeat(cp.arange(n, dtype=indices.dtype), lengths)
+    if int((indices == rows).sum()) != n:
+        return False, "a row lacks an explicit diagonal entry"
+    return True, None
+
+
+def _attachable_csr_view(cp, sparse, matrix, dtype):
+    """A zero-copy CuPyX CSR view of ``matrix`` that AMGX can borrow, or ``(None, reason)``.
+
+    ``matrix`` exposes ``indptr``, ``indices``, ``data`` (device arrays; ``data`` may be
+    ``(nnz, 1, 1)`` as in the scalar face-BSR operator), ``shape`` and optionally
+    ``block_size``. The fork borrows single-GPU scalar canonical int32 CSR with an explicit
+    diagonal in every row (AMGX/docs/borrowed_csr.md); anything else is uploaded as before.
+    """
+    if int(getattr(matrix, "block_size", 1)) != 1:
+        return None, "block size above one (the fork borrows scalar CSR only)"
+    n = int(matrix.shape[0])
+    if n <= 0 or n >= np.iinfo(np.int32).max or int(matrix.shape[1]) != n:
+        return None, "shape is not a square int32-sized matrix"
+    indptr, indices, data = matrix.indptr, matrix.indices, matrix.data
+    if getattr(data, "ndim", 1) == 3:
+        data = data.reshape(-1)
+    for name, array in (("indptr", indptr), ("indices", indices), ("data", data)):
+        if not isinstance(array, cp.ndarray) or array.ndim != 1 or not array.flags.c_contiguous:
+            return None, f"{name} is not a contiguous one-dimensional device array"
+    if indptr.dtype != cp.int32 or indices.dtype != cp.int32:
+        return None, "indices are not int32"
+    if data.dtype != cp.dtype(dtype):
+        return None, f"values are not {np.dtype(dtype).name}"
+    ok, reason = _csr_rows_are_canonical_with_diagonal(cp, indptr, indices, n)
+    if not ok:
+        return None, reason
+    view = sparse.csr_matrix((data, indices, indptr), shape=(n, n), copy=False)
+    for ours, theirs in ((indptr, view.indptr), (indices, view.indices), (data, view.data)):
+        if int(ours.data.ptr) != int(theirs.data.ptr):
+            return None, "the CSR view copied an array"
+    return view, None
+
+
+def _validate_bsr_values(matrix, block_dim: int) -> None:
+    """Block values must be ``(nnzb, b, b)``: pyamgx takes nnz from ``len(data)``, so a flat
+    value vector would be uploaded as ``nnzb*b*b`` blocks (AMGX 'invalid argument')."""
+    indices, data = getattr(matrix, "indices", None), getattr(matrix, "data", None)
+    if block_dim <= 1 or indices is None or data is None:
+        return
+    expected = (int(indices.size), int(block_dim), int(block_dim))
+    if tuple(data.shape) != expected:
+        raise ValueError(
+            f"BSR values must have shape {expected} (nnzb, block_size, block_size); "
+            f"got {tuple(data.shape)}"
+        )
+
+
+def _attachable_bsr_view(cp, matrix, dtype):
+    """A zero-copy view of a square-block device BSR that the fork can borrow, or ``(None, reason)``.
+
+    ``matrix`` exposes ``indptr``, ``indices`` (block rows), ``data`` ``(nnz, b, b)`` or flat,
+    scalar ``shape`` and ``block_size``. The contract is the CSR one per block row.
+    """
+    b = int(getattr(matrix, "block_size", 1))
+    if b <= 1:
+        return None, "block size one: use the CSR path"
+    n = int(matrix.shape[0]) // b
+    if n <= 0 or n >= np.iinfo(np.int32).max or int(matrix.shape[0]) != n * b or int(matrix.shape[1]) != n * b:
+        return None, "shape is not a square block matrix of int32-sized block dimensions"
+    indptr, indices, data = matrix.indptr, matrix.indices, matrix.data
+    for name, array in (("indptr", indptr), ("indices", indices), ("data", data)):
+        if not isinstance(array, cp.ndarray) or not array.flags.c_contiguous:
+            return None, f"{name} is not a contiguous device array"
+    if indptr.dtype != cp.int32 or indices.dtype != cp.int32:
+        return None, "indices are not int32"
+    if data.dtype != cp.dtype(dtype):
+        return None, f"values are not {np.dtype(dtype).name}"
+    if data.size != int(indices.size) * b * b:
+        return None, "values do not hold nnz blocks of block_size^2"
+    ok, reason = _csr_rows_are_canonical_with_diagonal(cp, indptr, indices, n)
+    if not ok:
+        return None, reason
+    view = types.SimpleNamespace(format="bsr", shape=(n * b, n * b), blocksize=(b, b),
+                                 indptr=indptr, indices=indices, data=data)
+    return view, None
+
+
+def amgx_device_memory_stats() -> dict | None:
+    """AMGX's allocator counters (``pyamgx.get_device_memory_stats``), or ``None`` without them."""
+    get_stats = getattr(require_pyamgx(), "get_device_memory_stats", None)
+    if get_stats is None:
+        return None
+    return {key: int(value) for key, value in get_stats().items()}
 
 
 class PyAMGXCsrDeviceSolver:
@@ -144,14 +269,19 @@ class PyAMGXCsrDeviceSolver:
             verbose: bool | int = 0,
             reusable: bool = False,
             fixed_amg_cycles: int | None = None,
+            borrow_csr: bool = False,
+            residual_history_limit: int | None = 64,
     ):
         """Initialize a solve, or an explicitly fixed number of AMG cycles.
 
         Fixed cycles disable tolerance-based early exit for preconditioner use.
         Ordinary solver calls retain convergence monitoring; history is optional.
+        ``residual_history_limit`` caps the residual history ``solve`` reports when the
+        configuration stores one (``None``: every iteration).
         """
         self.cp = require_cupy()
         self.pyamgx = require_pyamgx()
+        self.residual_history_limit = residual_history_limit
         self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose, fixed_amg_cycles=fixed_amg_cycles)
         self.verbose_level = (
             1
@@ -171,6 +301,12 @@ class PyAMGXCsrDeviceSolver:
         self.is_setup = False
         self.closed = False
         self.reusable = bool(reusable)
+        # ``borrow_csr``: let AMGX alias a qualifying scalar CSR (``attach_CSR``, zero copy)
+        # instead of copying it; ``csr_borrowed``/``borrow_note`` say what the last setup did.
+        self.borrow_csr = bool(borrow_csr)
+        self.csr_borrowed = False
+        self.borrow_note = None
+        self._borrowed = None
         self._shared_resources_acquired = False
         failure_phase = "resource acquisition"
         try:
@@ -213,19 +349,45 @@ class PyAMGXCsrDeviceSolver:
                     f"matrix shape {matrix.shape} is incompatible with block size {block_dim}"
                 )
             _validate_amgx_block_configuration(self.config_dict, block_dim)
+            _validate_bsr_values(matrix, block_dim)
             block_shape = (
                 int(matrix.shape[0] // block_dim),
                 int(matrix.shape[1] // block_dim),
             )
             matrix_upload_start = time.perf_counter()
             audit_arrays('amgx-matrix-upload', matrix)
-            self.mat.upload(
-                matrix.indptr,
-                matrix.indices,
-                matrix.data,
-                block_dims=[block_dim, block_dim],
-                shape=block_shape,
-            )
+            self.csr_borrowed, self.borrow_note = False, None
+            if self._borrowed is not None:
+                # A new matrix on a solver whose previous one is borrowed: AMGX refuses to
+                # detach while a solver retains the matrix, so the solver object is rebuilt.
+                failure_phase = "borrowed matrix release"
+                self._release_borrowed()
+                failure_phase = "matrix upload"
+            if self.borrow_csr:
+                value_dtype = np.float64 if str(AMGX_MODE)[2] == "D" else np.float32
+                if block_dim == 1:
+                    view, reason = _attachable_csr_view(self.cp, require_cupyx_sparse(), matrix, value_dtype)
+                    attach = self.mat.attach_CSR
+                elif hasattr(self.mat, "attach_BSR"):
+                    view, reason = _attachable_bsr_view(self.cp, matrix, value_dtype)
+                    attach = self.mat.attach_BSR
+                else:
+                    view, reason = None, "this pyamgx has no attach_BSR (borrowed BSR needs the extended fork)"
+                if view is not None:
+                    attach(view)
+                    self._borrowed, self.csr_borrowed = view, True
+                    self.borrow_note = (f"AMGX borrows the {'CSR' if block_dim == 1 else 'BSR'} arrays "
+                                        f"(attach_{'CSR' if block_dim == 1 else 'BSR'}, zero copy)")
+                else:
+                    self.borrow_note = f"uploaded: {reason}"
+            if not self.csr_borrowed:
+                self.mat.upload(
+                    matrix.indptr,
+                    matrix.indices,
+                    matrix.data,
+                    block_dims=[block_dim, block_dim],
+                    shape=block_shape,
+                )
             self.cp.cuda.get_current_stream().synchronize()
             self.last_matrix_upload_elapsed_seconds = time.perf_counter() - matrix_upload_start
             failure_phase = "solver setup"
@@ -268,6 +430,25 @@ class PyAMGXCsrDeviceSolver:
             )
         started = time.perf_counter()
         try:
+            if self.csr_borrowed:
+                # Borrowed storage: new values go into the aliased buffer and AMGX repeats
+                # its setup, which refreshes the preconditioner (the fork's contract; the
+                # coefficient-replacement entry point is rejected for attached matrices).
+                values = matrix.data.reshape(-1)
+                if int(values.data.ptr) != int(self._borrowed.data.data.ptr):
+                    # The borrowed BSR view keeps (nnz, b, b) values; write through a flat view.
+                    self._borrowed.data.reshape(-1)[...] = values
+                self.cp.cuda.get_current_stream().synchronize()
+                setup_start = time.perf_counter()
+                self.solver.setup(self.mat)
+                self.cp.cuda.get_current_stream().synchronize()
+                self.last_solver_setup_elapsed_seconds = time.perf_counter() - setup_start
+                self.last_coefficients_replace_elapsed_seconds = time.perf_counter() - started
+                self.last_matrix_upload_elapsed_seconds = self.last_coefficients_replace_elapsed_seconds
+                self.coefficients_replace_count += 1
+                self.setup_count += 1
+                self.borrow_note = "values replaced in the borrowed buffer; AMGX setup repeated"
+                return self.last_coefficients_replace_elapsed_seconds
             self.mat.replace_coefficients(matrix.data)
             self.cp.cuda.get_current_stream().synchronize()
         except Exception as exc:
@@ -343,7 +524,8 @@ class PyAMGXCsrDeviceSolver:
         )
         if store_residual_history and info["amgx_iterations"] is not None:
             history = []
-            first = max(0, info["amgx_iterations"] - 63)
+            limit = self.residual_history_limit
+            first = 0 if limit is None else max(0, info["amgx_iterations"] - (int(limit) - 1))
             for iteration in range(first, info["amgx_iterations"] + 1):
                 try:
                     history.append(float(self.solver.get_residual(iteration)))
@@ -355,15 +537,28 @@ class PyAMGXCsrDeviceSolver:
         info["amgx_solve_elapsed_seconds"] = solve_elapsed
         return x, info
 
+    def _release_borrowed(self) -> None:
+        """Detach the borrowed CSR: destroy the solver that retains it, detach, recreate the solver."""
+        if self._borrowed is None:
+            return
+        destroy_amgx_objects((self.solver,))
+        self.solver = None
+        self.mat.detach()
+        self._borrowed, self.csr_borrowed = None, False
+        self.solver = self.pyamgx.Solver()
+        self.solver.create(self.rsrc, self.cfg, mode=AMGX_MODE)
+
     def close(self, *, suppress_errors: bool = False) -> None:
         """Destroy owned AMGX objects and release the shared resource handle."""
         if self.closed:
             return
         first_error = None
         try:
+            # The solver goes first, so an attached matrix is no longer retained when destroyed.
             destroy_amgx_objects((self.solver, self.vec_x, self.vec_b, self.mat, self.cfg))
         except Exception as exc:
             first_error = exc
+        self._borrowed, self.csr_borrowed = None, False
         if self._shared_resources_acquired:
             try:
                 _AMGX_SHARED_RESOURCES.release()
@@ -417,12 +612,18 @@ def _pyamgx_solve_csr_device(
         tolerance: float = 1e-13,
         maxiter: int | None = None,
         verbose: bool | int = 0,
+        borrow_csr: bool = False,
 ):
     """Solve a device CSR system with PyAMGX without staging through host CSR."""
-    solver = PyAMGXCsrDeviceSolver(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
+    solver = PyAMGXCsrDeviceSolver(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose,
+                                   borrow_csr=borrow_csr)
     try:
         setup_elapsed = solver.setup(matrix)
         x, info = solver.solve(rhs, initial_guess=initial_guess)
+        # Closing releases the borrowed storage and clears the live ownership flag.
+        info["amgx_csr_borrowed"] = solver.csr_borrowed
+        if solver.borrow_note:
+            info["amgx_borrow_note"] = solver.borrow_note
     finally:
         solver.close()
     info["amgx_setup_elapsed_seconds"] = setup_elapsed
@@ -456,6 +657,7 @@ def _solve_reduced_system_amgx_device_once(
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
     scale_system: bool | str = True,
     scalarize_bsr: bool = False,
+    borrow_csr: bool = False,
     replace_reusable_coefficients: bool = False,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
@@ -608,6 +810,7 @@ def _solve_reduced_system_amgx_device_once(
                 tolerance=solve_tolerance,
                 maxiter=maxiter,
                 verbose=verbose,
+                borrow_csr=borrow_csr,
             )
         else:
             setup_elapsed = 0.0
@@ -882,6 +1085,7 @@ def solve_reduced_system_amgx_device(
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
     failure_snapshot=None,
+    borrow_csr: bool = False,
 ):
     """Solve one assembled device system, optionally retrying without reassembly.
 
@@ -907,7 +1111,8 @@ def solve_reduced_system_amgx_device(
         active = retry_solver_cache.get(key)
         if active is None or active.closed:
             active = PyAMGXCsrDeviceSolver(config=solver_config, tolerance=tolerance,
-                                           maxiter=maxiter, verbose=verbose, reusable=True)
+                                           maxiter=maxiter, verbose=verbose, reusable=True,
+                                           borrow_csr=borrow_csr)
             retry_solver_cache[key] = active
         if getattr(active, "_hybridge_fixed_operator", None) is not assembly.data:
             active.is_setup = False
@@ -1006,6 +1211,7 @@ def solve_reduced_system_amgx_device(
             initial_guess=initial_guess,
             reusable_solver=reusable_solver,
             scale_system=scale_system,
+            borrow_csr=borrow_csr,
             replace_reusable_coefficients=bool(
                 reuse_primary_preconditioner and reusable_solver is not None
                 and not reusable_solver.closed and reusable_solver.is_setup),
@@ -1125,6 +1331,7 @@ def solve_reduced_system_amgx_device(
                             maxiter=maxiter,
                             verbose=verbose,
                             reusable=True,
+                            borrow_csr=borrow_csr,
                         )
                         retry_solver_cache[cache_key] = attempt_solver
                     replace_coefficients = bool(attempt_solver.is_setup)
@@ -1150,6 +1357,7 @@ def solve_reduced_system_amgx_device(
                         reusable_solver=attempt_solver,
                         scale_system=attempt["scale_system"],
                         scalarize_bsr=attempt["scalarize_bsr"],
+                        borrow_csr=borrow_csr,
                         replace_reusable_coefficients=replace_coefficients,
                         raise_on_nonconvergence=False,
                         materialize_host_solution=materialize_host_solution,

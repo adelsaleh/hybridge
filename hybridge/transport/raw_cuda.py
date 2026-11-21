@@ -49,7 +49,7 @@ from hybridge.hdg.trace_maps import (
     _interior_side_index,
     _side_flux_offsets,
 )
-from hybridge.hdg.cuda.launch import _compile_kernel, _compile_kernel_timed
+from hybridge.hdg.cuda.launch import _compile_kernel, _compile_kernel_timed, record_kernel_resources
 from hybridge.hdg.cuda.pattern import (
     ReducedTraceCsrPattern,
     _edge_to_solve_edge_device,
@@ -655,6 +655,16 @@ _RAW_FUSED_TEMPLATE = r"""
 #ifndef RAW_POINTWISE_REACTION
 #define RAW_POINTWISE_REACTION 0
 #endif
+// RAW_VOLUME_PRELOADED (TSLE build only, hybridge.transport.tsle_volume_gemm):
+// the dense-tensor volume operator was already written to the global element
+// operator by an element-batched GEMM, so the shared routine starts local_lu
+// at zero (boundary mass only) and the build kernel adds it to that operator.
+#ifndef RAW_VOLUME_PRELOADED
+#define RAW_VOLUME_PRELOADED 0
+#endif
+#if RAW_VOLUME_PRELOADED && RAW_VOLUME_QUADRATURE
+#error "RAW_VOLUME_PRELOADED replaces the dense-tensor volume operator only"
+#endif
 #if (RAW_POINTWISE_BETA || RAW_POINTWISE_REACTION) && !RAW_VOLUME_QUADRATURE
 #error "quadrature-point coefficients need RAW_VOLUME_QUADRATURE"
 #endif
@@ -967,7 +977,12 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         local_rhs[i * NCOLS + source_col] = jac * source_value;
     }
 
-#if !RAW_VOLUME_QUADRATURE
+#if RAW_VOLUME_PRELOADED
+    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+        local_lu[idx] = 0.0;
+    }
+    __syncthreads();
+#elif !RAW_VOLUME_QUADRATURE
     // Volume operator: reaction mass minus beta . grad contribution.  Reaction
     // can be a scalar or a projected element field.  The advection tensor stores
     // int psi_k * phi_j * grad_D(phi_i), shaped D,k,i,j with k < NBETA advection modes.
@@ -2577,6 +2592,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         )
         timings['raw.kernel.prepare'] = compile_start - start
         timings['raw.kernel.jit'] = kernel_jit
+        record_kernel_resources(cupy, kernel, block_size, assembly_shared, timings, 'raw.kernel.resource.')
         stream = cupy.cuda.get_current_stream()
         begin = cupy.cuda.Event()
         end = cupy.cuda.Event()
@@ -2654,6 +2670,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         )
         timings['raw.kernel.prepare'] = compile_start - start
         timings['raw.kernel.jit'] = kernel_jit
+        record_kernel_resources(cupy, kernel, block_size, assembly_shared, timings, 'raw.kernel.resource.')
         stream = cupy.cuda.get_current_stream()
         begin = cupy.cuda.Event()
         end = cupy.cuda.Event()
@@ -3061,12 +3078,13 @@ def resolve_raw_lu_mode(raw_lu_mode: str | None, raw_local_assembly: str) -> str
     """Resolve the default raw-CUDA advection LU policy for one local-assembly path.
 
     ``None`` selects the cooperative LU wherever the kernel offers a choice
-    (``fused``, ``split3``, and ``auto``, which resolves to one of them); the
-    ``precomputed`` path keeps its fixed factorization, reported as ``"safe"``.
-    Explicit values pass through for validation.
+    (``fused``, ``split3``, ``tensor`` whose library LU stands in for it, and
+    ``auto``, which resolves to one of them); the ``precomputed`` path keeps
+    its fixed factorization, reported as ``"safe"``. Explicit values pass
+    through for validation.
     """
     if raw_lu_mode is None:
-        return "coop" if raw_local_assembly in {"fused", "split3", "auto"} else "safe"
+        return "coop" if raw_local_assembly in {"fused", "split3", "tensor", "auto"} else "safe"
     return raw_lu_mode
 
 
