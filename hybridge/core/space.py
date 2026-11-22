@@ -20,7 +20,7 @@ from typing import Any, Callable, Literal, Sequence
 import weakref
 import numpy as np
 from hybridge.core.mesh import DGMesh, as_dg_mesh
-from hybridge.core.quadrature import ReferenceElementData
+from hybridge.core.quadrature import LEGACY_BASIS_TYPES, ReferenceElementData, _normalize_basis_type
 from hybridge.core.simplex.polynomials import _bernstein_edge_basis, _lagrange_basis, _legendre_edge_basis
 from hybridge.core.simplex.reference import _legendre_gauss_lobatto, triangle_edge_points
 
@@ -404,6 +404,12 @@ class DGSpace:
             volume_degree: int | None = None,
     ) -> None:
         """Initialize this object."""
+        if _normalize_basis_type(basis_type) not in LEGACY_BASIS_TYPES:
+            raise ValueError(
+                f"DGSpace supports the bases {', '.join(LEGACY_BASIS_TYPES)}; {basis_type!r} exists only "
+                "for reference-element data (ReferenceElementData) until the transfer and compiled "
+                "kernels support it"
+            )
         self.mesh = as_dg_mesh(mesh)
         self.reference = ReferenceElementData.triangle(
             int(order),
