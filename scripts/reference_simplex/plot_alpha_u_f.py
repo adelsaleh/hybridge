@@ -134,11 +134,15 @@ def solve(problem: Problem, dim: int, order: int, *, basis: str, trace: str, tau
               "trace": trace, "l2_error": error_hdg, "l2_projection_error": error_projection,
               "condition_A": float(np.linalg.cond(a))}
     face_points, face_weights = reference._generic_face_rule
-    squares = 0.0
+    trace_squares = volume_squares = 0.0
     for f in range(reference.num_faces):
         x, uhat_values = trace_values(result, dim, f, face_points)
-        squares += reference.face_measure_ratios[f] * face_weights @ (problem.u(x) - uhat_values) ** 2
-    result["trace_l2_error"] = float(np.sqrt(squares))
+        exact_values = problem.u(x)
+        ratio = reference.face_measure_ratios[f]
+        trace_squares += ratio * face_weights @ (exact_values - uhat_values) ** 2
+        volume_squares += ratio * face_weights @ (exact_values - evaluate(reference, coefficients, x)) ** 2
+    result["trace_l2_error"] = float(np.sqrt(trace_squares))
+    result["face_l2_error"] = float(np.sqrt(volume_squares))
     return result
 
 
@@ -269,24 +273,32 @@ def face_samples(dim: int, subdivisions: int = 24):
     return np.linspace(-1.0, 1.0, 201)[:, None], None
 
 
-def face_errors(problem: Problem, result: dict, dim: int, subdivisions: int = 24):
-    """For every face ``f``: points ``x``, reference-face points ``s`` and ``u(x) - uhat_h(x)``."""
+FACE_FIELDS = {"volume": "u - u_h", "trace": "u - uhat_h"}
+
+
+def face_errors(problem: Problem, result: dict, dim: int, subdivisions: int = 24, kind: str = "trace"):
+    """For every face ``f``: points ``x``, reference-face points ``s`` and an error at ``x``.
+
+    ``kind = "trace"`` gives ``u - uhat_h`` (the trace unknown of face ``f``);
+    ``kind = "volume"`` gives ``u - u_h`` (the element polynomial restricted to the face).
+    """
     samples, _ = face_samples(dim, subdivisions)
     out = []
     for f in range(dim + 1):
         x, uhat_values = trace_values(result, dim, f, samples)
-        out.append((x, samples, problem.u(x) - uhat_values))
+        approximation = uhat_values if kind == "trace" else evaluate(result["reference"], result["coefficients"], x)
+        out.append((x, samples, problem.u(x) - approximation))
     return out
 
 
-def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> None:
-    """Draw ``u - uhat_h`` on the faces: colored face triangles of the tetrahedron, or curves above the triangle edges."""
+def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm, kind: str = "trace") -> None:
+    """Draw an error on the faces (see :func:`face_errors`): colored triangles on the tetrahedron, curves on the triangle."""
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     if dim == 3:
         _, triangles = face_samples(dim)
         polygons, colors = [], []
-        for x, _, values in face_errors(problem, result, dim):
+        for x, _, values in face_errors(problem, result, dim, kind=kind):
             polygons.append(x[triangles])
             colors.append(cmap(norm(values[triangles].mean(axis=1))))
         # One collection, so that its triangles are sorted by depth together; the labels are drawn
@@ -308,7 +320,7 @@ def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> N
         return
     closed = np.vstack((REFERENCE_TRIANGLE, REFERENCE_TRIANGLE[:1]))
     ax.plot(closed[:, 0], closed[:, 1], np.zeros(4), color=rp.OUTLINE, linewidth=0.8)
-    for f, ((x, _, values), name) in enumerate(zip(face_errors(problem, result, dim), face_names(2))):
+    for f, ((x, _, values), name) in enumerate(zip(face_errors(problem, result, dim, kind=kind), face_names(2))):
         ax.plot(x[:, 0], x[:, 1], values, color=rp.CATEGORICAL[f], linewidth=2.0)
         middle = len(values) // 2
         ax.text(x[middle, 0], x[middle, 1], values[middle], " " + name, fontsize=8, color="black")
@@ -317,14 +329,14 @@ def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> N
     ax.tick_params(labelsize=6, pad=-2)
 
 
-def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> None:
-    """Draw ``u - uhat_h`` on all faces at once: the unfolded tetrahedron, or one curve per triangle edge."""
+def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm, kind: str = "trace") -> None:
+    """Draw an error (see :func:`face_errors`) on all faces at once: the unfolded tetrahedron, or one curve per edge."""
     if dim == 3:
         face_vertices = reference_simplex(3).face_vertices
         _, net = rp.tetrahedron_net(face_vertices)
         _, triangles = face_samples(dim)
         triangle = reference_simplex(2)
-        for f, (_, s, values) in enumerate(face_errors(problem, result, dim)):
+        for f, (_, s, values) in enumerate(face_errors(problem, result, dim, kind=kind)):
             xy = triangle.barycentric(s) @ net[f]
             ax.tripcolor(xy[:, 0], xy[:, 1], triangles, facecolors=values[triangles].mean(axis=1), cmap=cmap,
                          norm=norm, shading="flat")
@@ -337,14 +349,15 @@ def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm) ->
                     bbox={"boxstyle": "round,pad=0.15", "facecolor": "white", "edgecolor": "none", "alpha": 0.75})
         ax.set_aspect("equal")
         ax.set_axis_off()
-        ax.set_title("u - uhat_h on the unfolded faces")
+        ax.set_title(f"{FACE_FIELDS[kind]} on the unfolded faces")
         return
     edges = face_names(2)
-    errors = face_errors(problem, result, dim)
+    errors = face_errors(problem, result, dim, kind=kind)
     rp.plot_series(ax, {name: s[:, 0] for name, (_, s, _) in zip(edges, errors)},
                    {name: values for name, (_, _, values) in zip(edges, errors)}, logy=False,
-                   xlabel="edge parameter t (from first to second vertex)", ylabel="u - uhat_h",
-                   title="u - uhat_h on the faces (edges)")
+                   xlabel="edge parameter t (from first to second vertex)", ylabel=FACE_FIELDS[kind],
+                   title=f"{FACE_FIELDS[kind]} on the faces (edges)")
+    ax.set_ylim(norm.vmin, norm.vmax)
     for line in ax.lines:
         line.set_marker("")
     ax.axhline(0.0, color=rp.TEXT_SECONDARY, linewidth=0.6)
@@ -352,13 +365,14 @@ def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm) ->
 
 
 def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heights, *, slider: bool):
-    """Lay out the four 3D views, the segment, the flat faces and the errors on ``figure``; return ``draw(index)``.
+    """Lay out the five 3D views, the segment, the flat faces and the errors on ``figure``; return ``draw(index)``.
 
     Top row: ``u``, ``u_h``, ``u - u_h`` (cross-sections of the tetrahedron or
-    surfaces over the triangle) and ``u - uhat_h`` on the faces. Bottom row:
-    ``u`` and ``u_h`` along the segment through the centroid, ``u - uhat_h`` on
-    all faces at once, and the errors against ``p``. With ``slider`` a thin third
-    row is left for the degree slider; the function returns ``(draw, slider_ax)``.
+    surfaces over the triangle), ``u - u_h`` on the faces (same color scale as the
+    cross-sections), and ``u - uhat_h`` on the faces (its own color scale). Bottom
+    row: ``u`` and ``u_h`` along the segment through the centroid, the two face
+    errors on all faces at once, and the errors against ``p``. With ``slider`` a thin third row is left for the degree
+    slider; the function returns ``(draw, slider_ax)``.
     """
     from matplotlib.cm import ScalarMappable
 
@@ -368,24 +382,27 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
         probe = triangle_lattice(REFERENCE_TRIANGLE, 40)[0]
     cmap, norm = color_scale(problem.u(probe), signed=False)
     rows = (1.0, 0.8, 0.06) if slider else (1.0, 0.8)
-    grid = figure.add_gridspec(len(rows), 4, height_ratios=rows)
-    views = [figure.add_subplot(grid[0, k], projection="3d") for k in range(4)]
+    grid = figure.add_gridspec(len(rows), 5, height_ratios=rows)
+    views = [figure.add_subplot(grid[0, k], projection="3d") for k in range(5)]
     if hasattr(views[0], "shareview"):
         for ax in views[1:]:
             ax.shareview(views[0])
     figure.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=views[:2], shrink=0.6, label="u, u_h")
-    error_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()), ax=views[2], shrink=0.6,
-                                label="u - u_h")
     segment_ax = figure.add_subplot(grid[1, 0:2])
-    flat_ax = figure.add_subplot(grid[1, 2])
-    errors_ax = figure.add_subplot(grid[1, 3])
+    flat_axes = {"volume": figure.add_subplot(grid[1, 2]), "trace": figure.add_subplot(grid[1, 3])}
+    errors_ax = figure.add_subplot(grid[1, 4])
+    error_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()),
+                                ax=views[2:4] + ([flat_axes["volume"]] if dim == 3 else []), shrink=0.6,
+                                label="u - u_h (inside and on the faces)")
     trace_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()),
-                                ax=[views[3], flat_ax] if dim == 3 else views[3], shrink=0.6, label="u - uhat_h")
+                                ax=[views[4]] + ([flat_axes["trace"]] if dim == 3 else []), shrink=0.6,
+                                label="u - uhat_h")
     s, segment = segment_points(dim)
     rp.plot_series(errors_ax, list(degrees), {
         "||u - u_h|| (HDG)": [results[p]["l2_error"] for p in degrees],
         "||u - Pi_p u|| (best)": [results[p]["l2_projection_error"] for p in degrees],
         "max |u - u_h|": [results[p]["max_error"] for p in degrees],
+        "||u - u_h|| on the faces": [results[p]["face_l2_error"] for p in degrees],
         "||u - uhat_h|| on the faces": [results[p]["trace_l2_error"] for p in degrees],
     }, xlabel="degree p", ylabel="error", title="Errors against the degree")
     marker = errors_ax.axvline(degrees[0], color=rp.TEXT_SECONDARY, linewidth=1.0, linestyle="--")
@@ -404,9 +421,11 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
         p = degrees[index]
         result = results[p]
         u, u_h, error = fields_for_degree(problem, result)
-        error_cmap, error_norm = color_scale(error(probe), signed=True)
-        trace_cmap, trace_norm = color_scale(np.concatenate([v for _, _, v in face_errors(problem, result, dim, 8)]),
-                                             signed=True)
+        on_faces = {kind: np.concatenate([v for _, _, v in face_errors(problem, result, dim, 8, kind=kind)])
+                    for kind in FACE_FIELDS}
+        error_cmap, error_norm = color_scale(np.concatenate([error(probe), on_faces["volume"]]), signed=True)
+        trace_cmap, trace_norm = color_scale(on_faces["trace"], signed=True)
+        scales = {"volume": (error_cmap, error_norm), "trace": (trace_cmap, trace_norm)}
         for bar, scale in ((error_bar, error_norm), (trace_bar, trace_norm)):
             bar.mappable.set_norm(scale)
             bar.update_normal(bar.mappable)
@@ -424,18 +443,19 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
                 draw_triangle_surface(ax, field, *scale)
             ax.view_init(elev=elev, azim=azim)
             ax.set_title(title)
-        elev, azim = views[3].elev, views[3].azim
-        views[3].cla()
-        draw_faces_3d(views[3], problem, result, dim, trace_cmap, trace_norm)
-        views[3].view_init(elev=elev, azim=azim)
-        views[3].set_title(f"u - uhat_h on the faces, p = {p}")
-        flat_ax.cla()
-        draw_faces_flat(flat_ax, problem, result, dim, trace_cmap, trace_norm)
+        for ax, kind in zip(views[3:], FACE_FIELDS):
+            elev, azim = ax.elev, ax.azim
+            ax.cla()
+            draw_faces_3d(ax, problem, result, dim, *scales[kind], kind=kind)
+            ax.view_init(elev=elev, azim=azim)
+            ax.set_title(f"{FACE_FIELDS[kind]} on the faces, p = {p}")
+            flat_axes[kind].cla()
+            draw_faces_flat(flat_axes[kind], problem, result, dim, *scales[kind], kind=kind)
         segment_ax.lines[1].set_ydata(u_h(segment))
         segment_ax.relim()
         segment_ax.autoscale_view()
-        segment_ax.set_title(f"p = {p}: L2 error {result['l2_error']:.2e} (best {result['l2_projection_error']:.2e}), "
-                             f"max {result['max_error']:.2e}; faces {result['trace_l2_error']:.2e}")
+        segment_ax.set_title(f"u and u_h, p = {p}: ||u - u_h|| = {result['l2_error']:.2e} "
+                             f"(best {result['l2_projection_error']:.2e})")
         marker.set_xdata([p, p])
 
     name = "tetrahedron" if dim == 3 else "triangle"
@@ -454,6 +474,7 @@ def summary_page(problem: Problem, dim: int, degrees, results):
         "||u - u_h|| (HDG)": [results[p]["l2_error"] for p in degrees],
         "||u - Pi_p u|| (best)": [results[p]["l2_projection_error"] for p in degrees],
         "max |u - u_h|": [results[p]["max_error"] for p in degrees],
+        "||u - u_h|| on the faces": [results[p]["face_l2_error"] for p in degrees],
         "||u - uhat_h|| on the faces": [results[p]["trace_l2_error"] for p in degrees],
     }, xlabel="degree p of u_h", ylabel="error", title="Errors against the degree")
     shown = list(degrees) if len(degrees) <= 7 else [degrees[int(round(k))] for k in np.linspace(0, len(degrees) - 1, 7)]
@@ -480,7 +501,7 @@ def write_files(problem: Problem, dim: int, degrees, results: dict, args) -> Non
     out.mkdir(parents=True, exist_ok=True)
     with publication_style(), PdfPages(out / "alpha_u_f.pdf", metadata={"Creator": "HYBRIDGE"}) as pdf:
         for index, p in enumerate(degrees):
-            figure = rp.new_figure(18.0, 9.0)
+            figure = rp.new_figure(22.0, 9.0)
             build_view(figure, problem, dim, degrees, results, args.heights, slider=False)(index)
             pdf.savefig(figure)
             figure.savefig(out / f"degree-{p:02d}.png", dpi=120)
@@ -515,7 +536,7 @@ def show_matplotlib(problem: Problem, dim: int, degrees, results: dict, heights)
     import matplotlib.pyplot as plt
     from matplotlib.widgets import Slider
 
-    figure = plt.figure(figsize=(18.0, 9.5), layout="constrained")
+    figure = plt.figure(figsize=(22.0, 9.5), layout="constrained")
     figure.canvas.manager.set_window_title(f"alpha u = f: {problem.path.name}")
     draw, slider_ax = build_view(figure, problem, dim, degrees, results, heights, slider=True)
     slider = Slider(slider_ax, "degree", 0, len(degrees) - 1, valinit=0, valstep=1)
@@ -569,7 +590,7 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
     else:
         lines = np.hstack([np.concatenate(([count], np.arange(count) + f * count)) for f in range(3)])
         face_mesh = pv.PolyData(np.vstack(face_blocks), lines=lines)
-    plotter = pv.Plotter(shape=(1, 4), window_size=(2100, 650), title=f"alpha u = f: {problem.path.name}")
+    plotter = pv.Plotter(shape=(1, 5), window_size=(2600, 650), title=f"alpha u = f: {problem.path.name}")
     plotter.set_background("white")
     cmap = rp.sequential_colormap() if exact.min() >= 0.0 else rp.diverging_colormap()
     u_limits = (float(exact.min()), float(exact.max())) if exact.min() >= 0.0 else (-bound, bound)
@@ -603,31 +624,35 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
         _, u_h, error = fields_for_degree(problem, results[p])
         values = u_h(coordinates)
         errors = exact - values
-        error_bound = max(float(np.abs(errors).max()), 1e-300)
+        face_values = {kind: np.concatenate([v for _, _, v in face_errors(problem, results[p], dim, 24, kind=kind)])
+                       for kind in FACE_FIELDS}
+        error_bound = max(float(np.abs(errors).max()), float(np.abs(face_values["volume"]).max()), 1e-300)
         show_field(1, "u_h", values, cmap, u_limits, f"HDG u_h, p = {p}: L2 error {results[p]['l2_error']:.2e}")
         show_field(2, "u - u_h", errors, rp.diverging_colormap(), (-error_bound, error_bound),
                    f"error u - u_h, p = {p} (max {results[p]['max_error']:.2e})")
-        trace_errors = np.concatenate([values for _, _, values in face_errors(problem, results[p], dim, 24)])
-        trace_bound = max(float(np.abs(trace_errors).max()), 1e-300)
-        plotter.subplot(0, 3)
-        shown = face_mesh.copy()
-        shown.point_data["u - uhat_h"] = trace_errors
-        plotter.add_mesh(shown, scalars="u - uhat_h", cmap=rp.diverging_colormap(), clim=(-trace_bound, trace_bound),
-                         name="faces", lighting=False, line_width=6, render_lines_as_tubes=dim == 2,
-                         scalar_bar_args={"title": "u - uhat_h", "color": "black", "vertical": True, "fmt": "%.3g",
-                                          "position_x": 0.86, "width": 0.07, "label_font_size": 12})
-        if dim == 3:
-            plotter.add_mesh(edges, color="#52514e", line_width=2, name="edges3")
-            plotter.add_point_labels(edges.points, ["A", "B", "C", "D"], font_size=12, text_color="black",
-                                     shape=None, show_points=False, name="labels3")
-        positions = face_label_positions(dim, 0.12)
-        if dim == 2:
-            positions = np.column_stack((positions, np.zeros(len(positions))))
-        plotter.add_point_labels(positions, face_names(dim), font_size=13, text_color="black", shape="rounded_rect",
-                                 shape_color="white", shape_opacity=0.7, show_points=False, name="faces3",
-                                 always_visible=True)
-        plotter.add_text(f"u - uhat_h on the faces, p = {p} (L2 {results[p]['trace_l2_error']:.2e})",
-                         font_size=10, color="black", name="title3")
+        bounds = {"volume": error_bound, "trace": max(float(np.abs(face_values["trace"]).max()), 1e-300)}
+        norms = {"volume": results[p]["face_l2_error"], "trace": results[p]["trace_l2_error"]}
+        for column, kind in zip((3, 4), FACE_FIELDS):
+            name = FACE_FIELDS[kind]
+            plotter.subplot(0, column)
+            shown = face_mesh.copy()
+            shown.point_data[name] = face_values[kind]
+            plotter.add_mesh(shown, scalars=name, cmap=rp.diverging_colormap(), clim=(-bounds[kind], bounds[kind]),
+                             name=f"faces{column}", lighting=False, line_width=6, render_lines_as_tubes=dim == 2,
+                             scalar_bar_args={"title": name + " ", "color": "black", "vertical": True,
+                                              "fmt": "%.3g", "position_x": 0.86, "width": 0.07, "label_font_size": 12})
+            if dim == 3:
+                plotter.add_mesh(edges, color="#52514e", line_width=2, name=f"edges{column}")
+                plotter.add_point_labels(edges.points, ["A", "B", "C", "D"], font_size=12, text_color="black",
+                                         shape=None, show_points=False, name=f"labels{column}")
+            positions = face_label_positions(dim, 0.12)
+            if dim == 2:
+                positions = np.column_stack((positions, np.zeros(len(positions))))
+            plotter.add_point_labels(positions, face_names(dim), font_size=13, text_color="black",
+                                     shape="rounded_rect", shape_color="white", shape_opacity=0.7, show_points=False,
+                                     name=f"facelabels{column}", always_visible=True)
+            plotter.add_text(f"{name} on the faces, p = {p} (L2 {norms[kind]:.2e})", font_size=10, color="black",
+                             name=f"title{column}")
         plotter.render()
 
     show_field(0, "u", exact, cmap, u_limits, "exact u = f / alpha")
