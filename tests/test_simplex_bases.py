@@ -337,13 +337,13 @@ def test_triangle_and_interval_bases_are_the_legacy_bases():
         np.testing.assert_array_equal(P.modal_basis("dub_orth", 1, order, x), P._legendre_edge_basis(order, x).T)
         np.testing.assert_array_equal(P.modal_basis("bernstein", 1, order, x), P._bernstein_edge_basis(order, x).T)
         index = P._orthogonal_index_array(2, order)
-        values, _ = P._orthogonal_kernel(points2, order, index, P.modal_dimension(2, order), False)
+        values, _ = P._orthogonal_kernel(points2, order, index, np.ones(P.modal_dimension(2, order)), False)
         np.testing.assert_allclose(values, legacy.evaluate_dubiner_basis(order, points2), rtol=1e-12, atol=1e-12)
         exponents, coefficients = P._bernstein_arrays(2, order)
         values, _ = P._bernstein_kernel(points2, order, exponents, coefficients, False)
         np.testing.assert_allclose(values, legacy.evaluate_bernstein_basis(order, points2), rtol=1e-13, atol=1e-15)
         index = P._orthogonal_index_array(1, order)
-        values, _ = P._orthogonal_kernel(x[:, None], order, index, order + 1, False)
+        values, _ = P._orthogonal_kernel(x[:, None], order, index, np.ones(order + 1), False)
         np.testing.assert_allclose(values, P._legendre_edge_basis(order, x).T, rtol=1e-13, atol=1e-13)
         exponents, coefficients = P._bernstein_arrays(1, order)
         values, _ = P._bernstein_kernel(x[:, None], order, exponents, coefficients, False)
@@ -621,7 +621,7 @@ def test_triangle_dubiner_vertex_gradients_equal_barycentric_kernel():
     vertices = np.asarray(reference_simplex(2).vertices)
     for order in range(1, 9):
         index = P._orthogonal_index_array(2, order)
-        _, barycentric = P._orthogonal_kernel(vertices, order, index, P.modal_dimension(2, order), True)
+        _, barycentric = P._orthogonal_kernel(vertices, order, index, np.ones(P.modal_dimension(2, order)), True)
         np.testing.assert_allclose(
             legacy.evaluate_dubiner_gradients(order, vertices), barycentric, rtol=1e-13, atol=1e-12
         )

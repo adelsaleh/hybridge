@@ -169,11 +169,13 @@ def test_tetrahedron_constructor(order, basis):
     assert reference.edg_dof == reference.face_dof == (order + 1) * (order + 2) // 2
     assert reference.num_faces == 4 and reference.num_face_orientations == 6
     assert reference.phi.shape == (reference.Krf_w.size, n_u)
-    assert reference.gphi.shape == (reference.Krf_w.size, n_u, 3)
-    assert reference.dbas_of_quads.shape == (3, n_u, reference.Krf_w.size)
-    assert _close(reference.MKrf, reference.exact_mass, rtol=1e-12)
+    assert reference.gradients_at(reference.Krf_quads).shape == (reference.Krf_w.size, n_u, 3)
+    finer = ReferenceElementData.tetrahedron(order, basis_type=basis, volume_degree=2 * order + 3)
+    assert _close(reference.MKrf, finer.MKrf, rtol=1e-12)  # two different rules, both exact for degree 2p
+    assert _close(reference.exact_mass, finer.exact_mass, rtol=1e-12)
     assert abs(reference.Krf_w.sum() - 4.0 / 3.0) < 1e-13
-    for name in ("quads_JGL", "MKrfe_lst", "M_rf_fc", "weighted_triple_phi_flat", "face_element_test_trace_trial"):
+    for name in ("quads_JGL", "MKrfe_lst", "M_rf_fc", "weighted_triple_phi_flat", "face_element_test_trace_trial",
+                 "gphi", "dbas_of_quads", "bas_of_quads", "weighted_phi"):
         assert getattr(reference, name) is None
     for item in dataclasses.fields(reference):
         value = getattr(reference, item.name)

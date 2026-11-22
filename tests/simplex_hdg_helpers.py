@@ -17,8 +17,11 @@ from itertools import product
 
 import numpy as np
 
-from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis, _evaluate_simplex_basis
+from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis, _evaluate_simplex_basis, weighted_gram
 from hybridge.core.simplex.reference import face_permutations, permute_face_points
+
+# Basis values evaluated at once by basis_blocks: about 256 MB of float64.
+_BLOCK_VALUES = 1 << 25
 
 
 def monomial_exponents(dim: int, degree: int) -> list[tuple[int, ...]]:
@@ -50,28 +53,50 @@ def random_interior_points(dim: int, count: int, seed: int) -> np.ndarray:
     return -1.0 + 2.0 * bary[:, 1:]
 
 
-def volume_load(reference: ReferenceElementData, source, rule=None) -> np.ndarray:
-    """Return ``F_i = int_K^ f phi_i`` on the reference element for a callable ``f(points) -> (n,)``.
+def basis_blocks(reference: ReferenceElementData, rule=None):
+    """Yield ``(points, weights, values)`` for consecutive blocks of the points of ``rule``.
 
-    ``rule`` is ``(points, weights)``; the default is the rule of ``reference``
-    exact for degree ``2p``, so pass a finer rule when ``f`` is not a polynomial.
+    ``rule`` is ``(points (nq, dim), weights (nq,))``; the default is the rule of
+    ``reference`` exact for degree ``2p``. ``values`` ``(m, n_u)`` are the volume
+    basis values at the ``m`` points of the block, in ``float64``; a block holds
+    about 256 MB of values, so a fine rule at a high degree is never tabulated whole.
     """
     points, weights = reference._generic_volume_rule if rule is None else rule
-    basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, points), dtype=np.float64)
-    return basis.T @ (weights * np.asarray(source(points), dtype=np.float64))
+    block = max(1, _BLOCK_VALUES // reference.el_dof)
+    for start in range(0, len(weights), block):
+        chunk = points[start:start + block]
+        values = np.asarray(_evaluate_basis(reference.basis_type, reference.order, chunk), dtype=np.float64)
+        yield chunk, weights[start:start + block], values
+
+
+def volume_load(reference: ReferenceElementData, source, rule=None) -> np.ndarray:
+    """Return ``F_i = int_K^ f phi_i`` on the reference element for a callable ``f(points)``.
+
+    ``f`` returns shape ``(n,)``, giving ``F`` of shape ``(n_u,)``, or ``(n, m)`` for
+    ``m`` right-hand sides at once, giving ``(n_u, m)``. ``rule`` is
+    ``(points, weights)``; the default is the rule of ``reference`` exact for
+    degree ``2p``, so pass a finer rule when ``f`` is not a polynomial.
+    """
+    load = 0.0
+    for points, weights, values in basis_blocks(reference, rule):
+        samples = np.asarray(source(points), dtype=np.float64)
+        load = load + values.T @ (weights.reshape((-1,) + (1,) * (samples.ndim - 1)) * samples)
+    return load
 
 
 def weighted_mass(reference: ReferenceElementData, weight, rule=None) -> np.ndarray:
     """Return ``int_K^ w phi_i phi_j`` for a constant or a callable ``w(points) -> (n,)``, shape ``(n_u, n_u)``.
 
     ``rule`` is ``(points, weights)``; the default is the rule of ``reference``
-    exact for degree ``2p`` (exact for a constant ``w``).
+    exact for degree ``2p`` (exact for a constant ``w``). Computed block by block
+    with :func:`hybridge.core.quadrature.weighted_gram`.
     """
-    points, weights = reference._generic_volume_rule if rule is None else rule
-    basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, points), dtype=np.float64)
-    values = weight(points) if callable(weight) else weight
-    values = np.broadcast_to(np.asarray(values, dtype=np.float64), weights.shape)
-    return basis.T @ ((weights * values)[:, None] * basis)
+    mass = np.zeros((reference.el_dof, reference.el_dof))
+    for points, weights, values in basis_blocks(reference, rule):
+        samples = weight(points) if callable(weight) else weight
+        samples = np.broadcast_to(np.asarray(samples, dtype=np.float64), weights.shape)
+        mass += weighted_gram(values, weights * samples)
+    return mass
 
 
 def trace_coefficients(reference: ReferenceElementData, trace_basis: str, function, orientations=None) -> np.ndarray:
@@ -130,13 +155,15 @@ def reaction_blocks(
     num_faces = reference.num_faces
     ratios = reference.face_measure_ratios if face_ratios is None else np.asarray(face_ratios)
     orientations = [0] * num_faces if orientations is None else list(orientations)
-    mass = reference.exact_mass.astype(np.float64)
     face_mass = reference.face_mass.astype(np.float64)
     coupling = tables.element_trace_coupling.astype(np.float64)
     lift = tables.trace_element_coupling.astype(np.float64)
     trace_mass = tables.trace_mass.astype(np.float64)
     n_t = trace_mass.shape[0]
-    volume = alpha * jacobian * mass if alpha_mass is None else np.asarray(alpha_mass, dtype=np.float64)
+    if alpha_mass is None:
+        volume = alpha * jacobian * reference.exact_mass.astype(np.float64)
+    else:
+        volume = np.asarray(alpha_mass, dtype=np.float64)
     a = volume + tau * np.einsum("f,fij->ij", ratios, face_mass)
     b = np.concatenate([tau * ratios[f] * coupling[orientations[f], f] for f in range(num_faces)], axis=1)
     c = np.concatenate([tau * ratios[f] * lift[orientations[f] * num_faces + f] for f in range(num_faces)], axis=0)

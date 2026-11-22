@@ -100,7 +100,7 @@ import numpy as np
 import scipy.linalg
 import scipy.optimize
 
-from hybridge.core.simplex.polynomials import _as_points, modal_basis, modal_gradients
+from hybridge.core.simplex.polynomials import _as_points, modal_basis, modal_gradients, modal_dimension, use_parallel_kernel
 from hybridge.core.simplex.reference import _legendre_gauss_lobatto, point_permutation, reference_simplex
 
 NODE_FAMILIES = ("equispaced", "warp_blend", "recursive", "fekete", "fekete_free")
@@ -528,9 +528,12 @@ def _orthonormal_values(dim: int, order: int, points: np.ndarray, parallel: bool
     return np.asarray(modal_basis("orthonormal", dim, order, points, parallel=parallel), dtype=np.float64)
 
 
-def _orthonormal_gradients(dim: int, order: int, points: np.ndarray) -> np.ndarray:
-    """Reference gradients of the orthonormal modal basis at ``points`` ``(n, dim)``; ``float64``, ``(n, n_u, dim)``."""
-    return np.asarray(modal_gradients("orthonormal", dim, order, points), dtype=np.float64)
+def _orthonormal_gradients(dim: int, order: int, points: np.ndarray, parallel: bool = False) -> np.ndarray:
+    """Reference gradients of the orthonormal modal basis at ``points`` ``(n, dim)``; ``float64``, ``(n, n_u, dim)``.
+
+    ``parallel=True`` evaluates the points in parallel (Numba threads).
+    """
+    return np.asarray(modal_gradients("orthonormal", dim, order, points, parallel=parallel), dtype=np.float64)
 
 
 @lru_cache(maxsize=None)
@@ -566,7 +569,7 @@ def lagrange_basis(family, dim, order, points) -> np.ndarray:
     """
     family, d, p = _check_arguments(family, dim, order)
     x = _as_points(points, d)
-    values = _orthonormal_values(d, p, x)
+    values = _orthonormal_values(d, p, x, parallel=use_parallel_kernel(x.shape[0], modal_dimension(d, p)))
     solved = scipy.linalg.lu_solve(_cached_vandermonde_lu(family, d, p), values.T, trans=1, check_finite=False)
     return np.ascontiguousarray(solved.T)
 
@@ -581,7 +584,7 @@ def lagrange_gradients(family, dim, order, points) -> np.ndarray:
     """
     family, d, p = _check_arguments(family, dim, order)
     x = _as_points(points, d)
-    gradients = _orthonormal_gradients(d, p, x)
+    gradients = _orthonormal_gradients(d, p, x, parallel=use_parallel_kernel(x.shape[0], modal_dimension(d, p)))
     n, n_u, _ = gradients.shape
     rhs = gradients.transpose(1, 0, 2).reshape(n_u, n * d)
     solved = scipy.linalg.lu_solve(_cached_vandermonde_lu(family, d, p), rhs, trans=1, check_finite=False)

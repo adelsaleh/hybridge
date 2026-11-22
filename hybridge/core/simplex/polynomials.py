@@ -252,8 +252,36 @@ def scaled_jacobi(order: int, alpha: float, beta: float, x, t, *, parallel: bool
 
 
 @nb.njit(cache=True, fastmath=True)
-def _orthogonal_kernel(points, order, mode_index, num_modes, want_gradients):
-    r"""Tabulate the orthogonal basis ``dub_orth`` (not scaled) and, if ``want_gradients``, its reference gradients.
+def _scaled_jacobi_values(order, alpha, beta, x, t, values):
+    r"""Write :math:`Q_k = t^k P_k^{(\alpha,\beta)}(x/t)` for ``k = 0..order`` into ``values[:order + 1]``.
+
+    The values of :func:`_scaled_jacobi_fill` with the same arithmetic, without the
+    two derivative recurrences; used when no gradient is requested.
+    """
+    values[0] = 1.0
+    if order < 1:
+        return
+    values[1] = 0.5 * ((alpha + beta + 2.0) * x + (alpha - beta) * t)
+    tt = t * t
+    for n in range(2, order + 1):
+        nf = float(n)
+        c = 2.0 * nf + alpha + beta
+        inverse = 1.0 / (2.0 * nf * (nf + alpha + beta) * (c - 2.0))
+        a_x = (c - 1.0) * c * (c - 2.0)
+        a_t = (c - 1.0) * (alpha * alpha - beta * beta)
+        a_2 = 2.0 * (nf + alpha - 1.0) * (nf + beta - 1.0) * c
+        values[n] = ((a_x * x + a_t * t) * values[n - 1] - a_2 * tt * values[n - 2]) * inverse
+
+
+# The kernels below loop over blocks of _POINTS_PER_TASK consecutive points (the
+# parallel loop runs over blocks) and allocate their work arrays once per block:
+# allocating them once per point made the parallel kernels allocation-bound.
+_POINTS_PER_TASK = 64
+
+
+@nb.njit(cache=True, fastmath=True)
+def _orthogonal_kernel(points, order, mode_index, scale, want_gradients):
+    r"""Tabulate the orthogonal basis ``dub_orth`` times ``scale`` and, if ``want_gradients``, its reference gradients.
 
     ``points`` has shape ``(num_points, d)``, ``d = 1, 2, 3``. Mode
     :math:`(n_1, \ldots, n_d)` is
@@ -268,34 +296,33 @@ def _orthogonal_kernel(points, order, mode_index, num_modes, want_gradients):
     K&S product
     :math:`\prod_k P_{n_k}^{(\beta_k,0)}(\eta_k)((1-\eta_k)/2)^{n_1+\cdots+n_{k-1}}`.
     Its column is ``mode_index[n_1, n_2, n_3]`` (missing indices are 0), an int64
-    array of shape ``(order + 1,) * 3``. For each point the polynomials of level 1
-    are computed once, those of level 2 once per :math:`n_1`, and those of level 3
-    once per :math:`(n_1, n_2)`. Returns ``values`` ``(num_points, num_modes)`` and
-    ``gradients`` ``(num_points, num_modes, d)`` (shape ``(0, num_modes, d)`` when
-    ``want_gradients`` is false).
+    array of shape ``(order + 1,) * 3``, and column ``m`` is multiplied by
+    ``scale[m]`` (``scale`` has shape ``(num_modes,)``: ones for ``dub_orth``,
+    :func:`orthonormal_scale` for ``orthonormal``). For each point the polynomials
+    of level 1 are computed once, those of level 2 once per :math:`n_1`, and those
+    of level 3 once per :math:`(n_1, n_2)`. Returns ``values``
+    ``(num_points, num_modes)`` and ``gradients`` ``(num_points, num_modes, d)``
+    (shape ``(0, num_modes, d)`` when ``want_gradients`` is false).
     """
     num_points = points.shape[0]
     dim = points.shape[1]
+    num_modes = scale.shape[0]
     values = np.empty((num_points, num_modes), dtype=np.float64)
     if want_gradients:
         gradients = np.empty((num_points, num_modes, dim), dtype=np.float64)
     else:
         gradients = np.empty((0, num_modes, dim), dtype=np.float64)
-    for i in nb.prange(num_points):
+    num_tasks = (num_points + _POINTS_PER_TASK - 1) // _POINTS_PER_TASK
+    for task in nb.prange(num_tasks):
         x = np.empty(3, dtype=np.float64)
         t = np.empty(3, dtype=np.float64)
         gx = np.zeros((3, 3), dtype=np.float64)
         gt = np.zeros((3, 3), dtype=np.float64)
-        tail = 0.0
-        for k in range(dim - 1, -1, -1):
-            xi = points[i, k]
-            x[k] = xi + tail
-            t[k] = 1.0 - tail
+        for k in range(dim):
             gx[k, k] = 1.0
             for c in range(k + 1, dim):
                 gx[k, c] = 0.5
                 gt[k, c] = -0.5
-            tail += 0.5 * (1.0 + xi)
         av = np.empty(order + 1, dtype=np.float64)
         ax = np.empty(order + 1, dtype=np.float64)
         at = np.empty(order + 1, dtype=np.float64)
@@ -305,38 +332,58 @@ def _orthogonal_kernel(points, order, mode_index, num_modes, want_gradients):
         cv = np.empty(order + 1, dtype=np.float64)
         cx = np.empty(order + 1, dtype=np.float64)
         ct = np.empty(order + 1, dtype=np.float64)
-        ga = np.empty(3, dtype=np.float64)
-        gb = np.empty(3, dtype=np.float64)
-        _scaled_jacobi_fill(order, 0.0, 0.0, x[0], t[0], av, ax, at)
-        for p in range(order + 1):
-            for c in range(dim):
-                ga[c] = ax[p] * gx[0, c] + at[p] * gt[0, c]
-            if dim == 1:
-                col = mode_index[p, 0, 0]
-                values[i, col] = av[p]
+        ga = np.zeros(3, dtype=np.float64)
+        gb = np.zeros(3, dtype=np.float64)
+        stop = min(num_points, (task + 1) * _POINTS_PER_TASK)
+        for i in range(task * _POINTS_PER_TASK, stop):
+            tail = 0.0
+            for k in range(dim - 1, -1, -1):
+                xi = points[i, k]
+                x[k] = xi + tail
+                t[k] = 1.0 - tail
+                tail += 0.5 * (1.0 + xi)
+            if want_gradients:
+                _scaled_jacobi_fill(order, 0.0, 0.0, x[0], t[0], av, ax, at)
+            else:
+                _scaled_jacobi_values(order, 0.0, 0.0, x[0], t[0], av)
+            for p in range(order + 1):
                 if want_gradients:
-                    gradients[i, col, 0] = ga[0]
-                continue
-            _scaled_jacobi_fill(order - p, 2.0 * p + 1.0, 0.0, x[1], t[1], bv, bx, bt)
-            for q in range(order - p + 1):
-                for c in range(dim):
-                    gb[c] = bx[q] * gx[1, c] + bt[q] * gt[1, c]
-                ab = av[p] * bv[q]
-                if dim == 2:
-                    col = mode_index[p, q, 0]
-                    values[i, col] = ab
+                    for c in range(dim):
+                        ga[c] = ax[p] * gx[0, c] + at[p] * gt[0, c]
+                if dim == 1:
+                    col = mode_index[p, 0, 0]
+                    values[i, col] = av[p] * scale[col]
                     if want_gradients:
-                        for c in range(2):
-                            gradients[i, col, c] = ga[c] * bv[q] + av[p] * gb[c]
+                        gradients[i, col, 0] = ga[0] * scale[col]
                     continue
-                _scaled_jacobi_fill(order - p - q, 2.0 * (p + q) + 2.0, 0.0, x[2], t[2], cv, cx, ct)
-                for r in range(order - p - q + 1):
-                    col = mode_index[p, q, r]
-                    values[i, col] = ab * cv[r]
+                if want_gradients:
+                    _scaled_jacobi_fill(order - p, 2.0 * p + 1.0, 0.0, x[1], t[1], bv, bx, bt)
+                else:
+                    _scaled_jacobi_values(order - p, 2.0 * p + 1.0, 0.0, x[1], t[1], bv)
+                for q in range(order - p + 1):
                     if want_gradients:
-                        for c in range(3):
-                            gc = cx[r] * gx[2, c] + ct[r] * gt[2, c]
-                            gradients[i, col, c] = (ga[c] * bv[q] + av[p] * gb[c]) * cv[r] + ab * gc
+                        for c in range(dim):
+                            gb[c] = bx[q] * gx[1, c] + bt[q] * gt[1, c]
+                    ab = av[p] * bv[q]
+                    if dim == 2:
+                        col = mode_index[p, q, 0]
+                        values[i, col] = ab * scale[col]
+                        if want_gradients:
+                            for c in range(2):
+                                gradients[i, col, c] = (ga[c] * bv[q] + av[p] * gb[c]) * scale[col]
+                        continue
+                    if want_gradients:
+                        _scaled_jacobi_fill(order - p - q, 2.0 * (p + q) + 2.0, 0.0, x[2], t[2], cv, cx, ct)
+                    else:
+                        _scaled_jacobi_values(order - p - q, 2.0 * (p + q) + 2.0, 0.0, x[2], t[2], cv)
+                    for r in range(order - p - q + 1):
+                        col = mode_index[p, q, r]
+                        s = scale[col]
+                        values[i, col] = ab * cv[r] * s
+                        if want_gradients:
+                            for c in range(3):
+                                gc = cx[r] * gx[2, c] + ct[r] * gt[2, c]
+                                gradients[i, col, c] = ((ga[c] * bv[q] + av[p] * gb[c]) * cv[r] + ab * gc) * s
     return values, gradients
 
 
@@ -365,37 +412,40 @@ def _bernstein_kernel(points, order, exponents, coefficients, want_gradients):
         gradients = np.zeros((num_points, num_modes, dim), dtype=np.float64)
     else:
         gradients = np.zeros((0, num_modes, dim), dtype=np.float64)
-    for i in nb.prange(num_points):
+    num_tasks = (num_points + _POINTS_PER_TASK - 1) // _POINTS_PER_TASK
+    for task in nb.prange(num_tasks):
         lam = np.empty(dim + 1, dtype=np.float64)
-        tail = 0.0
-        for k in range(dim):
-            lam[k + 1] = 0.5 * (points[i, k] + 1.0)
-            tail += lam[k + 1]
-        lam[0] = 1.0 - tail
         powers = np.empty((dim + 1, order + 1), dtype=np.float64)
-        for v in range(dim + 1):
-            powers[v, 0] = 1.0
-            for e in range(1, order + 1):
-                powers[v, e] = powers[v, e - 1] * lam[v]
-        for m in range(num_modes):
-            value = coefficients[m]
+        stop = min(num_points, (task + 1) * _POINTS_PER_TASK)
+        for i in range(task * _POINTS_PER_TASK, stop):
+            tail = 0.0
+            for k in range(dim):
+                lam[k + 1] = 0.5 * (points[i, k] + 1.0)
+                tail += lam[k + 1]
+            lam[0] = 1.0 - tail
             for v in range(dim + 1):
-                value *= powers[v, exponents[m, v]]
-            values[i, m] = value
-            if want_gradients:
+                powers[v, 0] = 1.0
+                for e in range(1, order + 1):
+                    powers[v, e] = powers[v, e - 1] * lam[v]
+            for m in range(num_modes):
+                value = coefficients[m]
                 for v in range(dim + 1):
-                    e = exponents[m, v]
-                    if e == 0:
-                        continue
-                    term = coefficients[m] * e * powers[v, e - 1]
-                    for w in range(dim + 1):
-                        if w != v:
-                            term *= powers[w, exponents[m, w]]
-                    if v == 0:
-                        for c in range(dim):
-                            gradients[i, m, c] -= 0.5 * term
-                    else:
-                        gradients[i, m, v - 1] += 0.5 * term
+                    value *= powers[v, exponents[m, v]]
+                values[i, m] = value
+                if want_gradients:
+                    for v in range(dim + 1):
+                        e = exponents[m, v]
+                        if e == 0:
+                            continue
+                        term = coefficients[m] * e * powers[v, e - 1]
+                        for w in range(dim + 1):
+                            if w != v:
+                                term *= powers[w, exponents[m, w]]
+                        if v == 0:
+                            for c in range(dim):
+                                gradients[i, m, c] -= 0.5 * term
+                        else:
+                            gradients[i, m, v - 1] += 0.5 * term
     return values, gradients
 
 
@@ -437,60 +487,69 @@ def _modified_kernel(points, order, modes, want_gradients):
         gradients = np.zeros((num_points, num_modes, dim), dtype=np.float64)
     else:
         gradients = np.zeros((0, num_modes, dim), dtype=np.float64)
-    for i in nb.prange(num_points):
+    num_tasks = (num_points + _POINTS_PER_TASK - 1) // _POINTS_PER_TASK
+    for task in nb.prange(num_tasks):
         lam = np.empty(dim + 1, dtype=np.float64)
+        # Gradients of lambda_k and of the partial sums s_j = 1 - (lambda_{j+1} + ... + lambda_d)
+        # (s_d = 1 exactly, s_0 = lambda_0); they are the same at every point.
         glam = np.zeros((dim + 1, dim), dtype=np.float64)
-        tail = 0.0
+        gpartial = np.zeros((dim + 1, dim), dtype=np.float64)
         for k in range(dim):
-            lam[k + 1] = 0.5 * (points[i, k] + 1.0)
-            tail += lam[k + 1]
             glam[0, k] = -0.5
             glam[k + 1, k] = 0.5
-        lam[0] = 1.0 - tail
-        # Partial sums s_j = 1 - (lambda_{j+1} + ... + lambda_d) and their gradients;
-        # s_d = 1 exactly, s_0 = lambda_0.
-        partial = np.empty(dim + 1, dtype=np.float64)
-        gpartial = np.zeros((dim + 1, dim), dtype=np.float64)
-        tail = 0.0
-        for j in range(dim, -1, -1):
-            partial[j] = 1.0 - tail
+        for j in range(dim + 1):
             for c in range(j, dim):
                 gpartial[j, c] = -0.5
-            if j >= 1:
-                tail += lam[j]
+        partial = np.empty(dim + 1, dtype=np.float64)
         qv = np.empty(order + 1, dtype=np.float64)
         qx = np.empty(order + 1, dtype=np.float64)
         qt = np.empty(order + 1, dtype=np.float64)
         g = np.empty(dim, dtype=np.float64)
-        for m in range(num_modes):
-            level = modes[m, 0]
-            if level < 0:
-                values[i, m] = 1.0
-                continue
-            value = 1.0
-            for c in range(dim):
-                g[c] = 0.0
-            for j in range(level + 1):
-                v = modes[m, 1 + j]
-                factor = lam[v]
+        stop = min(num_points, (task + 1) * _POINTS_PER_TASK)
+        for i in range(task * _POINTS_PER_TASK, stop):
+            tail = 0.0
+            for k in range(dim):
+                lam[k + 1] = 0.5 * (points[i, k] + 1.0)
+                tail += lam[k + 1]
+            lam[0] = 1.0 - tail
+            tail = 0.0
+            for j in range(dim, -1, -1):
+                partial[j] = 1.0 - tail
+                if j >= 1:
+                    tail += lam[j]
+            for m in range(num_modes):
+                level = modes[m, 0]
+                if level < 0:
+                    values[i, m] = 1.0
+                    continue
+                value = 1.0
                 for c in range(dim):
-                    g[c] = g[c] * factor + value * glam[v, c]
-                value *= factor
-            alpha = 1.0
-            for k in range(1, level + 1):
-                v = modes[m, 1 + k]
-                n = modes[m, 4 + k]
-                _scaled_jacobi_fill(n - 1, alpha, 1.0, lam[v] - partial[v - 1], partial[v], qv, qx, qt)
-                factor = qv[n - 1]
-                for c in range(dim):
-                    d_factor = qx[n - 1] * (glam[v, c] - gpartial[v - 1, c]) + qt[n - 1] * gpartial[v, c]
-                    g[c] = g[c] * factor + value * d_factor
-                value *= factor
-                alpha += 2.0 * n
-            values[i, m] = value
-            if want_gradients:
-                for c in range(dim):
-                    gradients[i, m, c] = g[c]
+                    g[c] = 0.0
+                for j in range(level + 1):
+                    v = modes[m, 1 + j]
+                    factor = lam[v]
+                    for c in range(dim):
+                        g[c] = g[c] * factor + value * glam[v, c]
+                    value *= factor
+                alpha = 1.0
+                for k in range(1, level + 1):
+                    v = modes[m, 1 + k]
+                    n = modes[m, 4 + k]
+                    if want_gradients:
+                        _scaled_jacobi_fill(n - 1, alpha, 1.0, lam[v] - partial[v - 1], partial[v], qv, qx, qt)
+                    else:
+                        _scaled_jacobi_values(n - 1, alpha, 1.0, lam[v] - partial[v - 1], partial[v], qv)
+                    factor = qv[n - 1]
+                    if want_gradients:
+                        for c in range(dim):
+                            d_factor = qx[n - 1] * (glam[v, c] - gpartial[v - 1, c]) + qt[n - 1] * gpartial[v, c]
+                            g[c] = g[c] * factor + value * d_factor
+                    value *= factor
+                    alpha += 2.0 * n
+                values[i, m] = value
+                if want_gradients:
+                    for c in range(dim):
+                        gradients[i, m, c] = g[c]
     return values, gradients
 
 
@@ -591,6 +650,23 @@ def _orthonormal_scale_array(dim: int, order: int) -> np.ndarray:
             factor *= (2 * partial + k) / 2.0
         scale[column] = sqrt(factor)
     return scale
+
+
+@lru_cache(maxsize=None)
+def _unit_scale_array(dim: int, order: int) -> np.ndarray:
+    """Return ones of shape ``(C(order + dim, dim),)``: the column scale of ``dub_orth`` in :func:`_orthogonal_kernel`."""
+    return np.ones(comb(order + dim, dim), dtype=np.float64)
+
+
+# From this many values (points times modes) on, the basis evaluators of
+# hybridge.core.quadrature and hybridge.core.simplex.nodes use the parallel kernels;
+# below it, starting the Numba threads costs more than it saves.
+PARALLEL_MIN_VALUES = 1 << 16
+
+
+def use_parallel_kernel(num_points: int, num_modes: int) -> bool:
+    """Return whether ``num_points * num_modes`` values are enough to evaluate them with the parallel kernels."""
+    return int(num_points) * int(num_modes) >= PARALLEL_MIN_VALUES
 
 
 def orthonormal_scale(dim, order) -> np.ndarray:
@@ -791,10 +867,9 @@ def _tabulate(name: str, dim: int, order: int, points: np.ndarray, want_gradient
         result = np.asarray(edge(order, points[:, 0]).T, dtype=np.float64)
     elif name in ("dub_orth", "orthonormal"):
         kernel = _orthogonal_kernel_parallel if parallel else _orthogonal_kernel
-        values, gradients = kernel(
-            points, order, _orthogonal_index_array(dim, order), comb(order + dim, dim), want_gradients
-        )
-        result = gradients if want_gradients else values
+        scale = _orthonormal_scale_array(dim, order) if name == "orthonormal" else _unit_scale_array(dim, order)
+        values, gradients = kernel(points, order, _orthogonal_index_array(dim, order), scale, want_gradients)
+        return gradients if want_gradients else values  # the kernel applied the orthonormal scale
     elif name == "bernstein":
         exponents, coefficients = _bernstein_arrays(dim, order)
         kernel = _bernstein_kernel_parallel if parallel else _bernstein_kernel

@@ -141,7 +141,10 @@ def _evaluate_simplex_basis(basis_type: str, dim: int, order: int, points: np.nd
     (:mod:`hybridge.core.simplex.polynomials`). ``points`` has shape
     ``(num_points, dim)``. Returns values of shape ``(num_points, n)`` or, with
     ``gradients=True``, reference gradients of shape ``(num_points, n, dim)``,
-    as ``REAL_DTYPE``.
+    as ``REAL_DTYPE``. Modal bases are evaluated with the parallel Numba kernels
+    when :func:`hybridge.core.simplex.polynomials.use_parallel_kernel` says the
+    table is large enough; nodal bases decide the same way in
+    :mod:`hybridge.core.simplex.nodes`.
     """
     from hybridge.core.simplex import nodes, polynomials
 
@@ -151,8 +154,41 @@ def _evaluate_simplex_basis(basis_type: str, dim: int, order: int, points: np.nd
         values = evaluate(family, int(dim), int(order), points)
     else:
         evaluate = polynomials.modal_gradients if gradients else polynomials.modal_basis
-        values = evaluate(basis_type, int(dim), int(order), points)
+        parallel = polynomials.use_parallel_kernel(np.shape(points)[0], polynomials.modal_dimension(dim, order))
+        values = evaluate(basis_type, int(dim), int(order), points, parallel=parallel)
     return np.ascontiguousarray(values, dtype=REAL_DTYPE)
+
+
+# Rows of the scaled table formed at once by weighted_gram: about 256 MB of float64.
+_GRAM_BLOCK_VALUES = 1 << 25
+
+
+def weighted_gram(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    r"""Return :math:`G_{ij} = \sum_q w_q\, v_{qi} v_{qj}`, shape ``(n, n)``, in ``float64``.
+
+    ``values`` has shape ``(nq, n)`` (for example basis values at quadrature points)
+    and ``weights`` shape ``(nq,)`` (quadrature weights, possibly times a
+    coefficient). With nonnegative weights :math:`G = S^T S` with
+    :math:`S = \mathrm{diag}(\sqrt{w})\, V`, which NumPy computes with the symmetric
+    BLAS product ``syrk`` (half the work of a general product, and an exactly
+    symmetric result); the rows are processed in blocks of about 256 MB so that
+    :math:`S` is never formed whole. A negative weight falls back to
+    :math:`V^T (w V)` per block.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    weights = np.asarray(weights, dtype=np.float64)
+    count, size = values.shape
+    gram = np.zeros((size, size), dtype=np.float64)
+    block = max(1, _GRAM_BLOCK_VALUES // max(size, 1))
+    nonnegative = bool(np.all(weights >= 0.0))
+    for start in range(0, count, block):
+        rows = values[start:start + block]
+        if nonnegative:
+            scaled = np.sqrt(weights[start:start + block])[:, None] * rows
+            gram += scaled.T @ scaled
+        else:
+            gram += rows.T @ (weights[start:start + block, None] * rows)
+    return gram
 
 
 def _edge_basis(order: int, edge_points_1d: np.ndarray) -> np.ndarray:
@@ -499,12 +535,16 @@ class ReferenceElementData:
         :func:`hybridge.core.simplex.reference.gauss_jacobi_collapsed_rule`, exact
         for total degree ``volume_degree`` (default ``2 * order``). Sets ``el_dof``
         (``C(p+3, 3)``), ``edg_dof`` (the trace dimension per face, ``C(p+2, 2)``),
-        ``Krf_quads``/``Krf_w``, the basis values ``phi``/``bas_of_quads``, the
-        gradients ``gphi``/``dbas_of_quads``, ``weighted_phi`` and the mass matrix
-        ``MKrf`` with its inverse. Every other field, which describes triangle
-        edges, is set to ``None``. Raises ``ValueError`` for options that only
-        exist on the triangle (``volume_quad_1d``, ``edge_quad_1d``, the
-        ``"symmetric"`` volume rule).
+        ``Krf_quads``/``Krf_w``, the basis values ``phi`` ``(num_quads, el_dof)``
+        and the mass matrix ``MKrf`` with its inverse. Every other field is set to
+        ``None``: the triangle-edge tables, and also the other layouts and the
+        gradients of the volume table (``bas_of_quads``, ``weighted_phi``,
+        ``gphi``, ``dbas_of_quads``), which nothing uses on the tetrahedron yet
+        and which would take ``(2 + 2 dim)`` times the memory of ``phi`` (about
+        50 GB at ``order = 40``). Reference gradients come from
+        :meth:`gradients_at` or :attr:`derivative_matrices`. Raises ``ValueError``
+        for options that only exist on the triangle (``volume_quad_1d``,
+        ``edge_quad_1d``, the ``"symmetric"`` volume rule).
         """
         from hybridge.core.simplex.reference import gauss_jacobi_collapsed_rule
 
@@ -535,16 +575,10 @@ class ReferenceElementData:
         points = np.ascontiguousarray(points, dtype=REAL_DTYPE)
         weights = np.ascontiguousarray(weights, dtype=REAL_DTYPE)
         basis = _evaluate_basis(self.basis_type, order, points)
-        gradients = _evaluate_gradients(self.basis_type, order, points)
-        mass = np.einsum("q,qi,qj->ij", weights.astype(np.float64), basis.astype(np.float64),
-                         basis.astype(np.float64), optimize=True)
+        mass = weighted_gram(basis, weights)
         object.__setattr__(self, "Krf_quads", points)
         object.__setattr__(self, "Krf_w", weights)
         object.__setattr__(self, "phi", np.ascontiguousarray(basis))
-        object.__setattr__(self, "bas_of_quads", np.ascontiguousarray(basis.T))
-        object.__setattr__(self, "gphi", np.ascontiguousarray(gradients))
-        object.__setattr__(self, "dbas_of_quads", np.ascontiguousarray(gradients.transpose(2, 1, 0)))
-        object.__setattr__(self, "weighted_phi", np.ascontiguousarray(weights[:, None] * basis))
         object.__setattr__(self, "MKrf", np.ascontiguousarray(mass, dtype=REAL_DTYPE))
         object.__setattr__(self, "MKrf_inv", np.ascontiguousarray(np.linalg.inv(mass), dtype=REAL_DTYPE))
 
@@ -605,6 +639,20 @@ class ReferenceElementData:
         return np.asarray(points, dtype=np.float64), np.asarray(weights, dtype=np.float64)
 
     @cached_property
+    def _volume_rule_is_generic(self) -> bool:
+        """Whether ``Krf_quads``/``Krf_w`` are the rule of :attr:`_generic_volume_rule`, stored in ``float64``.
+
+        True on the tetrahedron with the default ``volume_degree`` (both rules are
+        the collapsed Gauss-Jacobi rule exact for degree ``2 * order``) when
+        ``REAL_DTYPE`` is ``float64``; then ``phi`` and ``MKrf`` are reused instead
+        of being computed a second time.
+        """
+        if self.dim != 3 or np.dtype(REAL_DTYPE) != np.float64:
+            return False
+        degree = 2 * self.order if self.volume_degree is None else int(self.volume_degree)
+        return max(degree, 1) == max(2 * self.order, 1)
+
+    @cached_property
     def _generic_face_rule(self) -> tuple[np.ndarray, np.ndarray]:
         """Reference-face rule exact for degree ``face_degree`` (default ``2 * order``), in float64."""
         from hybridge.core.simplex.reference import simplex_face_rule
@@ -649,12 +697,23 @@ class ReferenceElementData:
         )
 
     @cached_property
-    def _generic_volume_tables(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Weights, basis values ``(nq, n_u)`` and gradients ``(nq, n_u, dim)`` on the exact volume rule, float64."""
-        points, weights = self._generic_volume_rule
-        basis = np.asarray(_evaluate_basis(self.basis_type, self.order, points), dtype=np.float64)
+    def _generic_volume_basis(self) -> np.ndarray:
+        """Basis values ``(nq, n_u)`` at the points of :attr:`_generic_volume_rule`, float64 (``phi`` when it is that rule)."""
+        if self._volume_rule_is_generic:
+            return self.phi
+        points, _ = self._generic_volume_rule
+        return np.asarray(_evaluate_basis(self.basis_type, self.order, points), dtype=np.float64)
+
+    @cached_property
+    def _generic_volume_gradients(self) -> np.ndarray:
+        """Reference gradients ``(dim, nq, n_u)`` at the points of :attr:`_generic_volume_rule`, float64.
+
+        The derivative index comes first so that every ``[k]`` is a contiguous
+        ``(nq, n_u)`` table for the matrix products below.
+        """
+        points, _ = self._generic_volume_rule
         gradients = np.asarray(_evaluate_gradients(self.basis_type, self.order, points), dtype=np.float64)
-        return weights, basis, gradients
+        return np.ascontiguousarray(gradients.transpose(2, 0, 1))
 
     @cached_property
     def element_basis_on_faces(self) -> np.ndarray:
@@ -668,16 +727,23 @@ class ReferenceElementData:
 
     @cached_property
     def exact_mass(self) -> np.ndarray:
-        """Mass matrix ``M_ij = int_K^ phi_i phi_j`` on a rule exact for degree ``2p``, shape ``(n_u, n_u)``."""
-        weights, basis, _ = self._generic_volume_tables
-        return np.ascontiguousarray(np.einsum("q,qi,qj->ij", weights, basis, basis, optimize=True), dtype=REAL_DTYPE)
+        """Mass matrix ``M_ij = int_K^ phi_i phi_j`` on a rule exact for degree ``2p``, shape ``(n_u, n_u)``.
+
+        On the tetrahedron with the default volume rule this is ``MKrf`` (same rule).
+        """
+        if self._volume_rule_is_generic:
+            return self.MKrf
+        _, weights = self._generic_volume_rule
+        return np.ascontiguousarray(weighted_gram(self._generic_volume_basis, weights), dtype=REAL_DTYPE)
 
     @cached_property
     def face_mass(self) -> np.ndarray:
         """Face mass matrices ``E^f_ij = int_F^ (phi_i phi_j) o F_f``, shape ``(dim + 1, n_u, n_u)``."""
         _, weights = self._generic_face_rule
         values = self.element_basis_on_faces.astype(np.float64)
-        return np.ascontiguousarray(np.einsum("q,fiq,fjq->fij", weights, values, values, optimize=True), dtype=REAL_DTYPE)
+        return np.ascontiguousarray(
+            np.stack([weighted_gram(values[f].T, weights) for f in range(self.num_faces)]), dtype=REAL_DTYPE
+        )
 
     @cached_property
     def derivative_matrices(self) -> np.ndarray:
@@ -688,17 +754,19 @@ class ReferenceElementData:
         transposes, computed on the caller's volume rule; these tables use a rule
         exact for degree ``2p``.
         """
-        weights, basis, gradients = self._generic_volume_tables
-        return np.ascontiguousarray(
-            np.einsum("q,qi,qjk->kij", weights, basis, gradients, optimize=True), dtype=REAL_DTYPE
-        )
+        _, weights = self._generic_volume_rule
+        weighted_basis = weights[:, None] * self._generic_volume_basis
+        gradients = self._generic_volume_gradients
+        return np.ascontiguousarray(weighted_basis.T @ gradients, dtype=REAL_DTYPE)
 
     @cached_property
     def stiffness_components(self) -> np.ndarray:
         """Stiffness components ``K^{kl}_ij = int_K^ d(phi_i)/d(xi_k) d(phi_j)/d(xi_l)``, shape ``(dim, dim, n_u, n_u)``."""
-        weights, _, gradients = self._generic_volume_tables
+        _, weights = self._generic_volume_rule
+        gradients = self._generic_volume_gradients
+        weighted = weights[None, :, None] * gradients
         return np.ascontiguousarray(
-            np.einsum("q,qik,qjl->klij", weights, gradients, gradients, optimize=True), dtype=REAL_DTYPE
+            np.transpose(weighted, (0, 2, 1))[:, None] @ gradients[None, :], dtype=REAL_DTYPE
         )
 
     def trace_tables(self, trace_basis: str = "lagrange_warp_blend") -> "ReferenceTraceTables":
@@ -813,8 +881,10 @@ class ReferenceElementData:
         """Evaluate reference gradients at reference points.
 
         Passing ``self.Krf_quads`` by object identity returns the precomputed
-        ``gphi`` table.  The gradients are with respect to reference coordinates
-        only; physical gradient conversion is handled by :meth:`DGField.grad_at_ref`.
+        ``gphi`` table on the triangle (the tetrahedron does not store it and
+        evaluates the gradients).  The gradients are with respect to reference
+        coordinates only; physical gradient conversion is handled by
+        :meth:`DGField.grad_at_ref`.
 
         Returns
         -------
@@ -822,7 +892,7 @@ class ReferenceElementData:
             Array with shape ``(num_points, el_dof, dim)``.
         """
         points = np.asarray(reference_points, dtype=REAL_DTYPE)
-        if points is self.Krf_quads:
+        if points is self.Krf_quads and self.gphi is not None:
             return self.gphi
         return _evaluate_gradients(self.basis_type, self.order, points)
 
@@ -900,18 +970,19 @@ def _build_reference_trace_tables(reference: ReferenceElementData, trace_basis: 
         return np.asarray(values, dtype=np.float64).T
 
     mu = trace_at(points)
-    mass = np.einsum("q,aq,bq->ab", weights, mu, mu, optimize=True)
-    phi_faces = reference.element_basis_on_faces.astype(np.float64)
+    weighted_mu = mu * weights
+    mass = weighted_mu @ mu.T
+    weighted_faces = reference.element_basis_on_faces.astype(np.float64) * weights
     couplings = []
     rotations = []
     for sigma in face_permutations(dim):
         mu_sigma = trace_at(permute_face_points(sigma, points))
-        couplings.append(np.einsum("q,fiq,aq->fia", weights, phi_faces, mu_sigma, optimize=True))
-        cross = np.einsum("q,aq,bq->ab", weights, mu_sigma, mu, optimize=True)
+        couplings.append(weighted_faces @ mu_sigma.T)
+        cross = mu_sigma @ weighted_mu.T
         rotations.append(np.linalg.solve(mass.T, cross.T).T)
     element_trace = np.stack(couplings)
     trace_element = element_trace.transpose(0, 1, 3, 2).reshape(
-        len(couplings) * (dim + 1), mu.shape[0], phi_faces.shape[1]
+        len(couplings) * (dim + 1), mu.shape[0], weighted_faces.shape[1]
     )
 
     def stored(array: np.ndarray) -> np.ndarray:
