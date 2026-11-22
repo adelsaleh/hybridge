@@ -201,20 +201,45 @@ def color_scale(values: np.ndarray, *, signed: bool):
     return rp.sequential_colormap(), Normalize(low, high if high > low else low + 1e-12)
 
 
-def draw_tetrahedron_slices(ax, field, heights, cmap, norm, subdivisions: int = 24) -> None:
-    """Draw ``field`` (callable on points ``(n, 3)``) on horizontal cross-sections of the reference tetrahedron."""
+def draw_tetrahedron_slices(ax, field, heights, cmap, norm, subdivisions: int = 24, *, faces: bool = False,
+                            face_opacity: float = 0.4) -> None:
+    """Draw ``field`` (callable on points ``(n, 3)``) on horizontal cross-sections of the reference tetrahedron.
+
+    With ``faces`` the same field is also drawn on the four faces, with opacity
+    ``face_opacity`` so that the cross-sections stay visible, and the faces are
+    labelled. Cross-sections and faces form one collection, so all their
+    triangles are sorted by depth together and the picture stays right when the
+    view is rotated.
+    """
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-    rp.draw_simplex_outline(ax, np.array([[-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]]),
-                            ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)))
+    polygons, colors = [], []
     for height in heights:
         points, triangles = triangle_lattice(slice_corners(height), subdivisions)
         values = field(points)
-        colors = cmap(norm(values[triangles].mean(axis=1)))
-        ax.add_collection3d(Poly3DCollection(points[triangles], facecolors=colors, edgecolors="none", alpha=0.92))
-    labels = {"A": (-1.0, -1.0, -1.0), "B": (1.0, -1.0, -1.0), "C": (-1.0, 1.0, -1.0), "D": (-1.0, -1.0, 1.0)}
-    for text, position in labels.items():
-        ax.text(*position, " " + text, fontsize=7, color=rp.TEXT_SECONDARY)
+        polygons.append(points[triangles])
+        rgba = cmap(norm(values[triangles].mean(axis=1)))
+        rgba[:, 3] = 0.95
+        colors.append(rgba)
+    if faces:
+        samples, triangles = face_samples(3, subdivisions)
+        for f in range(4):
+            points = reference_simplex(3).face_map(f, samples)
+            values = field(points)
+            polygons.append(points[triangles])
+            rgba = cmap(norm(values[triangles].mean(axis=1)))
+            rgba[:, 3] = face_opacity
+            colors.append(rgba)
+    ax.computed_zorder = False
+    ax.add_collection3d(Poly3DCollection(np.concatenate(polygons), facecolors=np.concatenate(colors),
+                                         edgecolors="none", zorder=1))
+    rp.draw_simplex_outline(ax, TETRAHEDRON_VERTICES, ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)))
+    for name, position in zip(VERTEX_NAMES, TETRAHEDRON_VERTICES):
+        ax.text(*position, " " + name, fontsize=7, color=rp.TEXT_SECONDARY, zorder=5)
+    if faces:
+        for name, position in zip(face_names(3), face_label_positions(3)):
+            ax.text(*position, name, fontsize=8, color="black", ha="center", va="center", zorder=10,
+                    bbox={"boxstyle": "round,pad=0.15", "facecolor": "white", "edgecolor": "none", "alpha": 0.8})
     ax.set_xlim(-1, 1)
     ax.set_ylim(-1, 1)
     ax.set_zlim(-1, 1)
@@ -224,13 +249,25 @@ def draw_tetrahedron_slices(ax, field, heights, cmap, norm, subdivisions: int = 
     ax.set_axis_off()
 
 
-def draw_triangle_surface(ax, field, cmap, norm, subdivisions: int = 40) -> None:
-    """Draw the surface ``z = field(x, y)`` over the reference triangle, colored by ``z``."""
-    points, triangles = triangle_lattice(np.array([[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0]]), subdivisions)
+def draw_triangle_surface(ax, field, cmap, norm, subdivisions: int = 40, *, faces: bool = False) -> None:
+    """Draw the surface ``z = field(x, y)`` over the reference triangle, colored by ``z``.
+
+    With ``faces`` the values on the three faces (edges) are drawn as labelled
+    curves along the boundary of the surface.
+    """
+    points, triangles = triangle_lattice(REFERENCE_TRIANGLE, subdivisions)
     values = field(points)
     surface = ax.plot_trisurf(points[:, 0], points[:, 1], values, triangles=triangles, cmap=cmap, norm=norm,
-                              linewidth=0.0, antialiased=True)
+                              linewidth=0.0, antialiased=True, alpha=0.85 if faces else 1.0)
     surface.set_array(values[triangles].mean(axis=1))
+    if faces:
+        samples, _ = face_samples(2)
+        for f, name in enumerate(face_names(2)):
+            x = reference_simplex(2).face_map(f, samples)
+            edge_values = field(x)
+            ax.plot(x[:, 0], x[:, 1], edge_values, color=rp.CATEGORICAL[f], linewidth=2.5, zorder=10)
+            middle = len(edge_values) // 2
+            ax.text(x[middle, 0], x[middle, 1], edge_values[middle], " " + name, fontsize=8, color="black", zorder=11)
     ax.view_init(elev=28, azim=-62)
     ax.set_xlabel("xi_1", labelpad=-8)
     ax.set_ylabel("xi_2", labelpad=-8)
@@ -364,14 +401,16 @@ def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm, ki
     ax.legend(frameon=False)
 
 
-def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heights, *, slider: bool):
+def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heights, *, slider: bool,
+               face_opacity: float = 0.4):
     """Lay out the five 3D views, the segment, the flat faces and the errors on ``figure``; return ``draw(index)``.
 
-    Top row: ``u``, ``u_h``, ``u - u_h`` (cross-sections of the tetrahedron or
-    surfaces over the triangle), ``u - u_h`` on the faces (same color scale as the
-    cross-sections), and ``u - uhat_h`` on the faces (its own color scale). Bottom
-    row: ``u`` and ``u_h`` along the segment through the centroid, the two face
-    errors on all faces at once, and the errors against ``p``. With ``slider`` a thin third row is left for the degree
+    Top row: ``u``, ``u_h`` and ``u - u_h``, each on the cross-sections of the
+    tetrahedron and on its faces in the same view (faces with opacity
+    ``face_opacity``; on the triangle: a surface with its three edge curves), and
+    ``u - uhat_h`` on the faces.
+    Bottom row: ``u`` and ``u_h`` along the segment through the centroid,
+    ``u - u_h`` and ``u - uhat_h`` on the unfolded faces, and the errors against ``p``. With ``slider`` a thin third row is left for the degree
     slider; the function returns ``(draw, slider_ax)``.
     """
     from matplotlib.cm import ScalarMappable
@@ -382,21 +421,27 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
         probe = triangle_lattice(REFERENCE_TRIANGLE, 40)[0]
     cmap, norm = color_scale(problem.u(probe), signed=False)
     rows = (1.0, 0.8, 0.06) if slider else (1.0, 0.8)
-    grid = figure.add_gridspec(len(rows), 5, height_ratios=rows)
-    views = [figure.add_subplot(grid[0, k], projection="3d") for k in range(5)]
+    outer = figure.add_gridspec(len(rows), 1, height_ratios=rows)
+    top = outer[0].subgridspec(1, 4)
+    bottom = outer[1].subgridspec(1, 5)
+    views = [figure.add_subplot(top[0, k], projection="3d") for k in range(4)]
     if hasattr(views[0], "shareview"):
         for ax in views[1:]:
             ax.shareview(views[0])
     figure.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=views[:2], shrink=0.6, label="u, u_h")
-    segment_ax = figure.add_subplot(grid[1, 0:2])
-    flat_axes = {"volume": figure.add_subplot(grid[1, 2]), "trace": figure.add_subplot(grid[1, 3])}
-    errors_ax = figure.add_subplot(grid[1, 4])
-    error_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()),
-                                ax=views[2:4] + ([flat_axes["volume"]] if dim == 3 else []), shrink=0.6,
-                                label="u - u_h (inside and on the faces)")
-    trace_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()),
-                                ax=[views[4]] + ([flat_axes["trace"]] if dim == 3 else []), shrink=0.6,
+    segment_ax = figure.add_subplot(bottom[0, 0:2])
+    flat_axes = {"volume": figure.add_subplot(bottom[0, 2]), "trace": figure.add_subplot(bottom[0, 3])}
+    errors_ax = figure.add_subplot(bottom[0, 4])
+    # One color bar per axes group of one grid row; a bar spanning both rows breaks the layout.
+    error_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()), ax=views[2], shrink=0.6,
+                                label="u - u_h")
+    trace_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()), ax=views[3], shrink=0.6,
                                 label="u - uhat_h")
+    bars = {"volume": [error_bar], "trace": [trace_bar]}
+    if dim == 3:
+        for kind, label in (("volume", "u - u_h"), ("trace", "u - uhat_h")):
+            bars[kind].append(figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()),
+                                              ax=flat_axes[kind], shrink=0.8, label=label))
     s, segment = segment_points(dim)
     rp.plot_series(errors_ax, list(degrees), {
         "||u - u_h|| (HDG)": [results[p]["l2_error"] for p in degrees],
@@ -426,29 +471,30 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
         error_cmap, error_norm = color_scale(np.concatenate([error(probe), on_faces["volume"]]), signed=True)
         trace_cmap, trace_norm = color_scale(on_faces["trace"], signed=True)
         scales = {"volume": (error_cmap, error_norm), "trace": (trace_cmap, trace_norm)}
-        for bar, scale in ((error_bar, error_norm), (trace_bar, trace_norm)):
-            bar.mappable.set_norm(scale)
-            bar.update_normal(bar.mappable)
+        for kind, scale in (("volume", error_norm), ("trace", trace_norm)):
+            for bar in bars[kind]:
+                bar.mappable.set_norm(scale)
+                bar.update_normal(bar.mappable)
         panels = (
-            (u, (cmap, norm), "exact u = f / alpha"),
-            (u_h, (cmap, norm), f"HDG u_h, p = {p}"),
-            (error, (error_cmap, error_norm), f"error u - u_h, p = {p}"),
+            (u, (cmap, norm), "exact u = f / alpha, inside and on the faces", True),
+            (u_h, (cmap, norm), f"HDG u_h inside and on the faces, p = {p}", True),
+            (error, (error_cmap, error_norm), f"error u - u_h inside and on the faces, p = {p}", True),
         )
-        for ax, (field, scale, title) in zip(views[:3], panels):
+        for ax, (field, scale, title, with_faces) in zip(views[:3], panels):
             elev, azim = ax.elev, ax.azim
             ax.cla()
             if dim == 3:
-                draw_tetrahedron_slices(ax, field, heights, *scale)
+                draw_tetrahedron_slices(ax, field, heights, *scale, faces=with_faces, face_opacity=face_opacity)
             else:
-                draw_triangle_surface(ax, field, *scale)
+                draw_triangle_surface(ax, field, *scale, faces=with_faces)
             ax.view_init(elev=elev, azim=azim)
             ax.set_title(title)
-        for ax, kind in zip(views[3:], FACE_FIELDS):
-            elev, azim = ax.elev, ax.azim
-            ax.cla()
-            draw_faces_3d(ax, problem, result, dim, *scales[kind], kind=kind)
-            ax.view_init(elev=elev, azim=azim)
-            ax.set_title(f"{FACE_FIELDS[kind]} on the faces, p = {p}")
+        elev, azim = views[3].elev, views[3].azim
+        views[3].cla()
+        draw_faces_3d(views[3], problem, result, dim, *scales["trace"], kind="trace")
+        views[3].view_init(elev=elev, azim=azim)
+        views[3].set_title(f"u - uhat_h on the faces, p = {p}")
+        for kind in FACE_FIELDS:
             flat_axes[kind].cla()
             draw_faces_flat(flat_axes[kind], problem, result, dim, *scales[kind], kind=kind)
         segment_ax.lines[1].set_ydata(u_h(segment))
@@ -462,7 +508,7 @@ def build_view(figure, problem: Problem, dim: int, degrees, results: dict, heigh
     figure.suptitle(f"alpha u = f on the reference {name} ({problem.path.name}, tau = {problem.tau:g})"
                     + ("; drag a 3D view to rotate, move the slider to change p" if slider else ""))
     if slider:
-        return draw, figure.add_subplot(grid[2, :])
+        return draw, figure.add_subplot(outer[2])
     return draw
 
 
@@ -501,8 +547,9 @@ def write_files(problem: Problem, dim: int, degrees, results: dict, args) -> Non
     out.mkdir(parents=True, exist_ok=True)
     with publication_style(), PdfPages(out / "alpha_u_f.pdf", metadata={"Creator": "HYBRIDGE"}) as pdf:
         for index, p in enumerate(degrees):
-            figure = rp.new_figure(22.0, 9.0)
-            build_view(figure, problem, dim, degrees, results, args.heights, slider=False)(index)
+            figure = rp.new_figure(20.0, 9.0)
+            build_view(figure, problem, dim, degrees, results, args.heights, slider=False,
+                       face_opacity=args.face_opacity)(index)
             pdf.savefig(figure)
             figure.savefig(out / f"degree-{p:02d}.png", dpi=120)
         figure = summary_page(problem, dim, degrees, results)
@@ -531,14 +578,15 @@ def fields_for_degree(problem: Problem, result: dict):
     return problem.u, u_h, error
 
 
-def show_matplotlib(problem: Problem, dim: int, degrees, results: dict, heights) -> None:
+def show_matplotlib(problem: Problem, dim: int, degrees, results: dict, heights, face_opacity: float = 0.4) -> None:
     """Open one window with the panels of :func:`build_view` and a slider that selects the degree."""
     import matplotlib.pyplot as plt
     from matplotlib.widgets import Slider
 
-    figure = plt.figure(figsize=(22.0, 9.5), layout="constrained")
+    figure = plt.figure(figsize=(20.0, 9.5), layout="constrained")
     figure.canvas.manager.set_window_title(f"alpha u = f: {problem.path.name}")
-    draw, slider_ax = build_view(figure, problem, dim, degrees, results, heights, slider=True)
+    draw, slider_ax = build_view(figure, problem, dim, degrees, results, heights, slider=True,
+                                 face_opacity=face_opacity)
     slider = Slider(slider_ax, "degree", 0, len(degrees) - 1, valinit=0, valstep=1)
     slider.valtext.set_text(f"p = {degrees[0]}")
 
@@ -554,7 +602,7 @@ def show_matplotlib(problem: Problem, dim: int, degrees, results: dict, heights)
     plt.show()
 
 
-def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) -> None:
+def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights, face_opacity: float = 0.4) -> None:
     """Open one PyVista window with u, u_h and u - u_h side by side (linked views) and a degree slider."""
     import pyvista as pv
 
@@ -590,13 +638,20 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
     else:
         lines = np.hstack([np.concatenate(([count], np.arange(count) + f * count)) for f in range(3)])
         face_mesh = pv.PolyData(np.vstack(face_blocks), lines=lines)
-    plotter = pv.Plotter(shape=(1, 5), window_size=(2600, 650), title=f"alpha u = f: {problem.path.name}")
+    face_coordinates = np.asarray(face_mesh.points, dtype=np.float64)[:, :dim]
+    plotter = pv.Plotter(shape=(1, 4), window_size=(2200, 650), title=f"alpha u = f: {problem.path.name}")
     plotter.set_background("white")
     cmap = rp.sequential_colormap() if exact.min() >= 0.0 else rp.diverging_colormap()
     u_limits = (float(exact.min()), float(exact.max())) if exact.min() >= 0.0 else (-bound, bound)
 
-    def show_field(column: int, name: str, values: np.ndarray, colormap, limits, title: str) -> None:
-        """Draw ``values`` in subplot ``column`` (cross-sections in 3D, a warped surface in 2D)."""
+    def show_field(column: int, name: str, values: np.ndarray, colormap, limits, title: str,
+                   face_values=None) -> None:
+        """Draw ``values`` in subplot ``column`` (cross-sections in 3D, a warped surface in 2D).
+
+        ``face_values`` (values at the points of the face mesh) are drawn on the faces
+        in the same subplot and color scale, with opacity ``face_opacity`` in 3D and
+        as tubes along the edges in 2D.
+        """
         plotter.subplot(0, column)
         grid = mesh.copy()
         grid.point_data[name] = values
@@ -612,6 +667,22 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
         if dim == 3:
             plotter.add_point_labels(edges.points, ["A", "B", "C", "D"], font_size=12, text_color="black",
                                      shape=None, show_points=False, name=f"labels{column}")
+        if face_values is not None:
+            on_faces = face_mesh.copy()
+            on_faces.point_data[name] = face_values
+            if dim == 2:
+                lifted = on_faces.points.copy()
+                lifted[:, 2] = face_values / max(np.abs(values).max(), 1e-300)
+                on_faces.points = lifted
+            plotter.add_mesh(on_faces, scalars=name, cmap=colormap, clim=limits, name=f"faces{column}",
+                             lighting=False, opacity=face_opacity if dim == 3 else 1.0, line_width=6,
+                             render_lines_as_tubes=dim == 2, show_scalar_bar=False)
+            positions = face_label_positions(dim, 0.12)
+            if dim == 2:
+                positions = np.column_stack((positions, np.zeros(len(positions))))
+            plotter.add_point_labels(positions, face_names(dim), font_size=13, text_color="black",
+                                     shape="rounded_rect", shape_color="white", shape_opacity=0.7,
+                                     show_points=False, name=f"facelabels{column}", always_visible=True)
         plotter.add_text(title, font_size=10, color="black", name=f"title{column}")
 
     slider = {}
@@ -627,12 +698,15 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
         face_values = {kind: np.concatenate([v for _, _, v in face_errors(problem, results[p], dim, 24, kind=kind)])
                        for kind in FACE_FIELDS}
         error_bound = max(float(np.abs(errors).max()), float(np.abs(face_values["volume"]).max()), 1e-300)
-        show_field(1, "u_h", values, cmap, u_limits, f"HDG u_h, p = {p}: L2 error {results[p]['l2_error']:.2e}")
+        show_field(1, "u_h", values, cmap, u_limits,
+                   f"HDG u_h inside and on the faces, p = {p}: L2 error {results[p]['l2_error']:.2e}",
+                   face_values=u_h(face_coordinates))
         show_field(2, "u - u_h", errors, rp.diverging_colormap(), (-error_bound, error_bound),
-                   f"error u - u_h, p = {p} (max {results[p]['max_error']:.2e})")
+                   f"error u - u_h inside and on the faces, p = {p} (max {results[p]['max_error']:.2e})",
+                   face_values=face_values["volume"])
         bounds = {"volume": error_bound, "trace": max(float(np.abs(face_values["trace"]).max()), 1e-300)}
         norms = {"volume": results[p]["face_l2_error"], "trace": results[p]["trace_l2_error"]}
-        for column, kind in zip((3, 4), FACE_FIELDS):
+        for column, kind in ((3, "trace"),):
             name = FACE_FIELDS[kind]
             plotter.subplot(0, column)
             shown = face_mesh.copy()
@@ -655,7 +729,8 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
                              name=f"title{column}")
         plotter.render()
 
-    show_field(0, "u", exact, cmap, u_limits, "exact u = f / alpha")
+    show_field(0, "u", exact, cmap, u_limits, "exact u = f / alpha, inside and on the faces",
+               face_values=problem.u(face_coordinates))
     update(degrees[0])
     plotter.subplot(0, 1)
     if len(degrees) > 1:
@@ -684,6 +759,8 @@ def main(argv=None) -> int:
                         help="window: matplotlib 3D axes or a PyVista render window")
     parser.add_argument("--out", type=Path, help="also write alpha_u_f.pdf, PNG pages and errors.json here")
     parser.add_argument("--no-show", action="store_true", help="do not open a window")
+    parser.add_argument("--face-opacity", type=float, default=0.4,
+                        help="opacity of the faces drawn over the cross-sections in the u - u_h view")
     args = parser.parse_args(argv)
 
     problem = Problem(args.problem.resolve())
@@ -717,7 +794,7 @@ def main(argv=None) -> int:
         write_files(problem, dim, degrees, results, args)
     if show:
         viewer = show_pyvista if args.backend == "pyvista" else show_matplotlib
-        viewer(problem, dim, degrees, results, args.heights)
+        viewer(problem, dim, degrees, results, args.heights, face_opacity=args.face_opacity)
     return 0
 
 
