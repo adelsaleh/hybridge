@@ -92,20 +92,15 @@ def _parity(cp, fused, split3) -> dict[str, float]:
     errors = {
         "matrix_max_abs": _max_abs(cp, split3.data, fused.data),
         "rhs_max_abs": _max_abs(cp, split3.rhs, fused.rhs),
-        "response_max_abs": _max_abs(
-            cp,
-            split3.raw.local_response,
-            fused.raw.local_response,
-        ),
     }
     scales = {
         "matrix_max_abs": max(1.0, float(cp.max(cp.abs(fused.data)).get())),
         "rhs_max_abs": max(1.0, float(cp.max(cp.abs(fused.rhs)).get())),
-        "response_max_abs": max(
-            1.0,
-            float(cp.max(cp.abs(fused.raw.local_response)).get()),
-        ),
     }
+    # Runs without the cached local response (sweep --no-local-response) compare the system only.
+    if split3.raw.local_response is not None and fused.raw.local_response is not None:
+        errors["response_max_abs"] = _max_abs(cp, split3.raw.local_response, fused.raw.local_response)
+        scales["response_max_abs"] = max(1.0, float(cp.max(cp.abs(fused.raw.local_response)).get()))
     errors["max_relative"] = max(errors[key] / scales[key] for key in scales)
     return errors
 
@@ -292,7 +287,7 @@ def _benchmark_configuration(cp, mesh, args, order: int, trace_basis: str) -> di
             kernel_profiles["split3"][stage]["local_size_bytes"]
             for stage in ("build", "solve", "scatter")
         )
-        if any(local_bytes):
+        if any(local_bytes) and not getattr(args, 'allow_spills', False):
             raise RuntimeError(
                 f"p={order} high-order assembly kernel spilled to local memory: "
                 f"{local_bytes} bytes/thread"
@@ -334,6 +329,7 @@ def _benchmark_configuration(cp, mesh, args, order: int, trace_basis: str) -> di
         "parity": parity,
         "p8_experimental": order == 8,
         "high_order_experimental": order >= 8,
+        "spill_policy": "record" if getattr(args, 'allow_spills', False) else "reject-high-order",
     }
 
     del beta_coeffs, cspace, trace_ref, beta_h, source_h, reaction_h, fused_response, split_workspace
@@ -379,6 +375,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
     parser.add_argument("--gmsh-num-threads", type=int, default=None)
     parser.add_argument("--output-json", type=Path, default=None)
+    parser.add_argument("--allow-spills", action="store_true", help="record local-memory spills as measurements rather than reject the trial")
     return parser
 
 
@@ -413,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
         "warmups": args.warmups,
         "repeats": args.repeats,
     }
+    from scripts.reports.run_provenance import mesh_fingerprint
+    metadata['mesh'] = mesh_fingerprint(mesh)
     print(
         f"TSLE-BSR assembly benchmark | {metadata['device']} | "
         f"elements={mesh.num_tri:,} | CUDA runtime={metadata['cuda_runtime']} | "

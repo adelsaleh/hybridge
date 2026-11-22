@@ -1,7 +1,7 @@
 """Catalogue of stationary ADR problems; importing it never builds or solves a mesh."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import Any, Callable
 
@@ -196,3 +196,30 @@ for _solution in ("affine", "sine"):
 for _name in diffusion_cases():
     _register(f"coefficient_{_name}", f"Tensor assembly benchmark: {_name}; no exact solution.",
               partial(coefficient_case, _name))
+
+
+SINE_CASES = ("trigonometric", "advection_dominated", "anisotropic")
+
+
+def compiled_case(key):
+    """Build case ``key`` with its source, velocity and exact data as compiled hybridge ``PointwiseLaw``s.
+
+    The problem is ``CASE_DEFINITIONS[key].build()`` (diffusion, reaction, exact flux and metadata
+    kept) with the NumPy closures, which sample on one core, replaced by the multithreaded laws of
+    :mod:`hybridge.cases.manufactured_pointwise`. Returns None for cases without compiled laws.
+    """
+    from hybridge.cases.manufactured_pointwise import (
+        cellular_pointwise_case, quadratic_pointwise_case, sine_pointwise_case)
+    problem = CASE_DEFINITIONS[key].build()
+    if key in SINE_CASES:
+        kwargs, exact = sine_pointwise_case(diffusion=problem.diffusion, reaction=problem.reaction, beta=problem.beta)
+    elif key in oscillatory.VARIANTS:
+        values = oscillatory.parameters(key)
+        kwargs, exact = cellular_pointwise_case(
+            diffusion=problem.diffusion, reaction=values["reaction"], amplitude=values["amplitude"],
+            frequency=values["frequency"], modes=oscillatory.MODES, drift=values["drift"])
+    elif key == "variable_velocity":
+        kwargs, exact = quadratic_pointwise_case(diffusion=problem.diffusion, reaction=problem.reaction)
+    else:
+        return None
+    return replace(problem, **kwargs, exact=exact)

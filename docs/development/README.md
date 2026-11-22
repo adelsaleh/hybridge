@@ -2,6 +2,9 @@
 
 ## Active Plans
 
+- [`architecture_tuning.md`](architecture_tuning.md): shared automatic calibration,
+  architecture evidence, current adapters and qualification gates.
+
 - [`plans/`](plans/README.md): indexed implementation and qualification plans
   that elaborate on the prioritized work in `TODO.md`.
 - [`plans/diffusion_stabilization_global_scales.md`](plans/diffusion_stabilization_global_scales.md):
@@ -12,6 +15,9 @@
   manufactured transient cases for reusable solver-class validation.
 
 ## Qualification And Release Evidence
+
+- [`repository_reconciliation.md`](repository_reconciliation.md): H200 integration,
+  research ownership, and authenticated campaign-record relocation.
 
 - Guiding-center investigations (`../../../guiding-center-cg-hdg/docs/README.md`):
   transport failures, precision studies, and their preserved numerical evidence.

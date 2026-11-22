@@ -85,9 +85,18 @@ is the only supported output, `raw_lu_mode="coop"` is required, p=1--7 is the
 qualified scope, and p=8--9 is available as an explicitly experimental path.
 
 For `raw_block_size="auto"`, TSLE screens candidates 32, 64, 128, and 256 for
-each stage independently on at most 32,768 elements, then retimes the best two
-per stage on the full mesh before caching the winning triple by device and
-discrete shape. Subsequent assemblies in the process skip tuning.
+each stage on an isolated patch of at most 512 actual elements. The stages
+share a 30-second/eight-candidate first-use budget, with independent solve
+backward-error and scatter-oracle checks. Persistent records include device,
+source, numerical settings and workload identity; cache hits allocate no trial
+buffers. There are no full-mesh finalist trials. See the
+[architecture policy](../development/architecture_tuning.md) for controls and
+qualification status.
+
+Eligible `raw_local_assembly="auto"` calls additionally compare complete fused,
+split3 and compatible same-precision tensor pipelines, including contraction
+engines and requested response retention. Production workspace and launch
+limits screen candidates before calibration. Explicit paths remain available.
 Level-3 solver logging prints the three stage times, selected blocks, device
 total, workspace GiB, and cold/reused tune state in two lines. Levels 2 and 4
 retain the full candidate/micro-timing dump.
@@ -108,9 +117,10 @@ alternating hot samples for p=1--7 and five for experimental p=8--9:
 | 8 | 1261.866 ms | 857.723 ms | **47.1%** | 1269.227 ms | 864.241 ms | **46.9%** |
 | 9 | 1918.382 ms | 1757.016 ms | **9.2%** | 1984.066 ms | 1769.417 ms | **12.1%** |
 
-The gate therefore keeps `fused` as the production `p <= 6` choice. TSLE
-remains explicit at p=7 despite its measured gain, and p=8--9 remains
-experimental. The high-order fused kernel uses 128 threads and moves its Schur
+The historical Quadro gate kept `fused` as the production `p <= 6` choice and
+TSLE explicit at p=7; p=8--9 was experimental. These measurements now inform
+candidate ordering, while qualification of the new tuner on Quadro remains
+pending. The high-order fused kernel uses 128 threads and moves its Schur
 lift rows into block-shared storage: compiler profiles report zero local-memory
 bytes for fused and all TSLE stages. Fused dynamic shared memory is 40,948 B at
 p=8 and 56,604 B at p=9, below the target GPU's 65,536 B opt-in limit.
@@ -118,9 +128,9 @@ p=8 and 56,604 B at p=9, below the target GPU's 65,536 B opt-in limit.
 TSLE's extra persistent workspace is material: 1.732 GiB at p=6, 2.679 GiB at
 p=7, 3.969 GiB at p=8, and 5.676 GiB at p=9 on this mesh. Full-mesh finalist
 autotuning cost about 25.7 s at p=8 and 53.6 s at p=9 in the modal runs. The
-corresponding measured cold-cost break-even is roughly 62 and 253 repeated
-assemblies, respectively; use the high-order path only when that cost and
-workspace are acceptable.
+corresponding historical cold-cost break-even was roughly 62 and 253 repeated
+assemblies, respectively. Those cold costs describe the previous full-mesh
+tuner, which the bounded persistent protocol replaces; workspace still matters.
 
 Reproduce the assembly-only sweep with:
 
@@ -231,9 +241,14 @@ factor and a bounded column batch in shared memory; a second layout retains
 the two directional coupling matrices when resources and timings favor it.
 No full-mesh mixed matrix or trace-flux tensor is constructed.
 
-All three local-factor policies work at high order. `none` refactors on demand;
-`schur-lu` retains the scalar LU and pivots; `schur-cholesky` retains the scalar
-factor, scalar trace response, and source solution. LU checks pivots and
+All local-factor policies work at high order. `none` refactors on demand;
+`schur-lu` retains the scalar LU and pivots; `schur-lu+responses` also retains
+the scalar trace response and source solution that assembly and the RHS already
+compute, so reconstruction needs no local solve, for `3*NTR*NEL+NEL` more reals
+per element; `schur-cholesky` retains the scalar
+factor, scalar trace response, and source solution. Both response policies
+reconstruct from the source solution of the last RHS, so a source must be refreshed
+before it is reconstructed. LU checks pivots and
 Cholesky checks symmetry, coupling adjointness, and positive pivots. Compact
 Cholesky reconstruction needs no shared factor. Source-only solutions remain
 separate from the boundary lift, so zero → nonzero → changed → zero Dirichlet
@@ -251,8 +266,9 @@ postprocessing, and the native p=4..6 multigrid gate are unchanged.
 ### Poisson tuning and resource limits
 
 For each unseen workload, `auto` queries the visible GPU, screens shared
-memory, thread and register limits, then tests at most four configurations on
-at most 2,048 representative elements. Candidate ordering uses architecture
+memory, thread and register limits, then tests at most eight configurations
+within a 30-second first-use budget on at most 2,048 representative elements.
+A running compilation or launch cannot be preempted. Candidate ordering uses architecture
 properties including FP32:FP64 throughput; CUDA-event timings choose the
 winner. Two warmups and five timed samples follow a numerical check against
 the conservative layout. Trial launches use isolated buffers, and cache hits
@@ -266,7 +282,9 @@ resources, driver/runtime/CuPy versions, kernel-source hash, precision, element
 and trace bases, order, quadrature size, phase, format, factor policy, boundary
 state, and a mesh-size bucket. Writes are atomic; malformed or unavailable
 disk caches fall back to measurement and process memory. `--refresh` replaces
-matching records. `--thorough` sweeps every legal candidate with ten samples.
+matching records. `--thorough` permits every legal candidate with ten samples,
+subject to the configured time cap. The shared policy and environment controls
+are documented in [architecture tuning](../development/architecture_tuning.md).
 
 For FP64, the conservative factor-plus-one-column layout requires:
 
@@ -487,7 +505,7 @@ for the assembly/reconstruction path. `raw_matrix_format` accepts COO, direct
 CSR (default), and native face BSR; `raw_block_size="auto"` selects 32/64/128
 threads at p<=2/4/9. The p=7--9 FP64 extension passed qualification on
 2026-10-15: 508 ADR checks and clean memcheck/racecheck. See the
-[dated evidence](../research/solver_studies/raw_cuda_adr_high_order_2026_10_15.md)
+[dated evidence](../research/solver_studies/adr_assembly/raw_cuda_adr_high_order_2026_10_15.md)
 and [higher-order implementation](../development/plans/raw_cuda_adr_tensor.md#higher-order-extension-2026-10-14).
 
 Native p=8 BSR solves require an explicit compatible `amgx_config`: the current
@@ -523,7 +541,7 @@ compilation or launch, naming the order, diffusion kind, quadrature sizes and
 largest fitting volume rule. Local factorization failures are checked before
 returning. The p<=6 FP64 layout fits the default and listed overintegrated rules
 except for general variable tensors at p=6 (at most 143 volume points); see the
-[shared-memory requirements](../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md)
+[shared-memory requirements](../research/solver_studies/adr_assembly/raw_cuda_adr_tensor_shared_memory_2026_09_29.md)
 and `scripts/advection_diffusion_reaction/diagnostics/tensor_shared_memory_budget.py`.
 
 All three factor-cache policies apply through p=9. `none` rebuilds local factors
@@ -540,4 +558,4 @@ incompatible quadrature-only table. Tensor primal and both total-flux recoveries
 are qualified separately through p=6 with CuPy; primal assembly uses a fused
 CUDA kernel. See the
 [device postprocessing guide](adr_device_postprocessing.md) for qualification. See the [implementation plan](../development/plans/raw_cuda_adr_tensor.md)
-and [qualification report](../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md).
+and [qualification report](../research/solver_studies/adr_assembly/raw_cuda_adr_tensor_2026_09_28.md).

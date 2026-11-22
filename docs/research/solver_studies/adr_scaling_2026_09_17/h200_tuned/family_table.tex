@@ -1,0 +1,31 @@
+\begin{tabular}{llrrllrrr}
+\toprule
+case & geom. & $p$ & triangles & winner BW & winner H200 & best BW & best H200 & P-LU (BW host)\\
+\midrule
+transport & squ & 2 & 8\,192 & ASM+PP & ASM+PP & 12.3 & 10.2 & 5.3\\
+transport & squ & 6 & 2\,048 & ASM+PP & ASM+PP & 9.0 & 7.2 & 5.3\\
+transport & squ & 6 & 8\,192 & ASM+PP & ASM+PP & 19.2 & 10.9 & 35.4\\
+transport & squ & 6 & 32\,768 & BJ+PP & BJ+PP & 108.3 & 36.7 & 239.2\\
+transport & squ & 6 & 99\,458 & AMGX & ASM+PP & 569.5 & 142.3 & 690.7\\
+aniso. & squ & 2 & 8\,192 & ASM+PP & ASM+PP & 48.6 & 40.0 & 5.0\\
+aniso. & squ & 6 & 2\,048 & ASM+PP & ASM+PP & 25.8 & 21.5 & 5.3\\
+aniso. & squ & 6 & 8\,192 & ASM+PP & ASM+PP & 144.1 & 45.5 & 35.0\\
+aniso. & squ & 6 & 32\,768 & AMGX & $p$MG--AMG & 441.4 & 157.2 & 236.2\\
+aniso. & squ & 6 & 99\,458 & AMGX & $p$MG--AMG & 621.9 & 384.5 & 694.4\\
+cell.\ weak & ann & 2 & 8\,039 & ASM+PP & ASM+PP & 144.4 & 83.4 & 5.2\\
+cell.\ weak & ann & 6 & 2\,043 & ASM+PP & ASM+PP & 142.3 & 73.6 & 5.3\\
+cell.\ weak & ann & 6 & 8\,039 & ASM+PP & ASM+PP & 226.4 & 109.3 & 32.0\\
+cell.\ weak & ann & 6 & 33\,174 & ASM+PP & ASM+PP & 2\,251 & 501.6 & 222.2\\
+cell.\ weak & ann & 6 & 99\,984 & ASM+PP & ASM+PP & 12\,369 & 2\,108 & 689.0\\
+trig. & squ & 2 & 8\,192 & ASM+PP & $p$MG--AMG & 27.5 & 15.2 & 4.8\\
+trig. & squ & 6 & 2\,048 & ASM+PP & $p$MG--AMG & 32.8 & 14.9 & 5.4\\
+trig. & squ & 6 & 8\,192 & $p$MG--AMG & $p$MG--AMG & 55.2 & 19.6 & 34.7\\
+trig. & squ & 6 & 32\,768 & $p$MG--AMG & $p$MG--AMG & 116.7 & 31.8 & 238.0\\
+trig. & squ & 6 & 99\,458 & AMGX & $p$MG--AMG & 250.1 & 66.6 & 692.5\\
+var.\ vel. & squ & 2 & 8\,192 & AMGX & $p$MG--AMG & 29.3 & 13.5 & 5.2\\
+var.\ vel. & squ & 6 & 2\,048 & ASM+PP & $p$MG--AMG & 22.1 & 13.3 & 5.3\\
+var.\ vel. & squ & 6 & 8\,192 & $p$MG--AMG & $p$MG--AMG & 26.3 & 16.4 & 35.5\\
+var.\ vel. & squ & 6 & 32\,768 & $p$MG--AMG & $p$MG--AMG & 57.3 & 25.5 & 234.4\\
+var.\ vel. & squ & 6 & 99\,458 & $p$MG--AMG & $p$MG--AMG & 136.5 & 50.2 & 700.8\\
+\bottomrule
+\end{tabular}

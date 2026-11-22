@@ -212,15 +212,13 @@ def test_cupy_asm_application_matches_cpu_reference(
     )
 
 
-def test_cupy_asm_apply_into_reuses_preallocated_buffers() -> None:
-    """
-    The GPU preconditioner allocates two internal workspaces during construction:
-    - restricted_buffer: the gathered per-element residuals.
-    - local_solution_buffer: the per-element local solutions.
-    The test saves their CUDA memory addresses, applies the preconditioner twice,
-        and verifies that the addresses do not change
-    This confirms those work buffers are reused during repeated GMRES iterations.
-    It also verifies that repeated calls produce the same result and that input/output aliasing is rejected.
+@pytest.mark.parametrize("application", ["matmul", "auto"])
+def test_cupy_asm_apply_into_reuses_preallocated_buffers(application: str) -> None:
+    """Repeated applications reuse every workspace required by the chosen kernel.
+
+    Matmul retains gathered residuals and local solutions. Automatic fused
+    applications retain local solutions and gather directly in the kernel.
+    Both must preserve storage, repeated results and input/output alias guards.
     """
     cp = _cupy_or_skip()
     space, direct = _small_face_problem("eliminate", nx=2, ny=2, order=2)
@@ -228,18 +226,24 @@ def test_cupy_asm_apply_into_reuses_preallocated_buffers() -> None:
         direct.system,
         direct.assembly.element_blocks,
         space.mesh.loc2glob_edge,
+        application=application,
     )
     x = cp.asarray(np.ones(direct.system.rhs.shape))
     out = cp.empty_like(x)
-    restricted_pointer = int(gpu.restricted_buffer.data.ptr)
+    restricted_pointer = (None if gpu.restricted_buffer is None
+                          else int(gpu.restricted_buffer.data.ptr))
     solution_pointer = int(gpu.local_solution_buffer.data.ptr)
+    assert (restricted_pointer is None) == gpu.uses_race_free_prolongation
+    assert not gpu.allocates_during_apply
 
     gpu.apply_into(x, out)
     first = cp.asnumpy(out)
     gpu.apply_into(x, out)
     second = cp.asnumpy(out)
 
-    assert int(gpu.restricted_buffer.data.ptr) == restricted_pointer
+    current_restricted_pointer = (None if gpu.restricted_buffer is None
+                                  else int(gpu.restricted_buffer.data.ptr))
+    assert current_restricted_pointer == restricted_pointer
     assert int(gpu.local_solution_buffer.data.ptr) == solution_pointer
     np.testing.assert_allclose(first, second, rtol=0.0, atol=0.0)
     with pytest.raises(ValueError, match="must not alias"):

@@ -29,8 +29,11 @@ from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import 
     GEOMETRIES, LEVELS, VARIANTS, StressParameters, estimate_normalization,
 )
 from campaigns.common.reporting import (
-    artifact_details, campaign_status, event, print_details, read_json,
+    artifact_details, campaign_status, convergence_status, event, print_details, read_json,
     result_details, timed_phase,
+)
+from campaigns.common.lifecycle import (
+    REQUEUE_SIGNALS, CampaignStop, describe_release, release_device, stop_on_signals, stop_signal_name,
 )
 
 
@@ -129,6 +132,7 @@ def source_hashes(branch_root):
     paths = list((ROOT/"scripts/advection_diffusion_reaction").rglob("*.py"))
     paths += list((ROOT/"hybridge").rglob("*.py"))
     paths += list((branch_root/"hdgfem").rglob("*.py"))
+    paths += [ROOT/"campaigns/adr_unified/native_hp_worker.py"]
     paths += [branch_root/"scripts"/name for name in (
         "adr_performance_common.py", "adv_diff_rea_cases.py", "oscillatory_adr_cases.py",
         "adr_performance_worker.py", "adr_solver_comparison_worker.py", "adr_native_hp_worker.py",
@@ -240,7 +244,7 @@ def run_job(spec, kind, key, args, common):
     resultpath = Path(spec["result"])
     if args.resume and resultpath.exists():
         prior = common.read_json(resultpath)
-        if prior.get("status") != "running":
+        if prior.get("status") not in ("running", "interrupted"):
             details = artifact_details(resultpath, spec, prior)
             print_details(key, details, reused=True, log_path=out/"logs"/f"{key}.log")
             event(out, "job_reused", job=key, kind=kind, details=details)
@@ -276,12 +280,17 @@ def run_job(spec, kind, key, args, common):
         print(f"started_utc={start_event['timestamp_utc']}\ncommand={shlex.join(command)}\n"
               f"cwd={args.branch_root}\nspec={specpath}\n", file=log, flush=True)
         monitor.start()
+        stopped = None
         try:
+            # subprocess.run kills the worker on timeout or interruption; release_device
+            # below then confirms nothing else in this job still holds the GPU.
             process = subprocess.run(
                 command,
                 cwd=args.branch_root, env=environment, stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout)
             result = read_json(resultpath)
             result["returncode"] = process.returncode
+            if stop_signal_name(process.returncode):
+                result.update(status="interrupted", stop_signal=stop_signal_name(process.returncode))
             if not isinstance(result.get("status"), str):
                 result.update(status="artifact_error", error="Worker result is missing a string status")
             elif result.get("status") == "running" or (process.returncode and result.get("status") == "passed"):
@@ -289,6 +298,10 @@ def run_job(spec, kind, key, args, common):
         except subprocess.TimeoutExpired:
             result = read_json(resultpath)
             result.update(status="timeout", timeout_seconds=args.timeout)
+        except KeyboardInterrupt as exc:
+            stopped = getattr(exc, "signal_name", "SIGINT")
+            result = read_json(resultpath)
+            result.update(status="interrupted", stop_signal=stopped)
         except OSError as exc:
             result = read_json(resultpath)
             result.update(status="process_error", error=str(exc))
@@ -296,6 +309,10 @@ def run_job(spec, kind, key, args, common):
         finally:
             stop.set()
             monitor.join()
+        # A stalled iterative solve is a measured outcome, not a broken job.
+        result["status"] = convergence_status(result, spec)
+        result["device"] = release_device()
+        print(describe_release(result["device"]), file=log, flush=True)
         result["runner_wall_seconds"] = monotonic()-started
         result["runner_started_utc"] = start_event["timestamp_utc"]
         print(f"\nrunner_status={result['status']} runner_wall_seconds={result['runner_wall_seconds']:.6f}", file=log, flush=True)
@@ -304,8 +321,14 @@ def run_job(spec, kind, key, args, common):
     with logpath.open("a") as log:
         print_details(key, details, wall_seconds=result["runner_wall_seconds"], stream=log)
     event(out, "job_finished", job=key, kind=kind, wall_seconds=result["runner_wall_seconds"],
-          result_path=str(resultpath), details=details)
+          result_path=str(resultpath), details=details, device=result["device"])
     print_details(key, details, wall_seconds=result["runner_wall_seconds"], log_path=logpath)
+    print(f"{key}: {describe_release(result['device'])}", flush=True)
+    if stopped:
+        # The result is saved as interrupted; --resume archives it and reruns this job.
+        raise CampaignStop(stopped)
+    if result["device"].get("released") is False:
+        raise RuntimeError(f"{key}: {describe_release(result['device'])}; stopping before later jobs")
     return result
 
 
@@ -429,11 +452,15 @@ def execute(plan, args, common):
                     profile = run_job(profile_spec, kind, "profile_"+jobkey, args, common)
                     profiles.append(dict(profile, case=case["name"], **point, candidate=choice["candidate"]))
                     common.atomic_json(out/"profiles.json", profiles)
+    # Non-convergence is expected for weak preconditioners; it is reported, never a failure.
+    outcomes = ("passed", "not_converged")
     completion = dict(status="prepared" if args.prepare_only else "completed", scheduled=plan["scheduled_solver_jobs"],
                       attempted=len(rows), passed=sum(row["status"] == "passed" for row in rows),
+                      not_converged=[{key: row[key] for key in ("case", "target_triangles", "p", "candidate")}
+                                     for row in rows if row["status"] == "not_converged"],
                       failures=[{key: row[key] for key in ("case", "target_triangles", "p", "candidate", "status")}
-                                for row in rows if row["status"] != "passed"],
-                      profile_failures=sum(row["status"] != "passed" for row in profiles),
+                                for row in rows if row["status"] not in outcomes],
+                      profile_failures=sum(row["status"] not in outcomes for row in profiles),
                       pardiso_attempted=len(pardiso_checks),
                       pardiso_passed=sum(row["status"] == "passed" for row in pardiso_checks),
                       pardiso_failures=sum(row["status"] != "passed" for row in pardiso_checks))
@@ -481,8 +508,10 @@ def parser():
     result.add_argument("--require-neck-screen", action="store_true", help="Stop before assembly if gap/diameter is below 6")
     result.add_argument("--assembly-backend", choices=("cupy", "numpy", "numba"), default="cupy",
                         help="CPU assembly can reduce VRAM demand on larger meshes; solves remain on GPU")
-    result.add_argument("--numba-threads", type=int, default=8,
-                        help="Parallel CPU assembly threads; BLAS stays single-threaded (default: 8)")
+    # Element-local assembly/reconstruction is embarrassingly parallel: use every allocated core.
+    result.add_argument("--numba-threads", type=int, default=len(os.sched_getaffinity(0)),
+                        help="Parallel CPU assembly threads; BLAS stays single-threaded "
+                             "(default: all cores in this process's CPU affinity)")
     result.add_argument("--numba-threading-layer", choices=("default", "tbb", "omp", "workqueue"), default="default",
                         help="Numba scheduler; default selects an available runtime")
     result.add_argument("--reference-max-dofs", type=int, default=100000)
@@ -528,7 +557,12 @@ def main(argv=None):
         if not args.execute and not args.prepare_only:
             print(json.dumps(dict(plan, mode="plan", note="No output files, meshes, assembly or solver jobs created."), indent=2))
             return 0
-        return execute(plan, args, common)
+        with stop_on_signals():
+            return execute(plan, args, common)
+    except CampaignStop as stop:
+        event(args.output, "campaign_interrupted", message=f"stopped by {stop.signal_name}; finished jobs are saved "
+              f"under {args.output/'jobs'}; rerun with --resume to continue", signal=stop.signal_name)
+        return 2 if stop.signal_name in REQUEUE_SIGNALS else 3
     except (ValueError, OSError, RuntimeError) as exc:
         cli.exit(2, f"{exc}\n")
 

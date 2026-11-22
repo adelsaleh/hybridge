@@ -23,8 +23,6 @@ from hybridge.hdg import condensation as hdg_assembly
 from hybridge.solvers.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
-    resolve_raw_local_assembly,
-    split3_memory_check_needed,
     validate_advection_backend_configuration,
 )
 from hybridge.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
@@ -172,7 +170,7 @@ class AdvectionReactionHDGOptions:
     matrix_pattern_only: bool = False
     assembly_backend: AssemblyBackend = "numpy"
     trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
-    raw_local_assembly: Literal["precomputed", "fused", "split3", "auto"] = "precomputed"
+    raw_local_assembly: Literal["precomputed", "fused", "split3", "tensor", "auto"] = "precomputed"
     raw_lu_mode: Literal["safe", "coop"] | None = None  # None: coop for fused/split3
     raw_block_size: RawCudaBlockSize = "auto"
     raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto"
@@ -242,8 +240,10 @@ def _quadrature_transport_inputs(source, beta, reaction, space: DGSpace, trace_s
         reaction = QuadratureScalar.from_element_coefficient(reaction, space, device=device)
     if isinstance(source, ElementCoefficient):
         source = QuadratureScalar.from_element_coefficient(source, space, device=device)
+    # Raw CUDA reduces a quadrature source to its moments before any kernel runs, so only the host
+    # backends and pointwise advection or reaction are restricted to the quadrature-capable kernels.
     flag = (isinstance(beta, QuadratureVectorField) or isinstance(reaction, QuadratureScalar)
-            or isinstance(source, QuadratureScalar))
+            or (isinstance(source, QuadratureScalar) and not device))
     return source, beta, reaction, flag
 
 
@@ -255,24 +255,32 @@ def _quadrature_source_field(source, space: DGSpace, *, device: bool):
     return (source.to_device() if device else source.to_host()).project(name="source_h")
 
 
+def _tensor_inputs(space: DGSpace, source, beta, reaction) -> bool:
+    """Return whether tensor TSLE accepts these inputs: DG coefficients, advection field in the solution basis."""
+    if any(isinstance(value, (QuadratureScalar, QuadratureVectorField, ElementCoefficient))
+           for value in (source, beta, reaction)):
+        return False
+    if not isinstance(beta, VectorDGField):
+        return False
+    field_space = beta.components[0].space
+    return field_space is space or field_space.is_compatible(space)
+
+
 def _resolve_local_assembly(space: DGSpace, trace_basis: str, raw_local_assembly: str, *, bsr_output: bool,
-                            raw_lu_mode, cache_operator: bool = False, workspace=None) -> str:
-    """Resolve ``raw_local_assembly``; at p=6-7 ``"auto"`` also compares split3's workspace with free memory."""
-    memory = {}
-    if split3_memory_check_needed(raw_local_assembly, order=space.order, bsr_output=bsr_output,
-                                  raw_lu_mode=raw_lu_mode, cache_operator=cache_operator):
-        from hybridge.transport.tsle_bsr import split3_memory_sizes
-        needed, available = split3_memory_sizes(space, space.trace_space(trace_basis), workspace)
-        memory = dict(split3_workspace_bytes=needed, available_device_bytes=available)
-    return resolve_raw_local_assembly(raw_local_assembly, order=space.order, bsr_output=bsr_output,
-                                      raw_lu_mode=raw_lu_mode, cache_operator=cache_operator, **memory)
+                            raw_lu_mode, cache_operator: bool = False, workspace=None,
+                            tensor_inputs: bool = False) -> str:
+    """Defer eligible automatic choices until actual device inputs are available."""
+    if raw_local_assembly != "auto":
+        return raw_local_assembly
+    if not bsr_output or raw_lu_mode == "safe" or cache_operator:
+        return "fused"
+    return "auto"
 
 
 def _with_implied_options(options: AdvectionReactionHDGOptions, explicit) -> AdvectionReactionHDGOptions:
     """Zero-flux raw-CUDA assembly runs only in the fused or split3 kernels; imply auto.
 
-    ``"auto"`` resolves per order (split3 from p=8 on when BSR output allows,
-    fused otherwise). An explicitly passed ``raw_local_assembly`` is kept and
+    ``"auto"`` calibrates equivalent pipelines when BSR output allows. An explicitly passed ``raw_local_assembly`` is kept and
     still validated.
     """
     if ("raw_local_assembly" not in explicit and options.boundary_mode == "zero-flux"
@@ -343,9 +351,9 @@ class AdvectionReactionHDGSolver:
     ownership model.
 
     Without an ``options`` object, raw-CUDA assembly with
-    ``boundary_mode="zero-flux"`` implies ``raw_local_assembly="auto"`` (split3
-    from p=8 on when face-BSR output allows, fused otherwise) unless another
-    kernel is passed. Solves warm-start from the previous
+    ``boundary_mode="zero-flux"`` implies ``raw_local_assembly="auto"`` unless
+    another kernel is passed. Eligible face-BSR pipelines are calibrated once
+    for each device/workload and cached. Solves warm-start from the previous
     trace when no ``initial_guess`` is given.
     """
 
@@ -678,7 +686,7 @@ class AdvectionReactionHDGSolver:
         finally:
             self.options = previous_options
 
-    def assemble_tangent_boundary_raw_cuda_bsr(self):
+    def assemble_tangent_boundary_raw_cuda_bsr(self, *, cache_local_response: bool = False):
         """Assemble the zero-normal-flux transport trace operator as face BSR.
 
         This class-level assembler is the no-solve counterpart of the fused
@@ -699,10 +707,11 @@ class AdvectionReactionHDGSolver:
         local_assembly = _resolve_local_assembly(
             self.space, normalize_trace_basis(options.trace_basis), options.raw_local_assembly,
             bsr_output=True, raw_lu_mode=options.raw_lu_mode, workspace=self._raw_cuda_tsle_workspace,
+            tensor_inputs=_tensor_inputs(self.space, self.source, self.beta, self.reaction),
         )
-        if local_assembly not in {"fused", "split3"}:
+        if local_assembly not in {"fused", "split3", "tensor", "auto"}:
             raise ValueError(
-                "tangent-boundary BSR assembly requires raw_local_assembly='fused', 'split3', or 'auto'"
+                "tangent-boundary BSR assembly requires raw_local_assembly='fused', 'split3', 'tensor', or 'auto'"
             )
         from hybridge.core.device import as_cupy_trace_space
         from hybridge.transport.cuda import assemble_reduced_system_cuda
@@ -719,7 +728,7 @@ class AdvectionReactionHDGSolver:
         beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
         block_size = (
             options.raw_block_size
-            if local_assembly == "split3"
+            if local_assembly in {"split3", "tensor", "auto"}
             else resolve_raw_cuda_block_size(
                 options.raw_block_size,
                 equation="advection-reaction",
@@ -742,12 +751,15 @@ class AdvectionReactionHDGSolver:
             raw_tsle_workspace=self._raw_cuda_tsle_workspace,
             advection_stabilization=hdg_stabilization.resolve_transport_stabilization(
                 options.advection_stabilization, self.beta),
-            raw_cache_local_response=False,
+            raw_cache_local_response=cache_local_response,
+            raw_response_workspace=self._raw_cuda_response_workspace,
             beta_space=beta.components[0].space,
         )
         if assembly.matrix_format != "bsr":
             raise RuntimeError("raw-CUDA tangent-boundary assembly did not return BSR")
         self._tangent_boundary_bsr_assembly = assembly
+        if cache_local_response:
+            self._raw_cuda_response_workspace = assembly.raw.local_response
         return assembly
 
     def solve(
@@ -903,7 +915,7 @@ def solve_advection_reaction_hdg(
         matrix_pattern_only: bool = False,
         assembly_backend: AssemblyBackend = "numpy",
         trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
-        raw_local_assembly: Literal["precomputed", "fused", "split3", "auto"] = "precomputed",
+        raw_local_assembly: Literal["precomputed", "fused", "split3", "tensor", "auto"] = "precomputed",
         raw_lu_mode: Literal["safe", "coop"] | None = None,
         raw_block_size: RawCudaBlockSize = "auto",
         raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto",
@@ -1130,6 +1142,7 @@ def solve_advection_reaction_hdg(
             ),
             raw_lu_mode=raw_lu_mode,
             cache_operator=bool(cache_operator),
+            tensor_inputs=not quadrature_coefficients and _tensor_inputs(space, source, beta, reaction),
         )
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
@@ -1173,7 +1186,7 @@ def solve_advection_reaction_hdg(
     verbosity = _verbosity_level(verbose)
     if verbosity:
         print("\n----- DG FEM Advection-Reaction HDG Solve -----")
-    if effective_backend == "raw-cuda" and raw_local_assembly != "split3":
+    if effective_backend == "raw-cuda" and raw_local_assembly not in {"split3", "tensor", "auto"}:
         raw_block_size = resolve_raw_cuda_block_size(
             raw_block_size,
             equation="advection-reaction",

@@ -9,7 +9,7 @@ of the dossier's phase 2 (`campaigns/h100_solvers`).
 
 | | |
 |---|---|
-| Status | complete (local GPU and CPU; `adr_closed_loop_stress_main`, `_main_v2`, the strong Numba h = 150k runs and the square BSR 2M short runs) |
+| Runs | local GPU and CPU: `adr_closed_loop_stress_main`, `_main_v2`, the strong Numba h = 150k runs and the square BSR 2M short runs |
 | Launcher | `run_closed_loop_stress.py` (plan, `--prepare-only`, `--execute`); worker `closed_loop_stress_worker.py` (isolated solver tree); `closed_loop_stress_pardiso.py` (the PyPardiso reference through `scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py`) |
 | Output directory | `run_outputs/solver_studies/adr_closed_loop_stress_main` (15 GB), `adr_closed_loop_stress_main_v2`, `adr_closed_loop_stress_strong_numba_h150k` (55 GB), `adr_square_stress_strong_numba_h150k`, `adr_square_bsr_2m_short*` |
 | Records | `docs/research/solver_studies/adr_closed_loop_stress_runner.md`, `docs/research/solver_studies/adr_solver_comparison_2026_09_17.md` |
@@ -32,12 +32,12 @@ HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cud
 
 ## Additional saved output directories
 
-- [adr_closed_loop_stress_main](records/adr_closed_loop_stress_main/DATA.md).
-- [adr_closed_loop_stress_main_v2](records/adr_closed_loop_stress_main_v2/DATA.md).
-- [adr_closed_loop_stress_strong_numba_h150k](records/adr_closed_loop_stress_strong_numba_h150k/DATA.md).
-- [adr_square_bsr_2m_short_20260922](records/adr_square_bsr_2m_short_20260922/DATA.md).
-- [adr_square_bsr_2m_short_mem90_20260922](records/adr_square_bsr_2m_short_mem90_20260922/DATA.md).
-- [adr_square_stress_strong_numba_h150k](records/adr_square_stress_strong_numba_h150k/DATA.md).
+- [adr_closed_loop_stress_main](../../docs/campaigns/adr_stress/records/adr_closed_loop_stress_main/DATA.md).
+- [adr_closed_loop_stress_main_v2](../../docs/campaigns/adr_stress/records/adr_closed_loop_stress_main_v2/DATA.md).
+- [adr_closed_loop_stress_strong_numba_h150k](../../docs/campaigns/adr_stress/records/adr_closed_loop_stress_strong_numba_h150k/DATA.md).
+- [adr_square_bsr_2m_short_20260922](../../docs/campaigns/adr_stress/records/adr_square_bsr_2m_short_20260922/DATA.md).
+- [adr_square_bsr_2m_short_mem90_20260922](../../docs/campaigns/adr_stress/records/adr_square_bsr_2m_short_mem90_20260922/DATA.md).
+- [adr_square_stress_strong_numba_h150k](../../docs/campaigns/adr_stress/records/adr_square_stress_strong_numba_h150k/DATA.md).
 
 ## Consolidated sources
 

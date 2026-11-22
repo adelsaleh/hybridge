@@ -178,7 +178,9 @@ Numba diffusion supports persistent `cache_local_factors="schur-lu"` and
 caching enabled. These policies use the reusable solver's existing source,
 boundary, reaction, options and space invalidation contract. See the
 [host Schur cache guide](../backends/numba_diffusion.md) for supported scope,
-checks, storage and timings. The default remains `"none"`.
+checks, storage and timings. The default remains `"none"`. Raw-CUDA diffusion also
+accepts `"schur-lu+responses"`, which reconstructs without a local solve at the
+accuracy of `"schur-lu"` for more stored data.
 
 ## Results And Functional Compatibility
 

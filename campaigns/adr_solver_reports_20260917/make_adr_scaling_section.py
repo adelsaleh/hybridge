@@ -278,7 +278,7 @@ def write_data(rows, campaign, out):
     keys=['case','n','p','triangles','trace_dofs','h','candidate','status','mean','minimum','maximum','iterations','setup','fresh','amortized','residual','l2']
     with (out/'scaling.csv').open('w',newline='') as stream:
         writer=csv.DictWriter(stream,fieldnames=keys);writer.writeheader();writer.writerows(flattened)
-    previous=read(ROOT/'docs/research/solver_studies/adr_solver_comparison_2026_09_17.data.json')
+    previous=read(ROOT/'docs/research/solver_studies/adr_scaling_2026_09_17/baseline/adr_solver_comparison_2026_09_17.data.json')
     provenance=previous['provenance']
     for binary, description in provenance['binaries'].items():
         digest=hashlib.sha256()
@@ -289,7 +289,7 @@ def write_data(rows, campaign, out):
         binary_and_repository_provenance=provenance,
         cited_prior_profiles={key:value for key,value in previous['profiles'].items() if key.endswith(('_components.json','_memory.json')) or key=='transport_tolerance_cycles.json'},
         rows=rows,assemblies=read(campaign/'assemblies.json'),validation=read(out/'validation.json'),local_campaign=str(campaign.resolve()),
-        prior_study=str(ROOT/'docs/research/solver_studies/adr_solver_comparison_2026_09_17.data.json'))
+        prior_study=str(ROOT/'docs/research/solver_studies/adr_scaling_2026_09_17/baseline/adr_solver_comparison_2026_09_17.data.json'))
     (out/'scaling.data.json').write_text(json.dumps(archive,indent=2)+'\n')
     return flattened
 

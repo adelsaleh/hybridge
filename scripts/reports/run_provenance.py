@@ -21,6 +21,19 @@ PACKAGES = ("numpy", "scipy", "numba", "cupy-cuda13x", "gmsh", "matplotlib", "pi
 CODE_SUFFIXES = {".py", ".json", ".toml", ".cfg", ".geo", ".cu", ".cuh"}
 
 
+def mesh_fingerprint(mesh):
+    """Identify actual geometry/connectivity, independent of cache file names."""
+    import numpy as np
+    hashes = {}
+    for name in ('node_coords', 'triangles'):
+        value = np.ascontiguousarray(getattr(mesh, name))
+        digest = hashlib.sha256()
+        digest.update(str((value.shape, value.dtype.str)).encode())
+        digest.update(memoryview(value).cast('B'))
+        hashes[name + '_sha256'] = digest.hexdigest()
+    return hashes
+
+
 def _git(root, *args):
     """Return git output for ``root``, or None outside a usable checkout."""
     try:

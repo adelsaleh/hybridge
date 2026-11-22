@@ -44,6 +44,19 @@ case, which was **not rerun**. Old oscillatory paths are compatibility symlinks.
   nine-lobed trapping, crossing circulation and perpendicular through-flow;
   all 60 residuals and the eight passing configurations' timings appear with
   the analytic figures in both `main.tex` and `main_synthesis.tex`.
+- [H200 tuned kernels versus this Blackwell study](h200_tuned/README.md): 71
+  matched configurations on identical operators, stock and tuned H200 kernels,
+  family winners and the LU crossover, and the H200-only ladder to 20M trace DOFs
+  (28–29 October 2026); appended to both standalone wrappers.
+- [Baseline, 17 September 2026](baseline/): the
+  [machine baseline](baseline/adr_machine_baseline_2026_09_17.md), the
+  [matched assembler comparison](baseline/adr_assembler_comparison_2026_09_17.md) and the
+  [matched solver comparison](baseline/adr_solver_comparison_2026_09_17.md) (with its
+  `.data.json`) that preceded this study.
+- Campaign documents: the [closed-loop stress proposal](closed_loop_stress/adr_closed_loop_stress_proposal_2026_09_21.md)
+  and [runner](closed_loop_stress/adr_closed_loop_stress_runner.md), the
+  [PyPardiso campaign](pardiso_lu/adr_pardiso_campaign.md) and the
+  [unified L1–L5 campaign](unified/adr_unified_l5_campaign.md).
 - [Focused comparison subsection](comparison/subsections.tex): 50 endpoint and
   144 scaling configurations, with all solver families shown in three figures
   and the largest-system table.

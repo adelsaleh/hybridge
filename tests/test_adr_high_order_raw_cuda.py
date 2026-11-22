@@ -191,6 +191,141 @@ def test_high_order_excessive_quadrature_still_has_a_bounded_error():
         raw.tensor_execution_workspace(55, np.array([6]), 10000, 19, order=9, shared_limit=48*1024)
 
 
+def test_tensor_mass_placement_switch(monkeypatch):
+    """HYBRIDGE_RAW_ADR_TENSOR_MASS forces either p>=7 layout; p<=6 and the default are unchanged."""
+    kinds, nq, nfq, limit = np.array([6]), 196, 19, 227*1024
+    default = raw.tensor_execution_workspace(55, kinds, nq, nfq, order=9, shared_limit=limit)
+    assert default.compact and not default.external_mass
+    monkeypatch.setenv('HYBRIDGE_RAW_ADR_TENSOR_MASS', 'external')
+    forced = raw.tensor_execution_workspace(55, kinds, nq, nfq, order=9, shared_limit=limit)
+    assert forced.compact and forced.external_mass and forced.shared_bytes < default.shared_bytes
+    assert raw.tensor_execution_workspace(28, kinds, 64, 13, order=6, shared_limit=limit).external_mass is False
+    monkeypatch.setenv('HYBRIDGE_RAW_ADR_TENSOR_MASS', 'shared')
+    with pytest.raises(raw.TensorWorkspaceError):
+        raw.tensor_execution_workspace(55, kinds, nq, nfq, order=9, shared_limit=48*1024)
+    monkeypatch.setenv('HYBRIDGE_RAW_ADR_TENSOR_MASS', 'sideways')
+    with pytest.raises(ValueError, match='HYBRIDGE_RAW_ADR_TENSOR_MASS'):
+        raw.tensor_execution_workspace(55, kinds, nq, nfq, order=9, shared_limit=limit)
+
+
+@pytest.mark.parametrize('order', [7, 8, 9])
+@pytest.mark.parametrize('cache', raw.CACHE_LOCAL_FACTORS)
+def test_explicit_mass_inverse_matches_lu_and_reference(cp, monkeypatch, order, cache):
+    """HYBRIDGE_RAW_ADR_MASS_INVERSE=on: Gauss-Jordan G^{-1} products instead of LU solves (kind 6)."""
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
+
+    mesh = rectangle_mesh(2, 1)
+    mesh = DGMesh.from_arrays(mesh.node_coords @ np.array([[1.2, .3], [-.1, .8]]), mesh.triangles)
+    space = DGSpace(mesh, order, basis_type='dub_orth')
+    trace = space.trace_space('legendre-modal')
+    diffusion = raw_cuda_coefficient('variable-full')
+    prepared = prepare_adr_data(lambda x, y: 1.+.1*x*y, lambda x, y: .4+.05*x, velocity(space), space,
+                                diffusion=diffusion, diffusion_stabilization=tau_law, trace_space=trace,
+                                dense_local_matrices=False)
+    boundary = lambda x, y: .2+x-.3*y
+    values = np.sin(np.arange(mesh.num_edg*(order+1))+.2)
+    expected, rhs, local = [cp.asnumpy(v) for v in cupy_reference(cp, prepared, diffusion, space, trace, boundary, values)]
+    results = {}
+    for mode in ('off', 'on'):
+        monkeypatch.setenv('HYBRIDGE_RAW_ADR_MASS_INVERSE', mode)
+        operator = assemble(prepared, boundary, space, diffusion=diffusion, trace_space=trace,
+                            cache_local_factors=cache, matrix_format='bsr')
+        assert operator.assembly.timings['raw.mass_inverse'] == float(mode == 'on')
+        unknowns, _ = reconstruct(operator, cp.asarray(values))
+        results[mode] = (dense_device(cp, operator.assembly), cp.asnumpy(operator.assembly.rhs), cp.asnumpy(unknowns))
+        if mode == 'on' and cache == 'schur-lu+mass':
+            again = assemble(prepared, boundary, space, diffusion=diffusion, trace_space=trace, cache_local_factors=cache,
+                             matrix_format='bsr', mass_factors=operator.mass_factors)
+            assert again.assembly.timings['raw.mass_factors.cached'] == 1.
+            np.testing.assert_allclose(cp.asnumpy(again.assembly.rhs), results['on'][1], rtol=1e-12, atol=1e-12)
+    for actual, lu, reference in zip(results['on'], results['off'], (expected, rhs, local)):
+        np.testing.assert_allclose(actual, reference, rtol=5e-10, atol=5e-10)
+        np.testing.assert_allclose(actual, lu, rtol=1e-10, atol=1e-11)
+
+
+def test_mass_inverse_needs_kind6_shared_mass_and_p7():
+    kinds, limit = np.array([6]), 227*1024
+    plan = raw.tensor_execution_workspace(55, kinds, 400, 19, order=9, shared_limit=limit)
+    on = raw.with_mass_inverse(plan, kinds, nel=55, order=9, shared_limit=limit, mode='on')
+    assert on.mass_inverse and on.shared_bytes == plan.shared_bytes + 8*2*55*plan.batch
+    assert raw.with_mass_inverse(plan, kinds, nel=55, order=9, shared_limit=limit, mode='auto').mass_inverse
+    assert not raw.with_mass_inverse(plan, kinds, nel=55, order=9, shared_limit=limit, mode='off').mass_inverse
+    assert not raw.with_mass_inverse(plan, np.array([5]), nel=55, order=9, shared_limit=limit, mode='on').mass_inverse
+    small = raw.tensor_execution_workspace(28, kinds, 64, 13, order=6, shared_limit=limit)
+    assert not raw.with_mass_inverse(small, kinds, nel=28, order=6, shared_limit=limit, mode='on').mass_inverse
+    assert not raw.with_mass_inverse(plan, kinds, nel=55, order=9, shared_limit=plan.shared_bytes, mode='on').mass_inverse
+
+
+@pytest.mark.parametrize('order,coefficient', [
+    (9, 'variable-full'), (8, 'variable-full'),
+    (9, 'constant-full'), (7, 'variable-full'),
+])
+def test_automatic_wide_launch_for_high_order_variable_tensors(cp, order, coefficient):
+    """Measured launch/layout selection matches the explicit 128-thread reference."""
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
+
+    space = DGSpace(rectangle_mesh(3, 2), order, basis_type='dub_orth')
+    trace = space.trace_space('legendre-modal')
+    diffusion = raw_cuda_coefficient(coefficient)
+    prepared = prepare_adr_data(space.constant(1.), .4, velocity(space), space, diffusion=diffusion,
+                                diffusion_stabilization=tau_law, trace_space=trace, dense_local_matrices=False)
+    boundary = lambda x, y: .2+x-.3*y
+    values = cp.sin(cp.arange(space.mesh.num_edg*(order+1), dtype=cp.float64)+.2)
+    common = dict(diffusion=diffusion, trace_space=trace, cache_local_factors='none', matrix_format='bsr')
+    automatic = assemble(prepared, boundary, space, block_size='auto', **common)
+    reference = assemble(prepared, boundary, space, block_size=128, **common)
+    timings = automatic.assembly.timings
+    block = timings['raw.block_size']
+    assert block in (64, 128, 256, 512)
+    assert automatic.reconstruction_data['tuning'] is not None
+    assert reference.assembly.timings['raw.block_size'] == 128
+    for name in ('data', 'rhs'):
+        expected_value, actual = getattr(reference.assembly, name), getattr(automatic.assembly, name)
+        cp.testing.assert_allclose(actual, expected_value, rtol=5e-10, atol=5e-10, err_msg=name)
+    local, recon = reconstruct(automatic, values)
+    local_reference, _ = reconstruct(reference, values)
+    assert recon['raw.reconstruction.block_size'] == block
+    cp.testing.assert_allclose(local, local_reference, rtol=5e-10, atol=5e-10)
+
+
+@pytest.mark.parametrize('placement', ['auto', 'external'])
+@pytest.mark.parametrize('coefficient,mass_phases', [('variable-full', True), ('constant-full', False)])
+def test_phase_clock_build_is_identical_and_charges_every_phase(cp, monkeypatch, placement, coefficient,
+                                                                 mass_phases):
+    """HYBRIDGE_RAW_ADR_PHASE_CLOCK only adds counters: same matrix up to scatter order, cycles in each phase."""
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
+
+    monkeypatch.setenv('HYBRIDGE_RAW_ADR_TENSOR_MASS', placement)
+    space = DGSpace(rectangle_mesh(3, 2), 9, basis_type='dub_orth')
+    trace = space.trace_space('legendre-modal')
+    diffusion = raw_cuda_coefficient(coefficient)
+    prepared = prepare_adr_data(space.constant(1.), .4, velocity(space), space, diffusion=diffusion,
+                                diffusion_stabilization=tau_law, trace_space=trace,
+                                dense_local_matrices=False)
+    boundary = lambda x, y: .2+x-.3*y
+    results = []
+    for clock in ('0', '1'):
+        monkeypatch.setenv('HYBRIDGE_RAW_ADR_PHASE_CLOCK', clock)
+        operator = assemble(prepared, boundary, space, diffusion=diffusion, trace_space=trace,
+                            cache_local_factors='none', matrix_format='bsr', block_size=64)
+        results.append(operator.assembly)
+    plain, clocked = results
+    assert not any(key.startswith('raw.phase') for key in plain.timings)
+    assert plain.timings['raw.kernel.num_regs'] > 0 and plain.timings['raw.kernel.blocks_per_sm'] >= 1
+    # Scatter uses atomicAdd across elements, so the summation order (not the kernel) varies.
+    for name in ('data', 'rhs'):
+        expected, actual = getattr(plain, name), getattr(clocked, name)
+        assert float(cp.abs(actual - expected).max()) <= 1e-13 * float(cp.abs(expected).max()), name
+    timings = clocked.timings
+    total = sum(timings[f'raw.phase.{name}'] for name in raw.TENSOR_PHASES)
+    assert total == pytest.approx(timings['raw.kernel.device'], rel=1e-9)
+    work = set(raw.TENSOR_PHASES) - {'prologue', 'mass_points', 'mass_assembly', 'mass_factor'}
+    for name in work | ({'mass_points', 'mass_assembly', 'mass_factor'} if mass_phases else set()):
+        assert timings[f'raw.phase_cycles.{name}'] > 0, name
+    if not mass_phases:
+        assert timings['raw.phase_cycles.mass_factor'] == 0
+
+
 @pytest.mark.parametrize('cache', raw.CACHE_LOCAL_FACTORS)
 @pytest.mark.parametrize('block_size,fmt', [(1, 'csr'), (32, 'coo'), (64, 'bsr'), (128, 'csr')])
 @pytest.mark.parametrize('kind', [4, 5, 6])

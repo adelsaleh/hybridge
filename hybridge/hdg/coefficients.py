@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import numpy as np
+from hybridge.core.quadrature_coefficients import QuadratureScalar
 from hybridge.core.space import DGField, DGSpace, DGTraceSpace, _normalize_callable_values
 from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.core.quadrature import _reference_edge_points_from_1d
@@ -555,6 +556,10 @@ def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: st
         if value.space is not space:
             raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
         return value
+    if label == "source" and isinstance(value, QuadratureScalar):
+        # The coefficient kernels read only the moments, which this field reproduces on this quadrature.
+        value.check(space)
+        return (value.to_device() if backend in {"cupy", "raw-cuda"} else value.to_host()).project(name="source_h")
     if callable(value):
         raise TypeError(
             f"assembly_backend='{backend}' requires {label} to be a DGField; "

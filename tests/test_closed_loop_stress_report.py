@@ -311,7 +311,11 @@ def test_direction_glyphs_have_equal_physical_length_and_skip_zero_vectors():
 
 
 def test_solver_report_tex_has_no_assembly_discussion():
+    # h200_tuned/ is its own report: its Assembly subsection and end-to-end (assembly plus
+    # solve) table were requested there, so the solver-only rule does not apply to it.
     for path in REPORT.rglob("*.tex"):
+        if "h200_tuned" in path.relative_to(REPORT).parts:
+            continue
         assert "assembl" not in path.read_text().lower(), path
     for name in ("adr_results_section.tex.in", "adr_synthesis_section.tex.in",
                  "oscillatory_scaling_subsection.tex.in", "oscillatory_adr_section.tex.in"):

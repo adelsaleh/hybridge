@@ -1,0 +1,36 @@
+Compare the converged ILU(10) configuration with and without PARDISO
+=================================================================
+From scripts/matk:
+
+Check all running and pending GPU allocations across all repositories first:
+  squeue -u "$USER" -o '%.18i %.12P %.28j %.10T %.20b %.20R'
+Maximum FIVE GPUs total. The following pair needs two available slots.
+
+  sbatch amgx_iluk_ordering_compare.sbatch pardiso
+  sbatch amgx_iluk_ordering_compare.sbatch none
+
+Both use the same qualified isolated AMGX library and the identical AMGX
+configuration: supplied-order b8 ILU(10), PFGMRES restart1000/max3000, native
+tolerance1e-14, original-system acceptance1e-8. No scaling, zero initial guess,
+no warm starts or external residual corrections. The PARDISO case reuses the
+saved phase11 permutation; the input-order case performs no permutation.
+Each run first passes a matching small numerical check.
+
+Consecutive b8 groups contain different unknowns after a scalar permutation.
+This compares the total effect of PARDISO ordering plus block regrouping;
+it does not hold the block partition fixed. Actual input/factor block counts
+and memory are reported separately, with original-system residual validation.
+
+Monitor:
+  tail -F matk-iluk-order-compare-JOBID.out
+
+Full results:
+  ../../run_outputs/matk/iluk-order-compare-JOBID/{smoke,full}.json
+  ../../run_outputs/matk/iluk-order-compare-JOBID/full_trials/
+
+Timing/result report (replace these IDs for a new pair):
+  ../../.venv/bin/python report_ordered_blocks.py --prefix iluk-order-compare \
+    --jobs 28478 28480 --output ../../run_outputs/matk/iluk-order-comparison.json
+
+The PARDISO analysis cost16.459631s is a saved one-time cost; its permutation
+application is paid on each reordered run. The none case has neither cost.

@@ -153,7 +153,45 @@ def measure(spec):
                             counts['residual_history_kind']='AMGX reported absolute L2 residuals; final residual checked independently'
                     solves.append({'solve_ms':elapsed,**counts,**checked})
                     if not checked['passed']:break
-                sample={'setup_ms':setup,'setup_stages':stages,'solves':solves,
+                warm=[]
+                warm_error=None
+                try:
+                    if spec.get('warm_deltas') and len(solves)==spec['solves_per_setup'] and all(s['passed'] for s in solves):
+                        # Time-stepping benchmark: perturbed RHS, previous solution as the initial guess,
+                        # same operator/preconditioner. Only the solve is timed; see scripts/warm_series.py.
+                        from scripts.warm_series import relative_residual,steps
+                        from hdgfem.assembly.face_dense import face_dense_matvec as warm_matvec
+                        matvec=lambda v:warm_matvec(system.blocks,system.neighbors,v)
+                        guess=x
+                        for delta,step,b in steps(rhs_host,spec['warm_deltas'],spec.get('warm_steps',4),spec.get('warm_seed',261027)):
+                            if step==1:guess=x.copy()
+                            initial=relative_residual(matvec,guess,b)
+                            if native:
+                                b_device=cp.asarray(b);guess_device=cp.asarray(guess);sync();stamp=perf_counter()
+                                answer=solver.solve(b_device,x0=guess_device,raise_on_failure=False)
+                                sync();elapsed=1000*(perf_counter()-stamp)
+                                new=cp.asnumpy(answer.solution);iterations=int(answer.iterations);converged=bool(answer.converged)
+                            else:
+                                b=np.ascontiguousarray(b);guess=np.ascontiguousarray(guess)
+                                rhs.upload_raw(b.ctypes.data,b.size//block_size,block_size)
+                                solution.upload_raw(guess.ctypes.data,guess.size//block_size,block_size)
+                                sync();stamp=perf_counter()
+                                solver.solve(rhs,solution,zero_initial_guess=False)
+                                sync();elapsed=1000*(perf_counter()-stamp)
+                                new=solution.download(np.empty_like(rhs_host));iterations=int(solver.iterations_number)
+                                converged=solver.status=='success'
+                            rel=relative_residual(matvec,new,b)
+                            warm.append({'delta':delta,'step':step,'iterations':iterations,'solve_ms':elapsed,
+                                         'initial_relative_residual':initial,'true_relative_residual':rel,
+                                         'passed':bool(converged and np.isfinite(rel) and rel<=spec['rtol'])})
+                            if np.all(np.isfinite(new)):guess=new
+                        if not native:
+                            # Leave the device RHS as the original problem for any later use.
+                            rhs.upload_raw(rhs_host.ctypes.data,rhs_host.size//block_size,block_size)
+                except Exception as error:
+                    # The warm benchmark must never cost the cold measurements of this setup.
+                    warm_error=f'{type(error).__name__}: {error}'
+                sample={'setup_ms':setup,'setup_stages':stages,'solves':solves,'warm':warm,'warm_error':warm_error,
                     'fresh_setup_solve_ms':setup+solves[0]['solve_ms'],
                     'amortized_ms':(setup+sum(s['solve_ms'] for s in solves))/len(solves),
                     'passed':len(solves)==spec['solves_per_setup'] and all(s['passed'] for s in solves),

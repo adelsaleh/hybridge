@@ -27,6 +27,7 @@ from hybridge.linalg.polynomial import (
     harmonic_ritz_values,
     leja_order_conjugate_preserving,
 )
+from hybridge.linalg.gpu.face_dense import face_dense_threads_per_block
 from hybridge.runtime.optional import device_arrays_overlap, require_cupy_device
 from hybridge.linalg.gpu.gmres import (
     CuPyOrthogonalization,
@@ -689,7 +690,7 @@ class CuPyPolynomialPreconditioner:
     def _launch_real_update(self, theta: float, result: Any) -> None:
         """Launch the corresponding preallocated CUDA kernel."""
         total = self.num_dofs
-        threads = 256
+        threads = face_dense_threads_per_block()
         blocks = (total + threads - 1) // threads
         scalar = np.float32 if self.dtype == self._cp.float32 else np.float64
         self._real_update(
@@ -707,7 +708,7 @@ class CuPyPolynomialPreconditioner:
     def _launch_pair_update(self, a: float, b: float, result: Any) -> None:
         """Launch the corresponding preallocated CUDA kernel."""
         total = self.num_dofs
-        threads = 256
+        threads = face_dense_threads_per_block()
         blocks = (total + threads - 1) // threads
         denominator = a * a + b * b
         scalar = np.float32 if self.dtype == self._cp.float32 else np.float64

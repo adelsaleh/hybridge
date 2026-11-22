@@ -19,8 +19,16 @@ DOCUMENTATION_AREAS = (
     "algorithms",
     "research",
     "releases",
+    "campaigns",
+    "lessons",
 )
 ALGORITHM_CONTENTS = {
+    "assembly": {
+        "README.md",
+        "h200_sm90",
+        "rtx_pro_5000_sm120",
+        "quadro_rtx6000_sm75",
+    },
     "advection_diffusion_reaction": {
         "README.md",
         "assembly.tex",
@@ -46,14 +54,15 @@ ALGORITHM_CONTENTS = {
     },
 }
 DEVELOPMENT_PLAN_CONTENTS = {
+    "cache_reuse_policy.md",
     "README.md",
     "face_block_hp_multigrid.md",
     "diffusion_stabilization_global_scales.md",
     "unrelated_mesh_transfer.md",
     "unsteady_solver_validation.md",
-    "n_gamma_d_bdf2.md",
     "raw_cuda_adr_tensor.md",
     "package_reorganization.md",
+    "shipped_kernel_choices.md",
 }
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(
@@ -62,7 +71,13 @@ DOCUMENTED_REPOSITORY_PATH = re.compile(
 
 
 def _documentation_markdown() -> tuple[Path, ...]:
-    return ROOT_GUIDES + tuple(sorted(DOCS.rglob("*.md")))
+    # What campaigns write under docs/campaigns/<name>/ stays on the machine that ran
+    # them and is not tracked, so only the index of that folder is checked.
+    campaigns = DOCS / "campaigns"
+    return ROOT_GUIDES + tuple(sorted(
+        path for path in DOCS.rglob("*.md")
+        if not path.is_relative_to(campaigns) or path.parent == campaigns
+    ))
 
 
 def _local_link_target(source: Path, raw_target: str) -> Path | None:

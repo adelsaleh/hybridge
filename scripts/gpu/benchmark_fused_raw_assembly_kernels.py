@@ -161,7 +161,8 @@ def _make_assembler(case: str, space: DGSpace, args):
     def assemble():
         return assemble_reduced_system_cuda(
             source, reaction, _zero, beta_coeffs, cspace, trace_ref,
-            backend="raw-cuda", raw_local_assembly=args.local_assembly, raw_lu_mode="coop",
+            backend="raw-cuda", raw_local_assembly=args.local_assembly,
+            raw_lu_mode="safe" if args.local_assembly == "precomputed" else "coop",
             raw_matrix_format=args.matrix_format, raw_block_size=args.block_size,
             raw_cache_local_response=False, beta_space=beta_space,
         )
@@ -180,7 +181,7 @@ def main(argv=None):
     parser.add_argument("--block-size", type=int, choices=(1, 32, 64, 128), default=128)
     parser.add_argument("--cache-policy", choices=("none", "schur-lu", "schur-cholesky"), default="none")
     parser.add_argument("--phase", choices=("assembly", "rhs", "cache", "reconstruction"), default="assembly")
-    parser.add_argument("--local-assembly", choices=("fused", "split3"), default="fused")
+    parser.add_argument("--local-assembly", choices=("precomputed", "fused", "split3"), default="fused")
     parser.add_argument("--coefficient-case", choices=("constant", "variable"), default="constant")
     parser.add_argument("--beta-order", type=int, default=None,
                         help="transport: degree of the drift's DG space (default: --order)")
@@ -195,9 +196,13 @@ def main(argv=None):
         parser.error("cache profiles combined raw assembly and Schur-Cholesky construction")
     if args.local_assembly == "split3" and (args.case != "transport" or args.matrix_format != "bsr"):
         parser.error("split3 requires transport BSR")
+    if args.local_assembly == "precomputed" and args.case != "transport":
+        parser.error("precomputed local matrices apply to transport only")
+    if args.local_assembly == "precomputed" and args.matrix_format != "coo":
+        parser.error("precomputed transport emits COO only; CSR/BSR require explicit fused or split3 assembly")
     if args.beta_order is not None and (args.case != "transport" or args.beta_order < 0):
         parser.error("--beta-order applies to transport and must be nonnegative")
-    max_order = 6 if args.case == "adr" else 9
+    max_order = 9
     if args.nx < 1 or not 1 <= args.order <= max_order or args.warmup < 1 or args.repeats < 1:
         parser.error(f"require nx >= 1, order in 1..{max_order} for {args.case}, warmup >= 1, repeats >= 1")
 
@@ -238,6 +243,7 @@ def main(argv=None):
         if measured_kernel is not None:
             samples_ms.append(1000.0 * float(measured_kernel))
         del result
+    from scripts.reports.run_provenance import mesh_fingerprint
     print(json.dumps({
         "case": args.case,
         "configuration": vars(args),
@@ -252,6 +258,7 @@ def main(argv=None):
         "wrapper_event_scope": "whole wrapper stream interval, including GPU idle gaps during host work; not summed kernel time",
         "phase_samples_seconds_and_metadata": phase_samples,
         "triangles": int(mesh.num_tri),
+        "mesh": mesh_fingerprint(mesh),
         "order": args.order,
         "trace_dofs": int(mesh.int_edges_inds.size * (args.order + 1)),
         "samples_device_ms": samples_ms,

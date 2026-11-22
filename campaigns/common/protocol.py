@@ -249,6 +249,32 @@ def host_load() -> dict:
     return dict(loadavg=os.getloadavg(), top=[line.strip() for line in top])
 
 
+def host_provenance(study: Path, **extra) -> dict:
+    """Append a provenance line for a host (CPU) campaign to ``<study>/provenance.jsonl``.
+
+    The hybridge commit comes from git, or, in a frozen copy (no git metadata), from the
+    ``COMMIT`` file written when the copy was cut from that committed revision. A git
+    checkout also records the sha256 of its tracked diff against HEAD.
+    """
+    def git(*args):
+        return subprocess.run(["git", "-C", str(HYBRIDGE), *args], capture_output=True, text=True).stdout
+
+    checkout = (HYBRIDGE / ".git").exists()
+    commit = git("rev-parse", "HEAD").strip() if checkout else None
+    if not commit and (HYBRIDGE / "COMMIT").exists():
+        commit = (HYBRIDGE / "COMMIT").read_text().strip()
+    cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+                if line.startswith("model name")), None)
+    info = dict(started=datetime.now().isoformat(timespec="seconds"), commit=commit, frozen_copy=not checkout,
+                tracked_diff_sha256=hashlib.sha256(git("diff", "HEAD").encode()).hexdigest() if checkout else None,
+                hybridge_root=str(HYBRIDGE), host=os.uname().nodename, slurm_job=os.environ.get("SLURM_JOB_ID"),
+                cpu=cpu, cpus=os.cpu_count(), python=sys.version, argv=sys.argv, host_load=host_load(), **extra)
+    study.mkdir(parents=True, exist_ok=True)
+    with (study / "provenance.jsonl").open("a") as stream:
+        stream.write(json.dumps(info, default=str) + "\n")
+    return info
+
+
 def paused_groups(study: Path) -> list[int]:
     path = study / "pause_pgids.json"
     try:

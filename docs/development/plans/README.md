@@ -22,10 +22,12 @@ algorithm, API, backend, or release contracts.
 - [`unsteady_solver_validation.md`](unsteady_solver_validation.md):
   manufactured transient problems and acceptance priorities for reusable
   diffusion-reaction and advection-reaction solver classes.
-- [`n_gamma_d_bdf2.md`](n_gamma_d_bdf2.md): decoupled axisymmetric n-Gamma
-  BDF2 with Euler startup and four manufactured-solution studies; implementation
-  follows validation of raw-CUDA variable-tensor ADR assembly, reconstruction,
-  and post-processing.
+- [`cache_reuse_policy.md`](cache_reuse_policy.md): what AR, DR and ADR solvers
+  retain by default, per artifact and per kind of coefficient change, with explicit
+  options still overriding the default.
+- [`shipped_kernel_choices.md`](shipped_kernel_choices.md): kernel choices
+  measured per GPU architecture, stored as package data and read by the tuner,
+  with one command that produces the file on a new GPU.
 - [`package_reorganization.md`](package_reorganization.md): one-way package
   layering and reorganization by HDG operator family (transport AR; mixed DR and
   ADR, where DR is ADR at β = 0), shared-helper consolidation, the divergence

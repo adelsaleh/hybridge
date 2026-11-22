@@ -40,6 +40,25 @@ bindings. CuPy connects device arrays through the CUDA array interface; no
 separate connector or custom C++ extension is needed. This is NVIDIA Holoviz,
 not the HoloViz browser plotting ecosystem.
 
+Some GPUs render headless but have no presentation support, and Holoviz then fails a window with "No device
+with presentation support". Pass `frame_window=True` there: `hybridge.io.frame_window` shows the headless frames
+in a small Tk window over X11, keeping only the newest frame so that a slow link never stalls the solver.
+`holoviz_ssh` is not needed on this path.
+
+On some systems the headless renderer never finishes a first frame when the solver process starts with a
+forwarded X11 display; it spins in `cudaFree` inside the format converter. Hiding `DISPLAY` and
+`WAYLAND_DISPLAY` before the render graph starts does not cure this, and neither does `holoviz_ssh`. Launch with
+no display in the solver process instead, and pass the display to the window alone:
+
+```bash
+export HYBRIDGE_FRAME_WINDOW_DISPLAY="$DISPLAY"
+unset DISPLAY
+```
+
+`hybridge.io.frame_window.window_environment` gives that value to the Tk process as its `DISPLAY`. The viewer
+still hides any display it finds until it closes, and a renderer that cannot drain is given only 5 s at close.
+Machine-specific install and launch notes belong with the build or launcher that needs them, not here.
+
 For a fresh compatible Python environment, install prebuilt packages:
 
 ```bash

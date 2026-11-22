@@ -1,0 +1,23 @@
+% Standalone document for the H200 section alone (H200 tuned kernels versus the RTX PRO 5000
+% Blackwell, and PyPardiso LU on a genoa CPU node). Typeset from this folder:
+%   latexmk -pdf -interaction=nonstopmode -halt-on-error main_h200.tex
+% Works in the repository (figures under run_outputs/...) and in a copy laid out as
+%   <dir>/h200_tuned/ (this folder) and <dir>/figures/h200_tuned/ (the figures).
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=12mm]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,microtype}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\textfraction}{0.08}
+\newcommand{\ADRResultsPath}{..}
+\IfFileExists{../figures/h200_tuned/speedup_matched.pdf}
+  {\newcommand{\ADRResultsFigurePath}{../figures}}
+  {\newcommand{\ADRResultsFigurePath}{../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}}
+\newcommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
+\begin{document}
+\input{\ADRResultsPath/h200_tuned/section.tex}
+\end{document}

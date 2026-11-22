@@ -171,12 +171,13 @@ def solve_adr_rt_total_flux_postprocess_cupy(
 __all__ = ["postprocess_diffusion_primal_cupy", "solve_adr_rt_total_flux_postprocess_cupy"]
 
 
-def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
+def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache, *, phase=None):
     """Apply the host-equivalent constrained minimum-distance flux recovery."""
     from hybridge.core.device import field_from_cupy_coefficients
     from hybridge.core.space import VectorDGField
 
     cp = require_cupy()
+    step = phase or (lambda name, fn: fn())
     post = cache.post_space
     q = post.quad_data
     n, d = space.mesh.num_tri, post.el_dof
@@ -185,7 +186,8 @@ def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
     face_jac = cp.asarray(space.mesh.jacs_el_fc)
     mass_inv = cp.asarray(q.MKrf_inv)
     base_basis = cp.asarray(space.basis_at(q.Krf_quads))
-    base = total_values @ (cp.asarray(q.Krf_w)[:, None] * base_basis) @ cp.asarray(space.quad_data.MKrf_inv)
+    base = step('flux.base_projection', lambda: total_values @ (
+        cp.asarray(q.Krf_w)[:, None] * base_basis) @ cp.asarray(space.quad_data.MKrf_inv))
     initial = base @ cp.asarray(cache.base_to_post_mass).T @ mass_inv
     face_moments = cp.asarray(q.face_element_test_trace_trial)
     face_constraints = cp.einsum('Kf,Kfc,fia->Kfaci', face_jac, normals, face_moments).reshape(n, -1, 2*d)
@@ -204,8 +206,11 @@ def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
     lift = cp.concatenate((mass_inv @ constraints[:, :, :d].transpose(0, 2, 1),
                            mass_inv @ constraints[:, :, d:].transpose(0, 2, 1)), axis=1) / jac[:, None, None]
     gap = target - (constraints @ initial[..., None])[..., 0]
-    correction = cp.linalg.solve(constraints @ lift, gap[..., None])
-    result = (initial + (lift @ correction)[..., 0]).reshape(n, 2, d)
+    from hybridge.linalg.gpu.tuned_batched_solve import solve_dense_batched
+    schur = step('flux.schur_assembly', lambda: constraints @ lift)
+    correction = step('flux.constraint_solve', lambda: solve_dense_batched(schur, gap[..., None],
+        workload=dict(operation='adr-total-flux-recovery', order=space.order)))
+    result = step('flux.correction_apply', lambda: (initial + (lift @ correction)[..., 0]).reshape(n, 2, d))
     return VectorDGField(tuple(field_from_cupy_coefficients(post, result[:, c], name='total_flux_h_star')
                                for c in range(2)), name='total_flux_h_star')
 
@@ -292,7 +297,9 @@ def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, d
     post = cache.post_space
     inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, post, device=True))
     matrix, rhs = primal_system_raw_cuda(local_unknowns, total_flux, space, cache, samples, inverse)
-    result = cp.linalg.solve(matrix, rhs[..., None])[:, :post.el_dof, 0]
+    from hybridge.linalg.gpu.tuned_batched_solve import solve_dense_batched
+    result = solve_dense_batched(matrix, rhs[..., None],
+        workload=dict(operation='adr-primal-recovery', order=space.order))[:, :post.el_dof, 0]
     return field_from_cupy_coefficients(post, result, name='u_h_star')
 
 
@@ -512,13 +519,23 @@ def postprocess_diffusion_primal_cupy(local_unknowns, space, cache, diffusion=1.
         "postprocess.primal.build_seconds": float(state.pop("build_seconds", 0.0)),
     }
     if operator is not None:
+        from hybridge.runtime.cuda_tuning import launch_tuned
+
         apply_pq, apply_inverse = _primal_kernels(cp)
         threads = num_elements * post_el_dof
-        grid = ((threads + 255) // 256,)
+
+        def grid(block):
+            """Return the CUDA grid for ``block`` threads per block: enough blocks for one thread per coefficient, ``num_elements * post_el_dof`` threads."""
+            return ((threads + block - 1) // block,)
+
         if operator[0] == "pq":
-            apply_pq(grid, (256,), (operator[1], operator[2], operator[3], unknowns, state["mean_base"],
-                                    np.float64(scale), np.int64(num_elements), np.int32(post_el_dof),
-                                    np.int32(base_el_dof), coefficients))
+            report = launch_tuned(
+                apply_pq, (operator[1], operator[2], operator[3], unknowns, state["mean_base"],
+                           np.float64(scale), np.int64(num_elements), np.int32(post_el_dof),
+                           np.int32(base_el_dof), coefficients),
+                outputs=(9,), grid=grid, source=_PRIMAL_APPLY_SOURCE,
+                identity=dict(operation="poisson-primal-recovery-pq", order=space.order))
+            cache._diffusion_primal_info["postprocess.primal.launch_threads"] = float(report["variant"])
             return field_from_cupy_coefficients(post, coefficients, name=name)
         fluxes = unknowns[:, base_el_dof:].reshape(2 * num_elements, base_el_dof) @ state["c_rs_t"]
         along = fluxes.reshape(num_elements, 2, 2 * post_el_dof)
@@ -529,9 +546,13 @@ def postprocess_diffusion_primal_cupy(local_unknowns, space, cache, diffusion=1.
             + geometry[:, 0, 1][:, None] * along[:, 0, post_el_dof:]
             + geometry[:, 1, 0][:, None] * along[:, 1, :post_el_dof]
             + geometry[:, 1, 1][:, None] * along[:, 1, post_el_dof:]))
-        apply_inverse(grid, (256,), (operator[1], operator[2], rhs, unknowns, state["mean_base"],
-                                     np.int64(num_elements), np.int32(post_el_dof), np.int32(base_el_dof),
-                                     coefficients))
+        report = launch_tuned(
+            apply_inverse, (operator[1], operator[2], rhs, unknowns, state["mean_base"],
+                            np.int64(num_elements), np.int32(post_el_dof), np.int32(base_el_dof),
+                            coefficients),
+            outputs=(8,), grid=grid, source=_PRIMAL_APPLY_SOURCE,
+            identity=dict(operation="poisson-primal-recovery-inverse", order=space.order))
+        cache._diffusion_primal_info["postprocess.primal.launch_threads"] = float(report["variant"])
         return field_from_cupy_coefficients(post, coefficients, name=name)
     batch = max(1, _PRIMAL_BATCH_BYTES // (8 * (post_el_dof + 1) ** 2))
     for start in range(0, num_elements, batch):

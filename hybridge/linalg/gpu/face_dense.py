@@ -13,10 +13,18 @@ No COO/CSR matrix is created on the device.  The two main device arrays are
 ``x_extended[f, s, j]``
     Gathered input vector with shape ``(NF, S, b)``.
 
-The default ``"matmul"`` implementation evaluates the batch through
+The default ``"auto"`` implementation measures same-precision legacy,
+interleaved and grouped kernels once per hardware/workload and caches the
+choice. Explicit ``"matmul"`` evaluates the batch through
 ``cupy.matmul``, which dispatches the dense products to CuPy/cuBLAS.  A simple
 ``"raw"`` CUDA kernel is also provided as an independent correctness path.  It
 is not intended to be selected on performance grounds before profiling.
+``"raw_fused"`` reads the neighbouring face values directly, one thread per output
+row.  ``"coalesced"`` does the same with a group of lanes per face reading the
+face's contiguous matrix in order (:class:`GroupedGatherGemv`).
+``"interleaved"`` keeps one thread per row on an interleaved (column-major) copy of the
+matrices (:class:`InterleavedGatherGemv`): fully coalesced and bitwise equal to
+``"raw_fused"``. Explicit implementations bypass calibration.
 """
 
 from __future__ import annotations
@@ -28,9 +36,231 @@ import numpy as np
 
 from hybridge.linalg.face_dense import FaceDenseSystem
 from hybridge.runtime.optional import device_arrays_overlap, require_cupy_device
+from hybridge.runtime.env import getenv
 
 
-GPUFaceMatvecImplementation = Literal["matmul", "raw", "raw_fused"]
+GPUFaceMatvecImplementation = Literal["auto", "matmul", "raw", "raw_fused", "coalesced", "interleaved"]
+
+
+def face_dense_threads_per_block(tuned: int | None = None) -> int:
+    """Threads per block of the face-dense solver kernels (operator, ASM, block-Jacobi, polynomial).
+
+    ``tuned`` (or 256) unless ``HYBRIDGE_FACE_DENSE_THREADS`` sets a multiple of 32 in [32, 1024]; the
+    H200 solver study sweeps it. Read at every launch, so a process can change it between
+    measurements.
+    """
+    value = getenv("FACE_DENSE_THREADS")
+    if not value:
+        return 256 if tuned is None else int(tuned)
+    threads = int(value)
+    if threads % 32 or not 32 <= threads <= 1024:
+        raise ValueError("HYBRIDGE_FACE_DENSE_THREADS must be a multiple of 32 in [32, 1024]")
+    return threads
+
+
+# One group of FD_G lanes per output group (a face row of the operator, an ASM element, a
+# block-Jacobi face). The group's dense FD_R x (FD_S*FD_B) matrix is contiguous; lane l owns the
+# columns c = l + k*FD_G, so for every row the group reads consecutive entries (coalesced),
+# multiplies them by its gathered input values and keeps FD_R partial sums, which a butterfly
+# shuffle inside the group reduces in a fixed order. All lanes of a warp reach the shuffles.
+_GROUPED_GEMV_SOURCE = r"""
+#define FD_C (FD_S * FD_B)
+#define FD_K ((FD_C + FD_G - 1) / FD_G)
+extern "C" __global__
+void grouped_gather_gemv(
+    const long long num_groups,
+    const FD_T* __restrict__ matrices,
+    const int* __restrict__ index,
+    const FD_T* __restrict__ x,
+    FD_T* __restrict__ y)
+{
+    const long long thread = (long long) blockDim.x * blockIdx.x + threadIdx.x;
+    const long long group = thread / FD_G;
+    const int lane = (int) (thread % FD_G);
+    const bool active = group < num_groups;
+
+    FD_T gathered[FD_K];
+    #pragma unroll
+    for (int k = 0; k < FD_K; ++k) {
+        const int column = lane + k * FD_G;
+        gathered[k] = (FD_T) 0;
+        if (active && column < FD_C) {
+            const int slot = column / FD_B;
+            const int dof = column - slot * FD_B;
+#if FD_IDENTITY
+            const long long face = group;
+#else
+            const long long face = index[group * FD_S + slot];
+#endif
+            if (face >= 0) gathered[k] = x[face * FD_B + dof];
+        }
+    }
+
+    const FD_T* matrix = matrices + (active ? group : 0) * (long long) (FD_R * FD_C);
+    FD_T sums[FD_R];
+    #pragma unroll
+    for (int row = 0; row < FD_R; ++row) {
+        FD_T value = (FD_T) 0;
+        #pragma unroll
+        for (int k = 0; k < FD_K; ++k) {
+            const int column = lane + k * FD_G;
+            if (active && column < FD_C) value += matrix[row * FD_C + column] * gathered[k];
+        }
+        sums[row] = value;
+    }
+    #pragma unroll
+    for (int offset = FD_G / 2; offset > 0; offset >>= 1) {
+        #pragma unroll
+        for (int row = 0; row < FD_R; ++row) {
+            sums[row] += __shfl_xor_sync(0xffffffffu, sums[row], offset);
+        }
+    }
+    if (active) {
+        #pragma unroll
+        for (int row = 0; row < FD_R; ++row) {
+            if (row % FD_G == lane) y[group * FD_R + row] = sums[row];
+        }
+    }
+}
+"""
+
+
+def grouped_gemv_group_lanes(columns: int) -> int:
+    """Lanes per group: the smallest power of two covering ``columns``, at most a warp.
+
+    ``HYBRIDGE_FACE_DENSE_GROUP_LANES`` (a power of two in [1, 32]) overrides it for studies.
+    """
+    value = getenv("FACE_DENSE_GROUP_LANES")
+    if value:
+        lanes = int(value)
+        if lanes < 1 or lanes > 32 or lanes & (lanes - 1):
+            raise ValueError("HYBRIDGE_FACE_DENSE_GROUP_LANES must be a power of two in [1, 32]")
+        return lanes
+    lanes = 1
+    while lanes < min(int(columns), 32):
+        lanes *= 2
+    return lanes
+
+
+class GroupedGatherGemv:
+    """``y[g] = M[g] @ concat(x[index[g, s]] for s)`` for every group ``g``, coalesced.
+
+    ``M`` has shape ``(groups, rows, slots*block)``, ``index`` ``(groups, slots)`` int32 with
+    ``-1`` for an absent slot (gathered as zero), ``x`` holds ``block`` values per face and ``y``
+    ``rows`` values per group. ``identity=True`` gathers face ``g`` itself (``slots == 1``,
+    no index). The sums run in a fixed order, but not the order of the row-per-thread kernels,
+    so results agree with them to round-off, not bitwise.
+    """
+
+    def __init__(self, cp, dtype, *, rows: int, slots: int, block: int, identity: bool = False) -> None:
+        """Compile a grouped gather-GEMV kernel for the supplied matrix layout."""
+        if identity and slots != 1:
+            raise ValueError("an identity gather has exactly one slot")
+        self.rows, self.slots, self.block, self.identity = int(rows), int(slots), int(block), bool(identity)
+        self.group_lanes = grouped_gemv_group_lanes(self.slots * self.block)
+        scalar = "double" if np.dtype(dtype) == np.float64 else "float"
+        options = (f"-DFD_R={self.rows}", f"-DFD_S={self.slots}", f"-DFD_B={self.block}",
+                   f"-DFD_G={self.group_lanes}", f"-DFD_T={scalar}", f"-DFD_IDENTITY={int(self.identity)}")
+        self.kernel = cp.RawKernel(_GROUPED_GEMV_SOURCE, "grouped_gather_gemv", options=options)
+
+    def __call__(self, matrices, index, x, y, *, num_groups: int, threads: int | None = None) -> None:
+        """Launch grouped gather-GEMV into the supplied output vector."""
+        threads = face_dense_threads_per_block(threads)
+        total = int(num_groups) * self.group_lanes
+        blocks = (total + threads - 1) // threads
+        self.kernel((blocks,), (threads,), (np.int64(num_groups), matrices, index if index is not None else matrices,
+                                            x, y))
+
+
+# One thread per output row; the dense group matrices are stored interleaved,
+# matrices_t[c * total_rows + row] (an ELL-style column-major copy), so a warp's 32 rows read
+# 32 consecutive values per column: every matrix load is fully coalesced and no reduction is
+# needed. Rows of one group share their gathered inputs, which the warp loads as broadcasts.
+# Columns run in order with the same multiply-add chain as the row-per-thread kernels, so the
+# result is bitwise equal to them: FD_SKIP_ABSENT=1 skips an absent slot (operator),
+# FD_SKIP_ABSENT=0 accumulates M*0 for it (fused ASM). FD_M is the matrix storage type.
+_INTERLEAVED_GEMV_SOURCE = r"""
+extern "C" __global__
+void interleaved_gather_gemv(
+    const long long total_rows,
+    const FD_M* __restrict__ matrices_t,
+    const int* __restrict__ index,
+    const FD_T* __restrict__ x,
+    FD_T* __restrict__ y)
+{
+    const long long row = (long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (row >= total_rows) return;
+    const long long group = row / FD_R;
+    const FD_M* __restrict__ m = matrices_t + row;
+    FD_T value = (FD_T) 0;
+    #pragma unroll
+    for (int s = 0; s < FD_S; ++s) {
+#if FD_IDENTITY
+        const long long face = group;
+#else
+        const long long face = __ldg(index + group * FD_S + s);
+#endif
+#if FD_SKIP_ABSENT
+        if (face < 0) continue;
+#endif
+        const FD_T* __restrict__ xs = x + face * FD_B;
+        #pragma unroll
+        for (int j = 0; j < FD_B; ++j) {
+#if FD_SKIP_ABSENT || FD_IDENTITY
+            const FD_T input = __ldg(xs + j);
+#else
+            const FD_T input = face >= 0 ? __ldg(xs + j) : (FD_T) 0;
+#endif
+            value += (FD_T) __ldg(m + (long long) (s * FD_B + j) * total_rows) * input;
+        }
+    }
+    y[row] = value;
+}
+"""
+
+
+def interleave_group_matrices(cp, matrices, dtype=None):
+    """Return the ``(columns, groups*rows)`` interleaved copy of ``(groups, rows, columns)``."""
+    groups, rows, columns = matrices.shape
+    out = cp.ascontiguousarray(matrices.reshape(groups * rows, columns).T)
+    return out if dtype is None else out.astype(dtype, copy=False)
+
+
+class InterleavedGatherGemv:
+    """``y[g] = M[g] @ concat(x[index[g, s]] for s)``, one thread per row, on interleaved ``M``.
+
+    Same contract as :class:`GroupedGatherGemv`, but ``matrices_t`` is the
+    :func:`interleave_group_matrices` copy. ``skip_absent`` selects the operator (skip) or
+    fused-ASM (accumulate zero) treatment of ``-1`` slots, making the result bitwise equal to the
+    corresponding row-per-thread kernel. ``matrix_dtype`` (float32) stores the matrices in single
+    precision while gathering and accumulating in ``dtype``; that changes the result.
+    """
+
+    def __init__(self, cp, dtype, *, rows: int, slots: int, block: int, identity: bool = False,
+                 skip_absent: bool = True, matrix_dtype=None) -> None:
+        """Compile the transposed-layout face GEMV kernel for the selected precisions."""
+        if identity and slots != 1:
+            raise ValueError("an identity gather has exactly one slot")
+        self.rows, self.slots, self.block, self.identity = int(rows), int(slots), int(block), bool(identity)
+        self.matrix_dtype = np.dtype(dtype if matrix_dtype is None else matrix_dtype)
+        scalar = "double" if np.dtype(dtype) == np.float64 else "float"
+        stored = "double" if self.matrix_dtype == np.float64 else "float"
+        options = (f"-DFD_R={self.rows}", f"-DFD_S={self.slots}", f"-DFD_B={self.block}",
+                   f"-DFD_T={scalar}", f"-DFD_M={stored}", f"-DFD_IDENTITY={int(self.identity)}",
+                   f"-DFD_SKIP_ABSENT={int(bool(skip_absent))}")
+        self.kernel = cp.RawKernel(_INTERLEAVED_GEMV_SOURCE, "interleaved_gather_gemv", options=options)
+
+    def interleave(self, cp, matrices):
+        """Return the interleaved copy of ``matrices`` in this kernel's storage type."""
+        return interleave_group_matrices(cp, matrices, self.matrix_dtype)
+
+    def __call__(self, matrices_t, index, x, y, *, num_groups: int, threads: int | None = None) -> None:
+        """Launch the transposed-layout face GEMV into the output vector."""
+        threads = face_dense_threads_per_block(threads)
+        total = int(num_groups) * self.rows
+        blocks = (total + threads - 1) // threads
+        self.kernel((blocks,), (threads,), (np.int64(total), matrices_t,
+                                            index if index is not None else matrices_t, x, y))
 
 
 @dataclass(frozen=True)
@@ -345,9 +575,9 @@ class CuPyFaceDenseOperator:
     ) -> None:
         """Initialize the instance and validate persistent storage."""
         cp = require_cupy_device()
-        if implementation not in ("matmul", "raw", "raw_fused"):
+        if implementation not in ("auto", "matmul", "raw", "raw_fused", "coalesced", "interleaved"):
             raise ValueError(
-                "implementation must be 'matmul', 'raw', or 'raw_fused'"
+                "implementation must be 'auto', 'matmul', 'raw', 'raw_fused', 'coalesced', or 'interleaved'"
             )
         if matrix_batches.ndim != 3:
             raise ValueError("matrix_batches must have shape (NF, b, S*b)")
@@ -376,13 +606,34 @@ class CuPyFaceDenseOperator:
         self.extended_size = int(extended_size)
         self.num_dofs = self.num_rows * self.block_size
         self.dtype = matrix_batches.dtype
+        self.implementation_requested = implementation
+        self.tuning_report = None
+        self._tuned_threads = None
+        if implementation == "auto":
+            from hybridge.linalg.gpu.solver_tuning import select_gather_gemv
+
+            suffix = "f32" if self.dtype == cp.float32 else "f64"
+            def compile_baseline():
+                """Keep the existing row-owned fused operator as the reference."""
+                return cp.RawKernel(_FUSED_RAW_MATVEC_KERNEL_SOURCE,
+                                    f"face_dense_matvec_fused_{suffix}")
+            def run_baseline(kernel, matrices, index, x, out, groups, threads):
+                """Apply the legacy operator to bounded isolated face rows."""
+                kernel(((groups * self.block_size + threads - 1) // threads,), (threads,),
+                       (np.int32(groups), np.int32(self.num_slots), np.int32(self.block_size),
+                        matrices, index, x, out))
+            implementation, self._tuned_threads, self.tuning_report = select_gather_gemv(
+                cp, matrix_batches, neighbors, operation="face-dense-matvec", block=self.block_size,
+                baseline="raw_fused", baseline_source=_FUSED_RAW_MATVEC_KERNEL_SOURCE,
+                compile_baseline=compile_baseline, run_baseline=run_baseline)
+            self.implementation = implementation
 
         # The fused raw path reads neighbouring face values directly and
         # therefore needs neither the gathered-vector buffer nor a temporary
         # batched-matmul output.  The two-stage paths keep their reusable
         # workspaces for validation and comparison.
         self._x_extended = None
-        if implementation != "raw_fused":
+        if implementation not in ("raw_fused", "coalesced", "interleaved"):
             self._x_extended = cp.empty(
                 (self.num_rows, self.num_slots, self.block_size),
                 dtype=self.dtype,
@@ -411,6 +662,18 @@ class CuPyFaceDenseOperator:
                 _FUSED_RAW_MATVEC_KERNEL_SOURCE,
                 f"face_dense_matvec_fused_{suffix}",
             )
+        self._coalesced_matvec = (
+            GroupedGatherGemv(cp, self.dtype, rows=self.block_size, slots=self.num_slots, block=self.block_size)
+            if implementation == "coalesced"
+            else None
+        )
+        self._interleaved_matvec = self._matrix_t = None
+        if implementation == "interleaved":
+            self._interleaved_matvec = InterleavedGatherGemv(
+                cp, self.dtype, rows=self.block_size, slots=self.num_slots, block=self.block_size,
+                skip_absent=True,
+            )
+            self._matrix_t = self._interleaved_matvec.interleave(cp, matrix_batches)
 
     @classmethod
     def from_device_blocks(
@@ -418,7 +681,7 @@ class CuPyFaceDenseOperator:
         blocks,
         neighbors,
         *,
-        implementation: GPUFaceMatvecImplementation = "raw_fused",
+        implementation: GPUFaceMatvecImplementation = "auto",
         device_id: int | None = None,
     ) -> "CuPyFaceDenseOperator":
         """Construct directly from GPU-resident ``(NF,S,b,b)`` blocks.
@@ -476,7 +739,7 @@ class CuPyFaceDenseOperator:
         cls,
         system: FaceDenseSystem,
         *,
-        implementation: GPUFaceMatvecImplementation = "matmul",
+        implementation: GPUFaceMatvecImplementation = "auto",
         dtype: np.dtype | type | None = None,
         device_id: int | None = None,
     ) -> "CuPyFaceDenseOperator":
@@ -586,7 +849,7 @@ class CuPyFaceDenseOperator:
         if not out.flags.c_contiguous:
             raise ValueError("out must be C-contiguous")
 
-        threads = 256
+        threads = face_dense_threads_per_block()
         total = self.num_rows * self.num_slots * self.block_size
         blocks = (total + threads - 1) // threads
         self._gather_kernel(
@@ -621,7 +884,18 @@ class CuPyFaceDenseOperator:
         if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
-        threads = 256
+        if self.implementation == "interleaved":
+            self._interleaved_matvec(self._matrix_t, self.neighbors, x.reshape(-1), out_faces,
+                                     num_groups=self.num_rows, threads=self._tuned_threads)
+            return
+
+        if self.implementation == "coalesced":
+            assert self._coalesced_matvec is not None
+            self._coalesced_matvec(self.matrix_batches, self.neighbors, x.reshape(-1), out_faces,
+                                   num_groups=self.num_rows, threads=self._tuned_threads)
+            return
+
+        threads = face_dense_threads_per_block(self._tuned_threads)
         blocks = (self.num_dofs + threads - 1) // threads
 
         if self.implementation == "raw_fused":

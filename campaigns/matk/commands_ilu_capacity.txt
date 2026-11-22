@@ -1,0 +1,95 @@
+# Run from scripts/matk.
+# At most FOUR GPUs combined across every repository, including background
+# jobs, pending jobs and smoke tests. Each sbatch here requests one H200.
+# Check allocations before each submission; do not submit all examples together.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+
+# Original isolated native ILU capacity build (baseline is never replaced).
+# Source snapshot, compiler output, patch, library/object hashes are retained.
+# CPU compilation only, no GPU allocation:
+# bash ../AMGX-build-cuda13.1-ilu1024/build.sh
+
+# Second isolated build also fixes the invalid row-length reduction used for
+# in-place matrix-value reordering. Qualification27692 passed all20 isolated
+# cases and both memchecks; full-matrix convergence remains unestablished.
+# bash ../AMGX-build-cuda13.1-ilu1024-reorder/build.sh
+
+# Compare expected baseline outcomes with the isolated 128/1024 dispatch,
+# both FP32/FP64 and ROW_MAJOR/COL_MAJOR. Includes compute-sanitizer checks.
+# MATK_ILU_BUILD=../AMGX-build-cuda13.1-ilu1024-reorder sbatch ilu_capacity.sbatch
+
+# Short diagnostic: exact initial guess, unchanged-library DILU control,
+# same-matrix solve after baseline ILU capacity rejection, and a low-degree
+# ILU1 coloring probe. This diagnostic preserves expected failures; read
+# each JSON status rather than treating a successful batch exit as all passed.
+# MATK_ILU_BUILD=../AMGX-build-cuda13.1-ilu1024-reorder sbatch ilu_capacity_diagnostics.sbatch
+
+# Configuration smoke test (job27694, all three passed):
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:15:00 amgx_strong.sbatch --smoke-test --smoke-blocks 512 --scaling column-max --max-iters 300 --residual-corrections 0 --timeout 180 --verbosity 3 --candidates pbicgstab_native_ilu1_capacity_b4 fgmres_inner_pbicg30_ilu1_minmax_capacity_b4 fgmres_inner_pbicg30_ilu1_bfs_capacity_b4
+
+# Full-matrix bounded screens (jobs27695 and27696 respectively):
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:15:00 amgx_strong.sbatch --scaling column-max --max-iters 300 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates pbicgstab_native_ilu1_capacity_b4
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:25:00 amgx_strong.sbatch --scaling column-max --max-iters 100 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_inner_pbicg30_ilu1_minmax_capacity_b4 fgmres_inner_pbicg30_ilu1_bfs_capacity_b4
+# Selecting a build via HYBRIDGE_AMGX_BUILD_ROOT also sets runtime linkage.
+# Each worker records the actually loaded libamgxsh.so path and SHA256.
+# These three capacity candidates refuse a different library hash, keeping
+# accidental runs against the limited baseline out of the comparison.
+
+# GMRES-based ILU1 follow-up, ROW_MAJOR legacy SpMV validated in27702:
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:15:00 amgx_strong.sbatch --scaling column-max --max-iters 1000 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_native_ilu1_minmax_capacity_b4_r1000
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:15:00 amgx_strong.sbatch --scaling column-max --max-iters 100 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_inner_fgmres50_ilu1_minmax_capacity_b4
+# Results27715/27716: original residuals0.966793/0.997053; no convergence.
+
+# BFS color-gap regression (tiny graph, both precisions and layouts):
+# sbatch ilu_bfs_capacity.sbatch
+# Baseline here means the preserved ILU+reorder build;27726 failed allfour.
+# The third isolated build additionally fixes empty interior color boundaries:
+# bash ../AMGX-build-cuda13.1-ilu1024-bfs/build.sh
+# MATK_ILU_BUILD=../AMGX-build-cuda13.1-ilu1024-bfs sbatch ilu_bfs_capacity.sbatch
+
+# Independent numerical/race checks (27733 confirms determinantfallback and
+# shared-memory hazards; these are expected failures/findings, not clean gates):
+# sbatch ilu_numerics.sbatch
+# Results ../../run_outputs/matk/ilu-numerics-JOBID/{inverse.json,racecheck.log}
+
+# Ordinary uniform right scaling addresses the absolute determinant cutoff
+# without changing the equations/conditionnumber. CPU andGPUsmokes27735 pass.
+# Full bounded comparisons27736/27737 (no full convergence claimed):
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-bfs sbatch --time=00:25:00 amgx_strong.sbatch --scaling column-max --max-iters 1000 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_native_ilu1_minmax_x1e6_b4_r1000 fgmres_native_ilu1_minmax_x1000_b4_r1000
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-bfs sbatch --time=00:25:00 amgx_strong.sbatch --scaling column-max --max-iters 1000 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_native_ilu1_bfs_fixed_b4_r1000 fgmres_native_ilu1_bfs_fixed_x1e6_b4_r1000
+# Other candidates can use --right-scale-multiplier VALUE; frozen metadata
+# takes precedence where a candidate defines its own multiplier.
+
+# Follow native logs live (replace JOBID):
+# tail -F matk-ilu-capacity-JOBID.out
+# tail -F matk-ilu-diagnostic-JOBID.out
+# squeue -j JOBID
+# sacct -j JOBID --format=JobID,State,Elapsed,ExitCode
+
+# Result locations:
+# ../../run_outputs/matk/ilu-capacity-JOBID/
+# ../../run_outputs/matk/ilu-diagnostic-JOBID/
+# ../../run_outputs/matk/amgx-strong-JOBID.json
+# ../../run_outputs/matk/amgx-strong-JOBID_trials/
+# Synchronization correction in a fourth isolated snapshot build (27767).
+# Source/design/review: ../AMGX/docs/matk_ilu_sync_fix*
+# Production sources/installed library unchanged. Run only with an available
+# GPU slot; the recorded submission reuses27765's slot with a dependency:
+# sbatch --dependency=afterany:27765 ilu_sync.sbatch
+# No full-matK use before inspecting capacity, zero-warning racecheck,
+# synccheck and inverse-oracle parity in ../../run_outputs/matk/ilu-sync-JOBID/.
+# Known determinant-scaling failures are preserved and compared explicitly.
+
+# Longer FP64ROW racecheck (27771), reusing the completed qualification slot:
+# sbatch --dependency=afterany:27767 ilu_racecheck.sbatch
+# 600s timeout; exact process status is retained. Actual27771 completed in128s
+# with919 warnings (exit99), despite passing the numerical residual check.
+# Displayed remaining hazards are in forward/backward application kernels.
+# This is a finding, not a passed qualification; see AMGX/docs audit updates.
+
+# Paired inversion-tile oracle (27776):
+# sbatch ilu_paired_inverse.sbatch
+# Passed18 expected outcomes on8193 blockrows, including the known six scale
+# failures, with zero synccheck errors. Graph is diagonal-only; this does not
+# qualify coupled forward/backward application kernels. Reports:
+# ../../run_outputs/matk/ilu-paired-27776/{plain,synccheck}.json

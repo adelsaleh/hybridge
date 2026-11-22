@@ -13,7 +13,6 @@ import math
 import os
 from pathlib import Path
 import random
-import signal
 import subprocess
 import sys
 import time
@@ -26,10 +25,19 @@ from campaigns.adr_unified.adr_unified_plan import (
     AMGX_BACKENDS, build_plan, fingerprint, memory_estimate, read_inventory,
 )
 from campaigns.adr_unified.adr_unified_worker import load_file
+from campaigns.common.reporting import convergence_status, print_details, result_details
+from campaigns.common.lifecycle import (
+    REQUEUE_SIGNALS, CampaignStop, describe_release, release_device, stop_on_signals, stop_signal_name, tail,
+    terminate_group,
+)
 
 GMRES_ROOT = ROOT/'vendor/adr_gmres'
 WORKER = Path(__file__).with_name('adr_unified_worker.py')
 RETRYABLE = {'running', 'interrupted', 'process_error'}
+
+
+class DeviceNotReleased(RuntimeError):
+    """A finished worker left a process on the GPU; later timings would be contaminated."""
 
 
 def event(message):
@@ -52,25 +60,44 @@ def cache_files(cache):
             for p in sorted(Path(cache).glob('*.npy'))}
 
 
-def terminate(process):
-    if process.poll() is None:
-        os.killpg(process.pid, signal.SIGTERM)
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+CHECKOUT_KEYS = ('branch_root', 'inventory_directory')
+
+
+def job_identity(specification):
+    """Hash of a job spec without its checkout paths, so a frozen copy resumes another copy's
+    output; the content checks stay (mesh_sha256, cache files, worker_sha256 in the records)."""
+    return fingerprint({k: v for k, v in specification.items() if k not in CHECKOUT_KEYS})
+
+
+def specification_matches(prior, specification, directory):
+    """Whether a finished record belongs to this job.
+
+    Accepts the current identity, the identity that still covered the checkout paths (records
+    before 2026-10-28), and a record whose own attempt spec equals this job up to the checkout
+    paths (built by another checkout, as the prefetched meshes were)."""
+    stored = prior.get('specification_sha256')
+    if stored in (job_identity(specification), fingerprint(specification)):
+        return True
+    attempts = sorted(directory.glob('attempt_*/spec.json'))
+    if not attempts:
+        return False
+    try:
+        own = json.loads(attempts[-1].read_text())
+    except (OSError, ValueError):
+        return False
+    own.pop('result', None)
+    return stored == fingerprint(own) and job_identity(own) == job_identity(specification)
 
 
 def run_job(key, specification, args, common, environment, *, retry=False, command=None):
     """Serial bounded subprocess with durable attempt logs and exact-spec resume."""
     directory = args.output/'jobs'/key
     directory.mkdir(parents=True, exist_ok=True)
-    identity = fingerprint(specification)
+    identity = job_identity(specification)
     final = directory/'result.json'
     if final.exists():
         prior = common.read_json(final)
-        if prior.get('specification_sha256') != identity:
+        if not specification_matches(prior, specification, directory):
             raise ValueError(f'Changed specification for {key}')
         if args.resume and prior.get('status') not in RETRYABLE and not retry:
             if specification['stage'] == 'assemble' and prior.get('status') == 'passed':
@@ -97,7 +124,8 @@ def run_job(key, specification, args, common, environment, *, retry=False, comma
     process = None
     status = None
     observed_rss_kib = 0
-    event(f'start {key} attempt={attempt} log={work/"worker.log"}')
+    stopped = None
+    event(f'start {key} attempt={attempt} timeout={args.timeout:g}s log={work/"worker.log"}')
     try:
         with (work/'worker.log').open('w') as stream:
             process = subprocess.Popen(argv, cwd=ROOT, env=environment, stdout=stream,
@@ -111,7 +139,7 @@ def run_job(key, specification, args, common, environment, *, retry=False, comma
                     pass
                 elapsed = time.monotonic()-started
                 if elapsed > args.timeout:
-                    terminate(process)
+                    terminate_group(process)
                     status = 'timeout'
                     break
                 if time.monotonic()-last >= args.heartbeat:
@@ -127,31 +155,58 @@ def run_job(key, specification, args, common, environment, *, retry=False, comma
                     event(f'running {key} wall={elapsed:.1f}s{progress}')
                     last = time.monotonic()
                 time.sleep(.25)
-    except KeyboardInterrupt:
-        if process:
-            terminate(process)
+    except KeyboardInterrupt as error:
+        stopped = getattr(error, 'signal_name', 'SIGINT')
         status = 'interrupted'
     except OSError as exc:
         status = 'process_error'
         event(f'{key}: {exc}')
+    finally:
+        # Also sweeps grandchildren of workers that exited on their own.
+        worker_exit = terminate_group(process) if process else None
+    device = release_device()
     try:
         result = common.read_json(work/'result.json')
     except (OSError, ValueError):
         result = dict(status='process_error', error='No valid worker result')
     returncode = process.returncode if process else None
+    if not status and stop_signal_name(returncode):
+        status, result['stop_signal'] = 'interrupted', stop_signal_name(returncode)
     if status:
         result['status'] = status
     elif result.get('status') == 'running' or (returncode and result.get('status') == 'passed'):
         result['status'] = 'process_error'
+    # A stalled iterative solve is a measured outcome, not a broken job.
+    result['status'] = convergence_status(result, specification)
     result.update(specification_sha256=identity, attempt=attempt, returncode=returncode,
                   runner_wall_seconds=time.monotonic()-started, log=str(work/'worker.log'),
-                  runner_observed_peak_rss_kib=observed_rss_kib)
+                  runner_observed_peak_rss_kib=observed_rss_kib, worker_exit=worker_exit, device=device)
+    if stopped:
+        result['stop_signal'] = stopped
     if specification['stage'] == 'assemble' and result.get('status') == 'passed':
         result['cache_files'] = cache_files(specification['cache'])
     common.atomic_json(final, result)
-    event(f'finish {key}: {result.get("status")} wall={result["runner_wall_seconds"]:.3f}s')
-    if status == 'interrupted':
-        raise KeyboardInterrupt
+    event(f'finish {key}: {result.get("status")} wall={result["runner_wall_seconds"]:.3f}s; {describe_release(device)}')
+    # Iterations, residuals and setup/solve timings per job, so a live campaign can be evaluated as it runs.
+    print_details(key, result_details(result, specification), wall_seconds=result['runner_wall_seconds'],
+                  log_path=work/'worker.log')
+    # Timing diagnostics of device campaigns: where the wall time went, and how busy the GPU was.
+    phases = {**result.get('worker_phases', {}), **result.get('phases', {})}
+    if phases:
+        timed = sum(result.get('phases', {}).values()) or sum(result.get('worker_phases', {}).values())
+        print(f"  phases ({timed:.1f} of {result.get('worker_wall_seconds', 0):.1f} s worker wall): "
+              + ', '.join(f'{k} {v:.2f}' for k, v in phases.items()), flush=True)
+    usage = result.get('gpu_utilization') or {}
+    if usage.get('samples'):
+        print(f"  gpu: SM busy mean {usage['sm_busy_mean']:.0f}% median {usage['sm_busy_median']:.0f}% "
+              f"p10 {usage['sm_busy_p10']}%, below 10% for {100*usage['idle_share_below_10']:.0f}% of "
+              f"{usage['samples']} samples, peak {usage['peak_used_bytes']/2**30:.1f} GiB", flush=True)
+    if result.get('status') not in ('passed', 'interrupted'):
+        print(tail(work/'worker.log'), flush=True)
+    if stopped:
+        raise CampaignStop(stopped)
+    if device.get('released') is False:
+        raise DeviceNotReleased(f'{key}: {describe_release(device)}')
     return result
 
 
@@ -166,7 +221,33 @@ def source_hashes(branch):
         paths += list((root/'scripts/advection_diffusion_reaction').rglob('*.py'))
         for path in sorted(set(paths)):
             sources[f'{label}/{path.relative_to(root)}'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    adapter = ROOT/'campaigns/adr_unified/native_hp_worker.py'
+    sources['master/campaigns/adr_unified/native_hp_worker.py'] = hashlib.sha256(adapter.read_bytes()).hexdigest()
     return sources
+
+
+def estimate_memory(system, choice, calibration):
+    """Planning estimate, with GPU assembly bytes replaced by this device's measured fit when given."""
+    estimate = memory_estimate(system, choice)
+    model = (calibration or {}).get('model', {}).get(str(system['problem']['p']))
+    if model:
+        triangles = system.get('triangles') or math.ceil(1.03*system['target_triangles'])
+        measured = model['bytes_per_triangle']*triangles + model['intercept_bytes']
+        # 15% margin over calibrate_assembly_memory.py; solver bounds keep the planning model.
+        estimate.update(planning_assembly_device_bytes=estimate['assembly_device_bytes'],
+                        assembly_device_bytes=math.ceil(1.15*measured), assembly_device_source='calibrated')
+        if 'host_bytes_per_triangle' in model:
+            # Measured host peak replaces the 6x planning model (1.7x high on L4 in 21958). Solves
+            # memory-map the cache, so the local inverses are clean, reclaimable page cache there.
+            host = model['host_bytes_per_triangle']*triangles + model['host_intercept_bytes']
+            p = system['problem']['p']
+            local = (p+1)*(p+2)//2
+            estimate.update(planning_assembly_host_bytes=estimate['assembly_host_bytes'],
+                            assembly_host_bytes=math.ceil(1.15*host), assembly_host_source='calibrated',
+                            planning_solver_host_bytes=estimate['solver_host_bytes'],
+                            solver_host_bytes=max(0, estimate['solver_host_bytes']-triangles*(3*local)**2*8),
+                            solver_host_source='planning without the memory-mapped local inverses')
+    return estimate
 
 
 def execute(plan, args, common):
@@ -218,6 +299,9 @@ def execute(plan, args, common):
                           memory_fraction=args.memory_fraction, reserve_gpu_gib=args.reserve_gpu_gib,
                           host_limit_gib=args.host_limit_gib, reference_max_dofs=0,
                           record_residual_history=True, mesh_path=None)
+            if getattr(args, 'warm_deltas', None):
+                # Warm-started series per setup (time stepping): previous solution as the guess.
+                shared.update(warm_deltas=args.warm_deltas, warm_steps=args.warm_steps)
             mesh_result = dict(status='passed')
             if system['mesh']:
                 definition = system['mesh']
@@ -230,7 +314,7 @@ def execute(plan, args, common):
                 if mesh_result['status'] == 'passed':
                     shared.update({k: mesh_result[k] for k in ('mesh_path', 'mesh_sha256', 'n')})
                     system.update(triangles=mesh_result['triangles'], trace_dofs=mesh_result['trace_dofs'])
-            shared['memory_estimate'] = memory_estimate(system, system['candidates'][0])
+            shared['memory_estimate'] = estimate_memory(system, system['candidates'][0], getattr(args, 'calibration', None))
             assembled = mesh_result
             if mesh_result['status'] == 'passed':
                 assembled = run_job('assemble_'+system['id'], dict(shared, stage='assemble'), args, common, environment)
@@ -244,7 +328,10 @@ def execute(plan, args, common):
                     solver = dict(choice['solver'], candidate=choice['id'])
                     spec = dict(shared, **solver, stage='solve',
                                 expected_operator_sha256=assembled['operator_sha256'])
-                    spec['memory_estimate'] = memory_estimate(system, choice)
+                    if os.environ.get('HYBRIDGE_ADR_CACHE_IDENTITY') == 'metadata':
+                        # Lets workers check the cache by array size and mtime instead of re-hashing it.
+                        spec['expected_cache_files'] = assembled.get('cache_files')
+                    spec['memory_estimate'] = estimate_memory(system, choice, getattr(args, 'calibration', None))
                     spec['assembly_backend'] = assembled.get('assembly_backend', shared['assembly_backend'])
                     result = run_job(key, spec, args, common, environment)
                 records.append(dict(result, system_id=system['id'], case=shared['case'], p=shared['p'],
@@ -256,7 +343,8 @@ def execute(plan, args, common):
         completion = dict(status='completed', scheduled=plan['coverage']['solver_jobs'], attempted=len(records),
                           statuses=dict(Counter(r['status'] for r in records)))
         common.atomic_json(args.output/'completion.json', completion)
-        return int(any(r['status'] != 'passed' for r in records))
+        # Non-convergence is expected for weak preconditioners; it is reported, never a failure.
+        return int(any(r['status'] not in ('passed', 'not_converged') for r in records))
 
 
 def parser():
@@ -269,7 +357,8 @@ def parser():
     p.add_argument('--repeats', type=int, default=3)
     p.add_argument('--warmup', type=int, default=1)
     p.add_argument('--assembly-backend', choices=('auto', 'cupy', 'numba'), default='auto')
-    p.add_argument('--numba-threads', type=int, default=min(24, len(os.sched_getaffinity(0))))
+    # Element-local assembly/reconstruction is embarrassingly parallel: use every allocated core.
+    p.add_argument('--numba-threads', type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument('--memory-fraction', type=float, default=.8)
     p.add_argument('--reserve-gpu-gib', type=float, default=1.)
     p.add_argument('--host-limit-gib', type=float)
@@ -278,6 +367,15 @@ def parser():
     p.add_argument('--fp64-override', dest='fp64_overrides', action='append', default=[], metavar='ORDINAL=TFLOPS')
     p.add_argument('--timeout', type=float, default=7200.)
     p.add_argument('--heartbeat', type=float, default=30.)
+    p.add_argument('--memory-calibration', type=Path,
+                   help='calibration.json from calibrate_assembly_memory.py on this GPU model')
+    p.add_argument('--warm-deltas', type=float, nargs='+',
+                   help='Relative RHS change per step of warm-started series on each reused setup')
+    p.add_argument('--warm-steps', type=int, default=4, help='Warm-started solves per series')
+    p.add_argument('--hp-grid', action='store_true',
+                   help='Add p=1-9 on every L1-L5 mesh of the representative classes')
+    p.add_argument('--lu-levels', action='store_true',
+                   help='Add L6/L7 (~8M/~20M trace DOFs) at p=2,6,9 for the representative classes')
     p.add_argument('--resume', action='store_true')
     mode = p.add_mutually_exclusive_group()
     mode.add_argument('--execute', action='store_true')
@@ -289,6 +387,8 @@ def main():
     args = parser().parse_args()
     for key in ('inventory', 'output', 'branch_root'):
         setattr(args, key, getattr(args, key).resolve())
+    # The measured model is recorded in the manifest, so a resume must use the same calibration.
+    args.calibration = json.loads(args.memory_calibration.read_text()) if args.memory_calibration else None
     if not 0 < args.memory_fraction < 1 or not 1 <= args.numba_threads <= len(os.sched_getaffinity(0)):
         raise ValueError('Invalid memory fraction or Numba thread count outside CPU affinity')
     if any(not math.isfinite(v) or v <= 0 for v in (args.timeout, args.heartbeat, args.reserve_gpu_gib)):
@@ -298,7 +398,8 @@ def main():
     args.fp64_overrides = [(int(k), float(v)*1e12) for k, v in (x.split('=') for x in args.fp64_overrides)]
     inventory = read_inventory(args.inventory)
     plan = build_plan(inventory, l5_triangles=args.l5_triangles, maxiter=args.maxiter,
-                      repeats=args.repeats, warmup=args.warmup, amgx_backend=args.amgx_backend)
+                      repeats=args.repeats, warmup=args.warmup, amgx_backend=args.amgx_backend,
+                      hp_grid=args.hp_grid, lu_levels=args.lu_levels)
     print(f'AMGX BSR backend: {plan["amgx_backend"]}')
     print(json.dumps(plan['coverage'], indent=2))
     if not args.execute and not args.preflight:
@@ -310,11 +411,19 @@ def main():
         path.write_text(json.dumps(plan, indent=2)+'\n')
         return 0
     common = load_file('_adr_unified_runner_common', args.branch_root/'scripts/adr_performance_common.py')
-    old = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
-    try:
-        return execute(plan, args, common)
-    finally:
-        signal.signal(signal.SIGTERM, old)
+    with stop_on_signals():
+        try:
+            return execute(plan, args, common)
+        except (CampaignStop, DeviceNotReleased) as error:
+            reason = error.signal_name if isinstance(error, CampaignStop) else 'device_not_released'
+            records = common.read_json(args.output/'summary.json') if (args.output/'summary.json').exists() else []
+            common.atomic_json(args.output/'completion.json', dict(
+                status='interrupted' if isinstance(error, CampaignStop) else 'device_not_released', stop_reason=reason,
+                error=str(error), scheduled=plan['coverage']['solver_jobs'], attempted=len(records),
+                statuses=dict(Counter(r['status'] for r in records))))
+            event(f'stopped ({reason}) after {len(records)}/{plan["coverage"]["solver_jobs"]} solver jobs; '
+                  f'job results are saved under {args.output/"jobs"}; rerun with --resume to continue')
+            return 2 if reason in REQUEUE_SIGNALS else 3
 
 
 if __name__ == '__main__':

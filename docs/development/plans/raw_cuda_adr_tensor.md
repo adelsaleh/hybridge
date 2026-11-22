@@ -57,7 +57,7 @@ bounded manufactured convergence.
 
 ## Qualification and evidence
 
-The [dated report](../../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md)
+The [dated report](../../research/solver_studies/adr_assembly/raw_cuda_adr_tensor_2026_09_28.md)
 records commands, results, environment and performance limitations. The original
 12-check / 18-configuration baseline remains at
 `/tmp/hybridge_adr_assembly_baseline_hiqvlnkv/baseline.json`; it is preliminary
@@ -81,7 +81,7 @@ repeatable slowdown above 5% requires investigation before acceptance.
 
 Tensor total-flux recovery (`l2_closest` and `RT_projection`) and tensor primal
 postprocessing are now qualified separately, as linked above. The
-[n-Gamma plan](n_gamma_d_bdf2.md) retains its remaining interface and model work.
+n-Gamma plan, now in the separate `ngamma` repository, retains its remaining interface and model work.
 The [main TODO](../../../TODO.md) owns feature status.
 
 ## Higher-order extension, 2026-10-14
@@ -139,7 +139,7 @@ FP64 qualification completed on 2026-10-15: all **508 ADR checks passed**
 cases), with no failures, errors or skips. The 306 host checks and p=6/p=9 smoke
 gate passed. Eight selected cases passed under each of Compute Sanitizer
 memcheck and racecheck, reporting zero errors and zero hazards. The
-[dated qualification report](../../research/solver_studies/raw_cuda_adr_high_order_2026_10_15.md)
+[dated qualification report](../../research/solver_studies/adr_assembly/raw_cuda_adr_high_order_2026_10_15.md)
 records coverage, tolerances, commands, environment, source/library digests and
 limitations. Host, smoke and sanitizer selections overlap the 508 ADR cases.
 

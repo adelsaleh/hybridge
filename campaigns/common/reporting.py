@@ -70,6 +70,31 @@ def _finite(value):
     return isinstance(value, (int, float)) and math.isfinite(value)
 
 
+def convergence_status(result, spec):
+    """Relabel a stalled iterative solve as ``not_converged``.
+
+    Workers report any failed verification as ``numerical_failure``. A solve
+    that stays finite but stops above the tolerance (solver flag, iteration cap,
+    or physical residual) is a measured outcome of that preconditioner, not a
+    broken run, so campaigns record it and continue. Nonfinite values and
+    converged solves with wrong answers remain ``numerical_failure``.
+    """
+    if result.get("status") != "numerical_failure":
+        return result.get("status")
+    failed = [solve for phase in ("warmups", "samples") for sample in result.get(phase, [])
+              for solve in sample.get("solves", []) if solve.get("passed") is False]
+    if not failed:
+        return "numerical_failure"
+    solve = failed[0]
+    residual, target = solve.get("true_relative_residual"), spec.get("rtol", result.get("rtol"))
+    finite = (_finite(residual) and ("l2_error" not in solve or solve["l2_error"] is None or _finite(solve["l2_error"]))
+              and all(_finite(value) for value in solve.get("residual_history", [])))
+    cap, iterations = spec.get("maxiter"), solve.get("iterations")
+    stalled = (solve.get("status") == "not_converged" or (_finite(cap) and _finite(iterations) and iterations >= cap)
+               or (_finite(residual) and _finite(target) and residual > target))
+    return "not_converged" if finite and stalled else "numerical_failure"
+
+
 def _format(value, precision=".3e"):
     return format(value, precision) if _finite(value) else "unavailable"
 
@@ -124,6 +149,16 @@ def result_details(result, spec):
                 details["reasons"].append("physical residual above target")
         elif "true_relative_residual" in solve and not _finite(residual):
             details["reasons"].append("nonfinite or unavailable physical residual")
+        warm_errors = [sample["warm_error"] for sample in result.get("samples", []) if sample.get("warm_error")]
+        if warm_errors:
+            details["reasons"].append(f"warm-started series failed: {warm_errors[0]}")
+        warm = [w for sample in result.get("samples", []) for w in sample.get("warm", [])]
+        if warm:
+            details["warm"] = {f"{delta:g}": dict(
+                solves=len(rows), passed=sum(w["passed"] for w in rows),
+                median_iterations=statistics.median(w["iterations"] for w in rows),
+                median_solve_ms=statistics.median(w["solve_ms"] for w in rows))
+                for delta in sorted({w["delta"] for w in warm}) for rows in [[w for w in warm if w["delta"] == delta]]}
         bound, error = spec.get("l2_bound"), solve.get("l2_error")
         if _finite(bound) and _finite(error) and error > bound:
             details["reasons"].append("manufactured L2 bound exceeded")
@@ -200,6 +235,10 @@ def print_details(key, details, *, wall_seconds=None, log_path=None, reused=Fals
               f"fresh_setup_solve_ms={_format(details.get('fresh_setup_solve_ms'), '.3f')} "
               f"measured_setup_median_ms={_format(details.get('setup_median_ms'), '.3f')} "
               f"measured_reused_mean_ms={_format(details.get('reused_solve_mean_ms'), '.3f')}")
+    if details.get("warm"):
+        emit("  warm-started (delta: median iterations, median solve ms, passed/solves): " + "; ".join(
+            f"{delta}: {row['median_iterations']:g} it, {row['median_solve_ms']:.3f} ms, {row['passed']}/{row['solves']}"
+            for delta, row in details["warm"].items()))
     if "assembly_median_ms" in details:
         emit(f"  space_setup_ms={_format(details.get('space_setup_ms'), '.3f')} "
              f"assembly_median_ms={_format(details.get('assembly_median_ms'), '.3f')}")

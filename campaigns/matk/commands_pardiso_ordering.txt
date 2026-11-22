@@ -1,0 +1,255 @@
+# From scripts/matk.
+# PARDISO phase11 supplies only its fill-reducing permutation. It does not
+# factor or solve matK, and exports no direct-solver solution as a seed.
+# At most FIVE concurrent/reserved GPUs across every repository, including
+# background and pending jobs. This is unconditional: background work
+# counts toward five; it does not lower the ceiling to four. Count allocations
+# before each submission, including jobs that could start concurrently.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+
+# Current preference: Hopper, using ALL currently available CPU cores.
+# This reserves ONE GPU while PARDISO does CPU analysis. Check the shared cap.
+bash submit_pardiso_hopper.sh --verbosity 3
+# Alternative CPU-only Genoa export,32 threads/192GiB, noGPU reservation:
+# sbatch pardiso_ordering.sbatch --verbosity 3
+# Replace ORDER_JOB below by the returned ID. The permutation is reusable:
+# ../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz
+# tail -F matk-pardiso-order-ORDER_JOB.out
+
+# Hopper alternative: request ALL CPUs currently unallocated on gpu-node and
+# set PARDISO's MKL threads to that Slurm allocation. Reserves ONE GPU while
+# CPU analysis runs, so include it in the FIVE-GPU total. Availability may
+# change between inspection and allocation; Slurm queues safely if necessary.
+# bash submit_pardiso_hopper.sh --verbosity 3
+
+# Current tiny qualification: ZERO starts, unpreconditioned BiCGSTAB/GMRES,
+# none/diagonal/row-max/column-max/Ruiz scaling. No checkpoint is used as a seed.
+sbatch pardiso_amgx_smoke.sbatch --verbosity 3 --unpreconditioned --smoke-max-iters 10000
+# Inspect ../../run_outputs/matk/ordering-smoke-SMOKE_JOB/qualification.json.
+# Require status passed before using this route on the full matrix.
+
+# COMPLETED BASELINES: reproduce only when another comparison is needed.
+# Replace ORDER_JOB, or use27789 for the verified existing96-thread export.
+# Each job runs BiCGSTAB10000 followed by GMRES1000, both fromzero withNOSOLVER.
+# No scaling and diagonal scaling were jobs 27805/27806:
+# sbatch amgx_ordering_baseline.sbatch none "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+# sbatch amgx_ordering_baseline.sbatch diagonal "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+# Row-max, column-max and Ruiz were jobs 27807/27808/27812:
+# sbatch amgx_ordering_baseline.sbatch row-max "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+# sbatch amgx_ordering_baseline.sbatch column-max "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+# sbatch amgx_ordering_baseline.sbatch ruiz "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+# Reports: ../../run_outputs/matk/amgx-ordering-baseline-JOBID-{bicgstab,gmres}.json
+# Live log: tail -F matk-order-baseline-JOBID.out
+# All completed baselines missed the original relative 1e-8 target. See
+# ../AMGX/docs/matk_pardiso_ordered_search_results.txt for results.
+
+# CURRENT STRONGER SEARCH / EXACT CONFIGURATION REPRODUCTIONS.
+# These jobs were already submitted. Choose a reproduction only when the shared
+# FIVE-GPU allocation permits it; do not submit this entire block as a new sweep.
+# All use the saved 96-thread phase-11 export, zero initial guesses, one pass,
+# baseline AMGX, native relative tolerance 1e-10 and original acceptance 1e-8.
+matk_order_archive="$PWD/../../run_outputs/matk/pardiso-order-27789.permutation.npz"
+
+# 27813 COMPLETED: unpreconditioned GMRES, restart 6000 / maximum 6000, none.
+# Original relative residual 0.0022680976897333244; pure solve 1202.461721 s.
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --time=01:05:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates gmres_unpreconditioned_csr_r6000 --max-iters 6000 --restart 6000 \
+  --scaling none --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 3600 --save-solution
+
+# CONTROLLED RESTART COMPARISONS: 27818 afterany:27813 (none, COMPLETED),
+# original residual 0.0031540353176112553, pure solve 219.783357 s.
+# 27819 COMPLETED afterany:27817 (column-max), original0.004326296524696232,
+# pure solve217.093868498s. Both sequential restart-comparison slots released.
+# Keep maximum 6000, p27789, zero starts and NOSOLVER, but use restart 1000.
+# Compare against restart 6000 / maximum 6000 in the matching scaling.
+# The fixed-r1000 candidate is gmres_unpreconditioned_csr (without _r6000).
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --dependency=afterany:27813 --time=00:16:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates gmres_unpreconditioned_csr --max-iters 6000 --restart 1000 \
+  --scaling none --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 900 --save-solution
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --dependency=afterany:27817 --time=00:16:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates gmres_unpreconditioned_csr --max-iters 6000 --restart 1000 \
+  --scaling column-max --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 900 --save-solution
+
+# 27830 COMPLETED: intermediate restart 3000, same maximum 6000, none scaling.
+# Original0.0024466139537002926, pure solve609.482315557s; still fails1e-8.
+# Compare completed original residual and solve time with 27813 / 27818.
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --time=00:26:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates gmres_unpreconditioned_csr_r3000 --max-iters 6000 --restart 3000 \
+  --scaling none --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 1500 --save-solution
+
+# 27814 (COMPLETED FAILURE): unpreconditioned BiCGSTAB, maximum 100000, no scaling.
+# Original relative residual 1.2722553546849857 after 565.004870 s solve.
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --time=00:25:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates bicgstab_unpreconditioned_csr --max-iters 100000 \
+  --scaling none --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 900 --save-solution
+
+# 27817 COMPLETED: GMRES, restart 6000 / maximum 6000, column-max scaling.
+# Original0.0029889018101691128, pure solve1225.397115181s; still fails1e-8.
+# This replaced the GPU released by completed job 27814.
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --time=01:05:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates gmres_unpreconditioned_csr_r6000 --max-iters 6000 --restart 6000 \
+  --scaling column-max --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 3600 --save-solution
+
+# 27815 / 27816 COMPLETED: gradual native preconditioner ladders, none / column-max.
+# Each job uses ONE GPU and tests candidates sequentially. Each full candidate
+# runs only after its tiny synthetic smoke passes. Full original residual is
+# authoritative; a smoke pass alone never establishes convergence on matK.
+sbatch amgx_ordering_ladder.sbatch none "$matk_order_archive"
+sbatch amgx_ordering_ladder.sbatch column-max "$matk_order_archive"
+# Ladder: GMRES+ILU0 (1000 steps), FGMRES+inner GMRES50/ILU0 (100 steps),
+# classical AMG+ILU0 with four pre/post sweeps (100 steps), then classical
+# AMG with GMRES30/ILU0 smoothing (20 steps). Both AMG full rungs failed during
+# legacy ILU setup at source line 217; no converged full configuration was found.
+
+# NATIVE HIERARCHY WORKFLOW (one GPU per sequential job, no ILU).
+# First four variants use iterative coarse inverses; new coarselu uses dense LU.
+# Wrapper: SCALING FULL_PERMUTATION [aggregation|interp8|coarselu|all|pairwise|multipass].
+# Default aggregation selects the new aggregation-only candidate. Use an
+# explicit family to reproduce a particular trial; historical defaults changed.
+# It first exports a matching p for 512 synthetic blocks / 10,240 DOFs, then
+# requires a 512-block multilevel smoke pass before a candidate's full solve.
+# Full matK always uses the precomputed p27789 supplied as the second argument.
+# 27826/27827 historical combined-batch launch records:
+# sbatch amgx_ordering_hierarchy.sbatch none "$matk_order_archive"
+# sbatch amgx_ordering_hierarchy.sbatch column-max "$matk_order_archive"
+# Their old default selected two candidates. The current default selects
+# aggregation only, and current all selects five; these are historical records.
+# Both pairwise smokes passed but full setups aborted with illegal memory
+# access; the original MULTIPASS probe's 64-entry truncation setting was then
+# rejected in smoke, so its full solve was skipped. Immutable reports retain
+# those actual configurations. The corrected MULTIPASS variant uses 32.
+# Original candidates: pairwise4 -> classical W2/L1 (100 outer steps), and a
+# MULTIPASS/DILU structural-size probe (2 outer steps). New candidates below
+# remove the CLASSICAL child or limit its interpolation rows to 8 entries.
+# The first four proposals follow CLI scaling. Coarselu explicitly fixes none.
+# Direct coarse LU was excluded at that earlier checkpoint; see27884 below
+# for its own subsequent full structural qualification.
+
+# 27828 / 27829 COMPLETED: corrected 32-entry MULTIPASS-only probes.
+# Third argument avoids repeating the already failed pairwise full candidate.
+# Both 10,240-DOF smokes passed (~1.87e-15), but both full setups aborted
+# with illegal memory access. No full solution residual or solve time exists.
+sbatch amgx_ordering_hierarchy.sbatch none "$matk_order_archive" multipass
+sbatch amgx_ordering_hierarchy.sbatch column-max "$matk_order_archive" multipass
+
+# Source audit: truncate_kernel has 1024-entry shared arrays but allocates
+# max_elmts entries per thread; 128 threads * 32 = 4096. This is a confirmed
+# bounds defect. Attribution of the full setup aborts is still unproved.
+# 27831 CURRENT: aggregation-only, removes the entire CLASSICAL subtree.
+# fgmres_pairwise4_coarse500_l1_csr keeps four aggregation levels with native
+# GMRES30/L1 smoothing; coarse GMRES500/L1 uses restart200 and tolerance0.01.
+# Smoke passed (5.06939781949081e-13); full cap100 outer /1800s, no ILU/dense LU.
+sbatch --time=00:45:00 amgx_ordering_hierarchy.sbatch none "$matk_order_archive" aggregation
+# 27832 CANCELLED 20:02:06 CET: pairwise-to-classical, interp_max_elements8.
+# 128 * 8 = 1024 bounds that shared workspace; it does not prove the full
+# failure's cause. Full setup passed3.524657746s, classical sizes
+# 105798 ->26475 ->4959 ->783 ->158, but inner coarse residual grew near1e69.
+# No completed physical residual/solve sample was saved. Reports may retain
+# an interrupted running stage; cancellation evidence is separate.
+sbatch --time=00:45:00 amgx_ordering_hierarchy.sbatch none "$matk_order_archive" interp8
+
+# 27884 CURRENT: same safe-interp8 hierarchy with native DENSE_LU_SOLVER coarse
+# inverse and min_coarse_rows/dense_lu_num_rows4096. Host scaling fixed none.
+# Full setup passed3.582423283s; actual terminal4784 DOFs, not predicted4959.
+# Coarsening is not bitwise identical across these runs despite determinism1.
+# The five frozen variants now include this structurally qualified coarse LU.
+sbatch --time=00:45:00 amgx_ordering_hierarchy.sbatch none "$matk_order_archive" coarselu
+
+# 27885 CURRENT: missing ordered scalar PBICGSTAB + legacy natural ILU0 control.
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+sbatch --time=00:11:00 amgx_strong.sbatch --verbosity 3 \
+  --candidates pbicgstab_legacy_ilu0_csr_ordering --max-iters 1000 \
+  --scaling column-max --ordering pardiso --permutation "$matk_order_archive" \
+  --inner-rtol 1e-10 --rtol 1e-8 --right-scale-multiplier 1 \
+  --residual-corrections 0 --repeats 1 --timeout 600 --save-solution
+
+# 27886 CURRENT: column-max counterpart of aggregation-only job27831.
+sbatch --time=00:45:00 amgx_ordering_hierarchy.sbatch column-max "$matk_order_archive" aggregation
+# Current four occupied slots:27831 +27884 +27885 +27886 (shared maxFIVE).
+# Background26542 completed independently with exit0; it was not cancelled.
+# Recheck the scheduler before any new submission, including pending work.
+# Live logs: tail -F matk-amgx-strong-27885.out matk-order-hierarchy-27831.out \
+#                    matk-order-hierarchy-27884.out matk-order-hierarchy-27886.out
+# Reports: ../../run_outputs/matk/amgx-strong-JOBID{,_trials/} and
+#          ../../run_outputs/matk/{ordering-ladder,ordering-hierarchy}-JOBID/
+# Mirrored hierarchy specs: ../AMGX/docs/matk_native_pardiso_hierarchy_proposals.json
+# Exporter/benchmark smoke sizes must match; CPU-only reproduction of that export:
+# ../../.venv/bin/python pardiso_ordering.py --smoke-test --smoke-blocks 512 \
+#   --threads 1 --verbosity 1 --output ../../run_outputs/matk/smoke-order-512-reproduction.json
+# Historical worker JSON may show timeout=1800 (its unused default). The parent
+# START log records the actual enforced worker cap: 3600 s for 27813/27817 and
+# 900 s for 27814. Future worker metadata now forwards the parent timeout.
+
+# EARLIER ILU0 CONTROL REPRODUCTIONS (the current ladder is documented above):
+# Run each command only within the shared GPU reservation cap.
+# Both runs use identical native solver/scaling/tolerance/initial-guess settings.
+# Only the second applies the exported permutation. Both start from zero here.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:25:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates gmres_legacy_ilu0_csr_ordering pbicgstab_legacy_ilu0_csr_ordering \
+#   --max-iters 1000 --inner-rtol 1e-10 --residual-corrections 0 \
+#   --timeout 600 --save-solution --continue-after-success
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:25:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates gmres_legacy_ilu0_csr_ordering pbicgstab_legacy_ilu0_csr_ordering \
+#   --max-iters 1000 --inner-rtol 1e-10 --residual-corrections 0 \
+#   --timeout 600 --save-solution --continue-after-success \
+#   --ordering pardiso \
+#   --permutation "$PWD/../../run_outputs/matk/pardiso-order-ORDER_JOB.permutation.npz"
+
+# Current user instruction: use ZERO initial guesses for this comparison.
+# Do not add --initial-guess. Checkpoints saved by these runs are outputs only.
+# The driver maps the output back and accepts only
+# ||A*x-b||/||b||<=1e-8 on the original full system. Native status is insufficient.
+# Export/scaling/permutation/setup and native solve timing are reported separately.
+# fresh_total_plus_ordering_analysis_seconds includes the saved one-time
+# phase11 cost; fresh_total_seconds assumes the permutation is already available.
+# For complete wall-clock cost include the separately reported file loading,
+# fingerprinting and checkpoint IO as well.
+
+# Recorded first comparison (2026-10-30):
+# 27779: Genoa CPU export cancelled while queued; moved to an available Hopper
+# allocation. 27781: exported with32 threads, analysis16.524311s.
+# 27780: all6 synthetic zero/warm mapping checks passed BEFORE the user asked
+# for zero-only full trials. Worst original residual4.5394e-16.
+# 27789: bash submit_pardiso_hopper.sh --verbosity 3
+# Requested all96 CPUs available at submission. Analysis16.459631s; same p
+# checksum as32 threads. Use this archive for the full comparison:
+# ../../run_outputs/matk/pardiso-order-27789.permutation.npz
+# 27782: natural-order full control (two candidates, zero initial guesses).
+# 27790: PARDISO-order full comparison (same settings, zero initial guesses).
+# Both use the two full commands above with ORDER_JOB=27789.
+# Logs: tail -F matk-amgx-strong-27782.out matk-amgx-strong-27790.out
+# 27790's GMRES finished; remainingPBICGSTAB wascancelled onusersteering.
+# SavedGMRES results: naturalrel0.2010081559 /129.947859s;
+# PARDISOrel0.1581845208 /121.044319s. Neither passed1e-8.
+
+# Detailed PARDISO-then-AMGX timing report, after desired jobsfinish:
+# ../../.venv/bin/python report_pardiso_amgx.py \
+#   --pardiso-report ../../run_outputs/matk/pardiso-order-27789.json \
+#   --pardiso-log matk-pardiso-order-27789.out \
+#   --amgx-reports ../../run_outputs/matk/amgx-ordering-baseline-27805-bicgstab.json \
+#                  ../../run_outputs/matk/amgx-ordering-baseline-27805-gmres.json \
+#                  ../../run_outputs/matk/amgx-ordering-baseline-27806-bicgstab.json \
+#                  ../../run_outputs/matk/amgx-ordering-baseline-27806-gmres.json \
+#   --output ../../run_outputs/matk/pardiso-amgx-unpreconditioned.json
+# Writes adjacentJSON+alignedTXT, separatesnativePARDISOcomponents, CPU/GPU
+# preparation/setup/solve/recovery/validation, and originalresidual gates.

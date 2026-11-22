@@ -75,7 +75,7 @@ def _inventory(data: Path) -> tuple[list[Path], int, list[str]]:
 
 def collect(campaign: str, data: Path | None = None, max_bytes: int = DEFAULT_MAX_BYTES,
             *, label: str | None = None, include: tuple[str, ...] = (),
-            status: str = "recorded; completion not inferred") -> Path:
+            status: str = "recorded; completion not inferred", include_logs: bool = False) -> Path:
     """Snapshot text records, their SHA256 hashes, markers, and data sizes."""
     campaign_dir = REPO / "campaigns" / _name(campaign)
     if not (campaign_dir / "README.md").is_file():
@@ -86,7 +86,7 @@ def collect(campaign: str, data: Path | None = None, max_bytes: int = DEFAULT_MA
     if data is None or not data.is_dir():
         raise ValueError(f"{campaign}: data directory not found ({data}); pass --data")
     data = data.resolve()
-    records = campaign_dir / "records"
+    records = REPO / "docs" / "campaigns" / campaign_dir.name / "records"
     if label:
         records /= _name(label)
     if records.resolve().is_relative_to(data):
@@ -109,7 +109,8 @@ def collect(campaign: str, data: Path | None = None, max_bytes: int = DEFAULT_MA
         marker = bool(MARKER_PATTERN.search(path.name)) and path.suffix.lower() in {"", ".done", ".failed", ".json", ".txt"}
         if marker:
             markers.append(relative)
-        if path.suffix.lower() not in RECORD_SUFFIXES and not marker:
+        if (path.suffix.lower() not in RECORD_SUFFIXES and not marker
+                and not (include_logs and path.suffix.lower() == '.log')):
             continue
         if size > max_bytes:
             skipped.append({"path": relative, "bytes": size})
@@ -177,11 +178,12 @@ def main(argv=None) -> int:
     p.add_argument("--label", help="subdirectory under records for this output directory")
     p.add_argument("--include", action="append", default=[], help="additional relative glob, repeatable")
     p.add_argument("--status", default="recorded; completion not inferred")
+    p.add_argument("--include-logs", action="store_true", help="also copy bounded UTF-8 .log files")
     p.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES)
     args = parser.parse_args(argv)
     try:
         records = collect(args.campaign, args.data, args.max_bytes, label=args.label,
-                          include=tuple(args.include), status=args.status)
+                          include=tuple(args.include), status=args.status, include_logs=args.include_logs)
     except ValueError as error:
         parser.error(str(error))
     print(records.relative_to(REPO))

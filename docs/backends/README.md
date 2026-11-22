@@ -19,6 +19,9 @@ package reorganization moved them without re-export shims.
   device sampling, explicit image saving, and static smoke checks.
 - [`cuda_execution.md`](cuda_execution.md): CUDA runner entry points, matrix
   formats, sparse-solve handoff, and direct-CSR timing anchor.
+- [`../lessons/kernel_tuning_by_architecture.md`](../lessons/kernel_tuning_by_architecture.md):
+  the kernel settings that were fastest on each measured GPU architecture, and
+  the lessons of those measurements.
 - [`amgx_classical_bsr.md`](amgx_classical_bsr.md): hybrid classical-AMG
   hierarchy with a BSR fine operator, scalar setup expansion, and the
   pure-BSR successor contract.

@@ -1,0 +1,18 @@
+# From scripts/matk.
+# Reproduce the actual 15x15 PARDISO example and print both matrices.
+# Signed entries span six negative to six positive powers of ten before rounding.
+../../.venv/bin/python check_pardiso_small.py --output-dir ../../run_outputs/matk/ordering-structure/small --verbosity 2
+cat ../../run_outputs/matk/ordering-structure/small/example.txt
+# example.json retains full precision; example.png is the annotated heatmap.
+
+# Check the shared five-GPU allocation limit, including running/pending work.
+squeue -u "$USER" -o '%.18i %.28j %.10T %.24b %.24E'
+# Full matK audit: every CSR row pointer, column index and coefficient checked
+# against independent SciPy A[p,:][:,p]; exact distance histograms, no sampling.
+# Reuses verified export27789. Hopper reserves one GPU, but this audit uses CPUs.
+sbatch ordering_structure.sbatch
+# Recorded run:27990. Replace JOBID for later runs.
+tail -F matk-order-audit-JOBID.out
+# Artifacts: ../../run_outputs/matk/ordering-structure/full-JOBID/
+# comparison.json / comparison.txt / histograms.npz
+# structure.png / structure.pdf / coupling_distances.png / coupling_distances.pdf

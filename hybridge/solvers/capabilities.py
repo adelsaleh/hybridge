@@ -278,7 +278,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "device -> host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
-        "Identity diffusion and scalar stabilization only.",
+        "Identity diffusion and scalar stabilization only. Accepts a QuadratureScalar source.",
     ),
     _assembly_capability(
         "diffusion-reaction",
@@ -286,7 +286,8 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "device -> host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
-        "Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR.",
+        "Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR. "
+        "Accepts a QuadratureScalar source.",
     ),
     *_solve_capabilities(
         "diffusion-reaction",
@@ -459,7 +460,10 @@ def _unsupported(
     )
 
 
-# Lowest order at which raw_local_assembly="auto" selects TSLE-BSR (split3).
+# Historical static recommendations retained for callers that request a
+# recommendation without device inputs. Public solver auto assembly now
+# defers to transport.pipeline_tuning; these rules do not choose its winner.
+# Lowest order at which the historical policy selected TSLE-BSR (split3).
 # On an RTX PRO 5000 Blackwell (117k-triangle star mesh, zero-flux transport,
 # bit-identical matrices) split3 was 24% faster than fused at p=8 and 44% at
 # p=9, and within 4% of it for p=4--7. Machine-specific: this is an
@@ -474,6 +478,22 @@ RAW_SPLIT3_MIN_ORDER = 8
 # an E*(NEL^2 + NEL*NCOLS + 6*NQF) workspace (about 1.8 GB at p=6, 157k).
 RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER = 6
 RAW_SPLIT3_WORKSPACE_FRACTION = 0.25
+# From this order, on the compute capabilities below, "auto" picks the FP64
+# tensorized TSLE (raw_local_assembly="tensor": cuTENSOR contractions + the
+# fused batched solve on sm_90, hybridge.transport.tsle_tensor) when its inputs
+# allow it and its workspace fits in RAW_TENSOR_WORKSPACE_FRACTION of the
+# available memory, or needs no more than the split3 workspace that "auto"
+# would otherwise take without a memory check (p >= RAW_SPLIT3_MIN_ORDER; the
+# tensor stage buffers are chunked, so this holds on large meshes). On an H200
+# NVL (sm_90, 2026-10-28, 117k-triangle star mesh, conflict-averaged zero-flux
+# transport) it assembled in 6.6/5.9/8.7/16.7/22.4 ms at p=5/6/7/8/9 against
+# 7.4/14.5/26.5/47.6/93.1 ms for the best split3 or fused launch, because its
+# contractions run on the FP64 tensor cores. Other architectures keep the
+# split3/fused rule until measured (on the FP64-limited RTX PRO 5000 tensor
+# won only at p=8-9).
+RAW_TENSOR_MIN_ORDER = 5
+RAW_TENSOR_COMPUTE_CAPABILITIES = frozenset({"90"})
+RAW_TENSOR_WORKSPACE_FRACTION = 0.25
 
 
 def resolve_raw_local_assembly(
@@ -485,10 +505,22 @@ def resolve_raw_local_assembly(
         cache_operator: bool = False,
         split3_workspace_bytes: int | None = None,
         available_device_bytes: int | None = None,
+        tensor_workspace_bytes: int | None = None,
 ) -> str:
-    """Resolve ``raw_local_assembly="auto"`` for one raw-CUDA advection assembly.
+    """Return the historical static recommendation without timing device inputs.
 
-    ``"auto"`` selects ``"split3"`` when its requirements hold (face-BSR
+    This compatibility helper retains the recorded degree/memory policy.
+    Normal solver ``"auto"`` calls defer to ``transport.pipeline_tuning``
+    after preparing actual coefficients; they do not use this helper.
+
+    ``"auto"`` selects ``"tensor"`` when the split3 requirements below hold,
+    the caller supplied ``tensor_workspace_bytes`` (it does so only on a
+    device in :data:`RAW_TENSOR_COMPUTE_CAPABILITIES` with tensor-compatible
+    inputs, see :func:`tensor_memory_check_needed`), the order is at least
+    :data:`RAW_TENSOR_MIN_ORDER`, and the workspace fits in
+    :data:`RAW_TENSOR_WORKSPACE_FRACTION` of ``available_device_bytes`` or,
+    from :data:`RAW_SPLIT3_MIN_ORDER`, is no larger than ``split3_workspace_bytes``.
+    Otherwise it selects ``"split3"`` when its requirements hold (face-BSR
     output, cooperative LU, no operator cache) and either the order is at
     least :data:`RAW_SPLIT3_MIN_ORDER`, or it is at least
     :data:`RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER` and the split3 workspace fits in
@@ -501,6 +533,12 @@ def resolve_raw_local_assembly(
         return raw_local_assembly
     if not (bsr_output and raw_lu_mode in {None, "coop"} and not cache_operator):
         return "fused"
+    if int(order) >= RAW_TENSOR_MIN_ORDER and tensor_workspace_bytes is not None and (
+            (available_device_bytes is not None
+             and tensor_workspace_bytes <= RAW_TENSOR_WORKSPACE_FRACTION * available_device_bytes)
+            or (int(order) >= RAW_SPLIT3_MIN_ORDER and split3_workspace_bytes is not None
+                and tensor_workspace_bytes <= split3_workspace_bytes)):
+        return "tensor"
     if int(order) >= RAW_SPLIT3_MIN_ORDER:
         return "split3"
     if (int(order) >= RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER and split3_workspace_bytes is not None
@@ -512,10 +550,25 @@ def resolve_raw_local_assembly(
 
 def split3_memory_check_needed(raw_local_assembly: str, *, order: int, bsr_output: bool,
                                raw_lu_mode: str | None = None, cache_operator: bool = False) -> bool:
-    """Return whether resolving ``"auto"`` depends on the split3 workspace size and free device memory."""
+    """Whether the historical static recommendation needs split3 memory sizes."""
     return (raw_local_assembly == "auto" and bsr_output and raw_lu_mode in {None, "coop"}
             and not cache_operator
             and RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER <= int(order) < RAW_SPLIT3_MIN_ORDER)
+
+
+def tensor_memory_check_needed(raw_local_assembly: str, *, order: int, bsr_output: bool,
+                               raw_lu_mode: str | None = None, cache_operator: bool = False,
+                               tensor_inputs: bool = False, compute_capability: str | None = None) -> bool:
+    """Whether the historical static recommendation needs tensor memory sizes.
+
+    ``tensor_inputs`` states that the coefficients are DG fields (no
+    quadrature-point data) with the advection field in the solution basis;
+    ``compute_capability`` is the device's, e.g. ``"90"``.
+    """
+    return (raw_local_assembly == "auto" and bsr_output and raw_lu_mode in {None, "coop"}
+            and not cache_operator and tensor_inputs
+            and compute_capability in RAW_TENSOR_COMPUTE_CAPABILITIES
+            and int(order) >= RAW_TENSOR_MIN_ORDER)
 
 
 def validate_advection_backend_configuration(
@@ -584,9 +637,9 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "raw-CUDA does not support trace_ordering; set trace_ordering='none'",
             )
-        if raw_local_assembly not in {"precomputed", "fused", "split3"}:
+        if raw_local_assembly not in {"precomputed", "fused", "split3", "tensor", "auto"}:
             raise ValueError(
-                "raw_local_assembly must be 'precomputed', 'fused', or 'split3'"
+                "raw_local_assembly must be 'precomputed', 'fused', 'split3', 'tensor', or 'auto'"
             )
         if quadrature_coefficients and raw_local_assembly == "precomputed":
             _unsupported(
@@ -596,10 +649,19 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "quadrature-point coefficients need raw_local_assembly='fused' or 'split3'",
             )
+        if quadrature_coefficients and raw_local_assembly == "tensor":
+            _unsupported(
+                "advection-reaction",
+                operation,
+                backend,
+                solver_backend,
+                "raw_local_assembly='tensor' supports DG coefficients only; "
+                "quadrature-point coefficients need raw_local_assembly='fused' or 'split3'",
+            )
         if raw_lu_mode not in {None, "safe", "coop"}:
             raise ValueError("raw_lu_mode must be None, 'safe', or 'coop'")
         raw_lu_mode = resolve_raw_lu_mode(raw_lu_mode, raw_local_assembly)
-        if raw_lu_mode == "coop" and raw_local_assembly not in {"fused", "split3"}:
+        if raw_lu_mode == "coop" and raw_local_assembly not in {"fused", "split3", "tensor", "auto"}:
             _unsupported(
                 "advection-reaction",
                 operation,
@@ -607,17 +669,17 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "raw_lu_mode='coop' requires raw_local_assembly='fused' or 'split3'",
             )
-        if raw_local_assembly == "split3" and raw_lu_mode != "coop":
+        if raw_local_assembly in {"split3", "tensor"} and raw_lu_mode != "coop":
             _unsupported(
                 "advection-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw_local_assembly='split3' requires raw_lu_mode='coop'",
+                f"raw_local_assembly={raw_local_assembly!r} requires raw_lu_mode='coop'",
             )
         if raw_matrix_format not in {"auto", "coo", "csr", "bsr"}:
             raise ValueError("raw_matrix_format must be 'auto', 'coo', 'csr', or 'bsr'")
-        if boundary_mode == "zero-flux" and raw_local_assembly not in {"fused", "split3"}:
+        if boundary_mode == "zero-flux" and raw_local_assembly not in {"fused", "split3", "tensor", "auto"}:
             _unsupported(
                 "advection-reaction",
                 operation,
@@ -636,7 +698,7 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "raw-CUDA supports default upwind, ScaledUpwind, 'lax-friedrichs', or 'conflict-averaged-upwind' stabilization",
             )
-        if raw_local_assembly == "split3" and raw_matrix_format in {"coo", "csr"}:
+        if raw_local_assembly in {"split3", "tensor"} and raw_matrix_format in {"coo", "csr"}:
             _unsupported(
                 "advection-reaction",
                 operation,
@@ -646,7 +708,7 @@ def validate_advection_backend_configuration(
             )
         if raw_matrix_format in {"csr", "bsr"} and not (
             operation == "solve"
-            and raw_local_assembly in {"fused", "split3"}
+            and raw_local_assembly in {"fused", "split3", "tensor", "auto"}
             and solver_backend == "amgx"
             and not requires_host_system
         ):

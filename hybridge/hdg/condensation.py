@@ -20,6 +20,7 @@ import numpy as np
 
 from hybridge.hdg import matrices as hdg_mats
 import hybridge.core.mass as core_mass
+from hybridge.core.quadrature_coefficients import QuadratureScalar
 from hybridge.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
@@ -95,6 +96,9 @@ def reaction_mass(reaction, space: DGSpace) -> np.ndarray:
 
 def source_moments(source, space: DGSpace) -> np.ndarray:
     r"""Compute element moments :math:`\int_K f\phi_i\,dx`."""
+    if isinstance(source, QuadratureScalar):
+        source.check(space)
+        return np.ascontiguousarray(source.to_host().moments(), dtype=REAL_DTYPE)
     if isinstance(source, DGField):
         source.space.assert_same_mesh(space)
         constant_value = source.constant_value
@@ -163,7 +167,8 @@ def block_source_moments(
     if source_block < 0 or source_block >= num_blocks:
         raise ValueError("source_block must satisfy 0 <= source_block < num_blocks")
 
-    array = np.asarray(source, dtype=REAL_DTYPE) if not callable(source) and not isinstance(source, DGField) else None
+    array = (np.asarray(source, dtype=REAL_DTYPE)
+             if not callable(source) and not isinstance(source, (DGField, QuadratureScalar)) else None)
     if array is not None and array.shape == (space.mesh.num_tri, num_blocks * space.el_dof):
         return np.ascontiguousarray(array)
 
@@ -573,8 +578,8 @@ def trace_from_field_faces(field: DGField) -> np.ndarray:
         np.add.at(mass, edges[interior], face_mass[interior, face])
 
     trace = np.zeros((mesh.num_edg, q.edg_dof), dtype=REAL_DTYPE)
-    for edge in mesh.int_edges_inds:
-        trace[edge] = np.linalg.solve(mass[edge], rhs[edge])
+    interior = mesh.int_edges_inds
+    trace[interior] = np.linalg.solve(mass[interior], rhs[interior][..., None])[..., 0]
     return trace.reshape(-1)
 
 

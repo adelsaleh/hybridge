@@ -76,8 +76,67 @@ def problem_class(system):
     return (system['geometry'], p['case'], fingerprint(p.get('stress_parameters', {})))
 
 
+# Classes that get the full h-p grid and the LU-struggle levels: smooth, advection-dominated
+# and variable-velocity squares, the weak-diffusion cellular annulus and two stress annuli.
+REPRESENTATIVE_CLASSES = (('square', 'trigonometric'), ('square', 'advection_dominated'),
+                          ('square', 'variable_velocity'), ('annulus', 'cellular7_weak'),
+                          ('annulus', 'stress_main_trap'), ('annulus', 'stress_main_orthogonal'))
+HP_DEGREES = tuple(range(1, 10))
+# Trace-DOF targets beyond the largest measured PARDISO factorization (3.8M DOFs, p=6):
+# L6 passes the int32 factor-index limit (~6.5M DOFs at p=6), L7 needs hundreds of GB of LU memory.
+LU_LEVELS = (('L6', 8_000_000), ('L7', 20_000_000))
+LU_DEGREES = (2, 6, 9)
+
+
+def _quadrature_for(problem, base_p, p):
+    """Keep a class's explicit quadrature margin over 2p+2 when changing its degree."""
+    for key in ('volume_quad_1d', 'edge_quad_1d'):
+        value = problem.get(key)
+        if value is not None:
+            problem[key] = max(2*p+2, value+2*(p-base_p))
+
+
+def _degree_variant(base, p, level, suite):
+    system = deepcopy(base)
+    system.pop('archived_operator_sha256', None)
+    base_p = base['problem']['p']
+    system['problem']['p'] = p
+    _quadrature_for(system['problem'], base_p, p)
+    system.update(level=level, origins=[dict(suite=suite, source_systems=[base['id']])])
+    if system['geometry'] == 'square':
+        n = system['problem']['n']
+        system['triangles'] = 2*n*n
+        system['trace_dofs'] = (3*n*n-2*n)*(p+1)
+    else:
+        system['trace_dofs'] = None
+    system['id'] = f'{level}_p{p}_'+fingerprint(dict(problem=system['problem'], geometry=system['geometry'],
+                                                    mesh=system['mesh'], triangles=system.get('triangles')))[:16]
+    return system
+
+
+def _sized_for_dofs(base, p, level, dofs, suite):
+    """A degree variant whose mesh is sized for a trace-DOF target (square: exact n; annulus: generated)."""
+    system = _degree_variant(base, p, level, suite)
+    if system['geometry'] == 'square':
+        n = math.ceil((2+math.sqrt(4+12*dofs/(p+1)))/6)
+        system['problem']['n'] = n
+        system.update(mesh=None, triangles=2*n*n, trace_dofs=(3*n*n-2*n)*(p+1))
+    else:
+        # Trace DOFs ~ 1.5 x triangles x (p+1) on these annular meshes.
+        target = math.ceil(dofs/(1.5*(p+1)))
+        stress = 'stress_parameters' in system['problem']
+        system['mesh'] = dict(generator='stress' if stress else 'five_lobed', target_triangles=target,
+                              max_triangles=math.ceil(1.03*target), boundary_points=3600 if stress else 1600,
+                              neck_elements=12 if stress else None)
+        system.update(triangles=None, target_triangles=target, trace_dofs=None)
+        system['problem']['n'] = round(math.sqrt(target/2))
+    system['id'] = f'{level}_p{p}_'+fingerprint(dict(problem=system['problem'], geometry=system['geometry'],
+                                                    mesh=system['mesh']))[:16]
+    return system
+
+
 def build_plan(inventory, *, l5_triangles=400000, maxiter=2000, repeats=3, warmup=1,
-               amgx_backend='cusparse_generic'):
+               amgx_backend='cusparse_generic', hp_grid=False, lu_levels=False):
     if amgx_backend not in AMGX_BACKENDS:
         raise ValueError(f'Unsupported AMGX BSR backend: {amgx_backend}')
     if l5_triangles < 300000:
@@ -129,6 +188,40 @@ def build_plan(inventory, *, l5_triangles=400000, maxiter=2000, repeats=3, warmu
         system['origins'] = [dict(suite='L5', source_systems=[s['id'] for s in group])]
         system['id'] = 'L5_'+fingerprint(dict(problem=system['problem'], geometry=system['geometry'], mesh=system['mesh']))[:16]
         systems.append(system)
+    extra = []
+    for key, group in groups.items():
+        if (key[0], key[1]) not in REPRESENTATIVE_CLASSES or not (hp_grid or lu_levels):
+            continue
+        l5 = next(s for s in systems if s['level'] == 'L5' and problem_class(s) == key)
+        if hp_grid:
+            # Every degree on every mesh of the class: archived L1-L4 meshes (the stress
+            # classes have two archived meshes, labelled L4 and L4b) and the L5 mesh.
+            by_mesh = defaultdict(list)
+            for source in group:
+                mesh = source['mesh']['file'] if source.get('mesh') else source['problem']['n']
+                by_mesh[mesh].append(source)
+            bases = []
+            for sources in by_mesh.values():
+                level = next((s['level'] for s in sources if s['level'] != 'original'), None)
+                if level is None and 'stress_parameters' in sources[0]['problem']:
+                    level = 'L4' if sources[0]['triangles'] < 120000 else 'L4b'
+                if level is not None:
+                    bases.append((level, max(sources, key=lambda s: s['problem']['p']), {s['problem']['p'] for s in sources}))
+            bases.append(('L5', l5, {6}))
+            for level, base, present in bases:
+                for p in HP_DEGREES:
+                    if p not in present:
+                        extra.append(_degree_variant(base, p, level, 'hp_grid'))
+        if lu_levels:
+            for level, dofs in LU_LEVELS:
+                for p in LU_DEGREES:
+                    extra.append(_sized_for_dofs(l5, p, level, dofs, 'lu_struggle'))
+        for system in extra:
+            if problem_class(system) == key:
+                system['candidates'] = deepcopy(l5['candidates'])
+    if len({s['id'] for s in systems+extra}) != len(systems)+len(extra):
+        raise ValueError('Duplicate system identity in the h-p grid')
+    systems.extend(extra)
     for system in systems:
         for choice in system['candidates']:
             # Explicit shared iteration cap; retain archived restart, PP and
@@ -147,9 +240,16 @@ def build_plan(inventory, *, l5_triangles=400000, maxiter=2000, repeats=3, warmu
                     total_systems=len(systems), solver_jobs=sum(len(s['candidates']) for s in systems),
                     jobs_by_family=dict(Counter(c['solver']['family'] for s in systems for c in s['candidates'])),
                     original_suites=sorted({o['suite'] for s in inventory['systems'] for o in s['origins']}))
-    return dict(schema_version=1, inventory_sha256=fingerprint(inventory), protocol=protocol,
+    plan = dict(schema_version=1, inventory_sha256=fingerprint(inventory), protocol=protocol,
                 amgx_backend=amgx_backend,
                 l5_triangles=l5_triangles, systems=systems, coverage=coverage)
+    if hp_grid or lu_levels:
+        # Recorded only when enabled, so the archival replay plan is unchanged.
+        plan.update(hp_grid=hp_grid, lu_levels=lu_levels)
+        coverage.update(hp_grid_systems=sum(o['suite'] == 'hp_grid' for s in systems for o in s['origins']),
+                        lu_struggle_systems=sum(o['suite'] == 'lu_struggle' for s in systems for o in s['origins']),
+                        degrees=sorted({s['problem']['p'] for s in systems}))
+    return plan
 
 
 def memory_estimate(system, choice):

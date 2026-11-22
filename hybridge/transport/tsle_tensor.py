@@ -27,8 +27,11 @@ Stages
    source column ``f_e = J M^T s_e`` are two more contractions.
 2. Solve. Batched pivoted LU of ``A_e`` and solution of all ``3*NTR + 1``
    columns: the TSLE cooperative kernel compiled in the working precision
-   (``"coop"``), cuBLAS ``getrf/getrsBatched`` (``"cublas"``), or MAGMA
-   batched LU (``"magma"``).
+   (``"coop"``), cuBLAS ``getrf/getrsBatched`` (``"cublas"``), MAGMA
+   batched LU (``"magma"``), or the fused register Gauss-Jordan solve of
+   :mod:`hybridge.linalg.gpu.fused_batched_solve` (``"fused"``, FP64 only:
+   one block per element, partial pivoting, ``A_e`` left intact, the
+   response written in place in the layout stage 3 reads).
 3. Condense. Lift rows ``L_e[(f,t), i] = sum_q tau_w mu_t phi_fi``, Schur rows
    ``S_e = L_e R_e`` with ``R_e = A_e^{-1}[B_e | f_e]``, and trace masses
    ``G_e[f, a, b] = sum_q gamma_w mu_a mu_b``, all in local (element-side)
@@ -58,6 +61,7 @@ so no transposition pass is needed.
 
 from __future__ import annotations
 
+import hashlib
 import statistics
 import time
 from dataclasses import dataclass, field
@@ -81,7 +85,7 @@ from hybridge.transport.tsle_bsr import _TSLE_KERNEL_TEMPLATE
 TENSOR_PRECISIONS = ("float32", "float64")
 TENSOR_CONTRACTIONS = ("cutensor", "cublas")
 TENSOR_COMPUTES = ("default", "3xtf32", "tf32", "bf16x9")
-TENSOR_LOCAL_SOLVERS = ("coop", "cublas", "magma")
+TENSOR_LOCAL_SOLVERS = ("auto", "coop", "cublas", "magma", "fused")
 
 # Candidate block sizes for the cooperative solve (powers of two, as required
 # by its pivot reduction) and the prefix grid used to time them.
@@ -172,8 +176,9 @@ extern "C" __global__ void advection_tsle_tensor_face_weights(
 }
 
 
-// One thread per (element, k < NEL): FP64 coefficient rows rounded once to
-// WORK_REAL.
+// One thread per (chunk element, k < NEL): FP64 coefficient rows rounded once
+// to WORK_REAL. Chunk element e is mesh element element_offset + e; the rows
+// are chunk-local, every other array is mesh-wide (total_elements).
 //   x_operator (E, operator_width) = [-J b_ref0 | -J b_ref1 | reaction | tau_w]
 //   x_rhs      (E, 3*NQF + NEL)    = [gamma_w | J s]
 // reaction is J*r (reaction_width = NEL) or J*reaction_scalar (width 1).
@@ -190,21 +195,24 @@ extern "C" __global__ void advection_tsle_tensor_rows(
         const double reaction_scalar,
         const int reaction_is_scalar,
         const int operator_width,
-        const long long num_elements)
+        const long long num_elements,
+        const long long element_offset,
+        const long long total_elements)
 {
     const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_elements * NEL) {
         return;
     }
     const long long element = idx / NEL;
+    const long long mesh_element = element_offset + element;
     const int k = (int)(idx - element * NEL);
-    const double jac = aff_jacs[element];
-    const double inv_t00 = inv_aff_mats_t[(element * 2 + 0) * 2 + 0];
-    const double inv_t01 = inv_aff_mats_t[(element * 2 + 0) * 2 + 1];
-    const double inv_t10 = inv_aff_mats_t[(element * 2 + 1) * 2 + 0];
-    const double inv_t11 = inv_aff_mats_t[(element * 2 + 1) * 2 + 1];
-    const double beta_x = beta_coeffs[element * NEL + k];
-    const double beta_y = beta_coeffs[(num_elements + element) * NEL + k];
+    const double jac = aff_jacs[mesh_element];
+    const double inv_t00 = inv_aff_mats_t[(mesh_element * 2 + 0) * 2 + 0];
+    const double inv_t01 = inv_aff_mats_t[(mesh_element * 2 + 0) * 2 + 1];
+    const double inv_t10 = inv_aff_mats_t[(mesh_element * 2 + 1) * 2 + 0];
+    const double inv_t11 = inv_aff_mats_t[(mesh_element * 2 + 1) * 2 + 1];
+    const double beta_x = beta_coeffs[mesh_element * NEL + k];
+    const double beta_y = beta_coeffs[(total_elements + mesh_element) * NEL + k];
     WORK_REAL* row = x_operator + element * operator_width;
     row[k] = (WORK_REAL)(-jac * (beta_x * inv_t00 + beta_y * inv_t10));
     row[NEL + k] = (WORK_REAL)(-jac * (beta_x * inv_t01 + beta_y * inv_t11));
@@ -215,15 +223,15 @@ extern "C" __global__ void advection_tsle_tensor_rows(
         }
         tail += 1;
     } else {
-        row[tail + k] = (WORK_REAL)(jac * reaction_coeffs[element * NEL + k]);
+        row[tail + k] = (WORK_REAL)(jac * reaction_coeffs[mesh_element * NEL + k]);
         tail += NEL;
     }
     WORK_REAL* rhs_row = x_rhs + element * (3 * NQF + NEL);
     for (int q = k; q < 3 * NQF; q += NEL) {
-        row[tail + q] = (WORK_REAL)tau_w[element * 3 * NQF + q];
-        rhs_row[q] = (WORK_REAL)gamma_w[element * 3 * NQF + q];
+        row[tail + q] = (WORK_REAL)tau_w[mesh_element * 3 * NQF + q];
+        rhs_row[q] = (WORK_REAL)gamma_w[mesh_element * 3 * NQF + q];
     }
-    rhs_row[3 * NQF + k] = (WORK_REAL)(jac * source_coeffs[element * NEL + k]);
+    rhs_row[3 * NQF + k] = (WORK_REAL)(jac * source_coeffs[mesh_element * NEL + k]);
 }
 
 
@@ -232,7 +240,8 @@ extern "C" __global__ void advection_tsle_tensor_rows(
 // trace masses G_e (E, 3, NTR, NTR), both in local trace orientation. Values
 // are promoted to FP64 before orientation signs, boundary elimination, and
 // accumulation. The same-edge (diagonal) block receives -S + G (+ gauge) in one
-// atomicAdd per entry; other blocks are written by exactly one element.
+// atomicAdd per entry; other blocks are written by exactly one element. Schur
+// rows and trace masses are chunk-local (mesh element element_offset + e).
 extern "C" __global__ void advection_tsle_tensor_scatter_bsr(
         const int* __restrict__ bsr_indptr,
         double* __restrict__ data,
@@ -248,18 +257,20 @@ extern "C" __global__ void advection_tsle_tensor_scatter_bsr(
         const int* __restrict__ side_bsr_block_pos,
         const int* __restrict__ diagonal_bsr_block_pos,
         const double* __restrict__ boundary_trace,
-        const long long num_elements)
+        const long long num_elements,
+        const long long element_offset)
 {
     const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_elements * 3 * NTR) {
         return;
     }
     const long long element = idx / (3 * NTR);
+    const long long mesh_element = element_offset + element;
     const int task = (int)(idx - element * 3 * NTR);
     const int row_face = task / NTR;
     const int row_dof = task - row_face * NTR;
-    const long long side_id = interior_side_index[element * 3 + row_face];
-    const long long row_edge = loc2glob_edge[element * 3 + row_face];
+    const long long side_id = interior_side_index[mesh_element * 3 + row_face];
+    const long long row_edge = loc2glob_edge[mesh_element * 3 + row_face];
     const long long row_solve_edge = edge_to_solve_edge[row_edge];
     if (side_id < 0 || row_solve_edge < 0) {
         return;
@@ -267,24 +278,24 @@ extern "C" __global__ void advection_tsle_tensor_scatter_bsr(
     bool gauge_face = false;
 #if RAW_CONFLICT_AVERAGED_UPWIND
     const long long other = edge_side_indices[row_edge * 2 + 1];
-    gauge_face = edge_side_indices[row_edge * 2] == element * 3 + row_face && other >= 0;
+    gauge_face = edge_side_indices[row_edge * 2] == mesh_element * 3 + row_face && other >= 0;
     if (gauge_face) {
-        const double* own_tau = tau_w + element * 3 * NQF + row_face * NQF;
+        const double* own_tau = tau_w + mesh_element * 3 * NQF + row_face * NQF;
         const double* other_tau = tau_w + (other / 3) * 3 * NQF + (other % 3) * NQF;
         for (int q = 0; q < NQF; ++q)
             gauge_face = gauge_face && own_tau[q] == 0.0 && other_tau[q] == 0.0;
     }
 #endif
-    const bool row_positive = orientations[element * 3 + row_face];
+    const bool row_positive = orientations[mesh_element * 3 + row_face];
     const int row_local_dof = raw_local_trace_dof(row_positive, row_dof);
     const double row_sign = raw_trace_orientation_sign(row_positive, row_dof);
     const WORK_REAL* schur_row = schur + (element * 3 * NTR + row_face * NTR + row_local_dof) * NCOLS;
     double rhs_value = row_sign * (double)schur_row[NCOLS - 1];
     const int diagonal_pos = diagonal_bsr_block_pos[row_solve_edge];
     for (int col_face = 0; col_face < 3; ++col_face) {
-        const long long col_edge = loc2glob_edge[element * 3 + col_face];
+        const long long col_edge = loc2glob_edge[mesh_element * 3 + col_face];
         const long long col_solve_edge = edge_to_solve_edge[col_edge];
-        const bool col_positive = orientations[element * 3 + col_face];
+        const bool col_positive = orientations[mesh_element * 3 + col_face];
         for (int col_dof = 0; col_dof < NTR; ++col_dof) {
             const int column = raw_trace_column_index(col_face, col_positive, col_dof);
             const double col_sign = raw_trace_orientation_sign(col_positive, col_dof);
@@ -512,6 +523,115 @@ def _reference_tables(cupy, *, cspace, trace_ref, advection_tensor, reaction_is_
     }
 
 
+TENSOR_CHUNK_BYTES = 16 * 2 ** 30
+
+
+def _chunk_bytes_per_element(nel: int, ntr: int, nqf: int) -> int:
+    """FP64 bytes of the chunk-sized stage buffers, pivots and pointers per element."""
+    ncols = 3 * ntr + 1
+    reals = ((3 * nel + 3 * nqf) + (3 * nqf + nel)   # coefficient rows
+             + nel * nel + nel * ncols                # operator, response
+             + 3 * ntr * nel + 3 * ntr * ncols        # lift, Schur rows
+             + 3 * ntr * ntr)                         # trace masses
+    return 8 * reals + 4 * (nel + 1) + 3 * 8
+
+
+def tensor_chunk_elements(num_elements: int, nel: int, ntr: int, nqf: int, *,
+                          chunk_elements: int | None = None) -> int:
+    """Return the elements per tensor TSLE pass.
+
+    ``chunk_elements``, else ``HYBRIDGE_RAW_TENSOR_CHUNK_ELEMENTS``, else equal
+    chunks whose stage buffers fit ``HYBRIDGE_RAW_TENSOR_CHUNK_GIB`` (16 GiB by
+    default; one chunk up to about 270k elements at p=9).
+    """
+    import os
+
+    num_elements = max(int(num_elements), 1)
+    if chunk_elements is None:
+        value = os.environ.get("HYBRIDGE_RAW_TENSOR_CHUNK_ELEMENTS", "").strip()
+        chunk_elements = int(value) if value else None
+    if chunk_elements is None:
+        value = os.environ.get("HYBRIDGE_RAW_TENSOR_CHUNK_GIB", "").strip()
+        budget = float(value) * 2 ** 30 if value else TENSOR_CHUNK_BYTES
+        limit = max(1, int(budget // _chunk_bytes_per_element(int(nel), int(ntr), int(nqf))))
+        chunks = -(-num_elements // limit)
+        chunk_elements = -(-num_elements // chunks)
+    if int(chunk_elements) < 1:
+        raise ValueError("tensor chunk_elements must be positive")
+    return min(int(chunk_elements), num_elements)
+
+
+def tensor_workspace_bytes(num_elements: int, nel: int, ntr: int, nqf: int, *,
+                           cache_local_response: bool = True, chunk_elements: int | None = None) -> int:
+    """Return the FP64 device bytes of one tensor TSLE assembly for this signature.
+
+    Counts the persistent stage buffers of :class:`RawAdvectionTsleTensorWorkspace`
+    (with the field-reaction coefficient width, an upper bound) for one chunk
+    (:func:`tensor_chunk_elements`), the mesh-wide face weights, the batched-LU
+    pivots and pointers, and, with ``cache_local_response``, the FP64 response
+    copy returned for reconstruction. Reference tables and the output ``data``
+    are not counted (split3 does not count them either).
+    """
+    nel, ntr, nqf = int(nel), int(ntr), int(nqf)
+    ncols = 3 * ntr + 1
+    chunk = tensor_chunk_elements(num_elements, nel, ntr, nqf, chunk_elements=chunk_elements)
+    mesh_wide = 8 * (6 * nqf + (nel * ncols if cache_local_response else 0))  # tau_w, gamma_w, response copy
+    return int(num_elements) * mesh_wide + chunk * _chunk_bytes_per_element(nel, ntr, nqf)
+
+
+def tensor_memory_sizes(space, trace_space, workspace=None) -> tuple[int, int]:
+    """Return ``(workspace_bytes, available_bytes)`` for the memory-aware tensor choice.
+
+    Mirrors :func:`hybridge.transport.tsle_bsr.split3_memory_sizes`: available
+    memory is the driver's free memory plus CuPy's free pool blocks, plus a
+    tensor workspace already allocated for this element count and size.
+    """
+    cupy = require_cupy()
+    nqf = int(trace_space.weights.size)
+    num_elements, nel = int(space.mesh.num_tri), int(space.el_dof)
+    needed = tensor_workspace_bytes(num_elements, nel, space.order + 1, nqf)
+    free, _total = cupy.cuda.runtime.memGetInfo()
+    available = int(free) + int(cupy.get_default_memory_pool().free_bytes())
+    tensor = getattr(workspace, "tensor", None)
+    if tensor is not None and tensor.signature is not None and tensor.signature[3:5] == (num_elements, nel):
+        available += tensor.nbytes
+    return needed, available
+
+
+def _device_compute_capability() -> str | None:
+    """Return the current CUDA device's compute capability (e.g. ``"90"``), or ``None``."""
+    try:
+        import cupy
+
+        return str(cupy.cuda.Device().compute_capability)
+    except Exception:  # noqa: BLE001 - no device or no CuPy
+        return None
+
+
+def default_tensor_engines() -> tuple[str, str]:
+    """Return contraction preference and measured local-solve selection.
+
+    ``auto`` compares equivalent same-precision local solvers on actual sampled
+    systems. Environment overrides retain explicit engine selection.
+    """
+    import os
+
+    contraction = os.environ.get("HYBRIDGE_RAW_TENSOR_CONTRACTION", "").strip().lower()
+    if not contraction:
+        try:
+            require_cutensor()
+            contraction = "cutensor"
+        except Exception:  # noqa: BLE001 - any load failure falls back to cuBLAS
+            contraction = "cublas"
+    from hybridge.runtime.env import getenv
+    local_solver = getenv("RAW_TENSOR_LOCAL_SOLVER", "auto").strip().lower() or "auto"
+    if contraction not in TENSOR_CONTRACTIONS:
+        raise ValueError(f"HYBRIDGE_RAW_TENSOR_CONTRACTION must be one of {TENSOR_CONTRACTIONS}")
+    if local_solver not in TENSOR_LOCAL_SOLVERS:
+        raise ValueError(f"HYBRIDGE_RAW_TENSOR_LOCAL_SOLVER must be one of {TENSOR_LOCAL_SOLVERS}")
+    return contraction, local_solver
+
+
 def _strided(cupy, base, shape, strides, offset: int = 0):
     """Return a strided view of ``base`` with element strides and offset."""
     itemsize = base.dtype.itemsize
@@ -564,6 +684,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         contraction: str = "cutensor",
         compute: str = "default",
         local_solver: str = "coop",
+        chunk_elements: int | None = None,
 ) -> RawAdvectionAssemblyResult:
     """Assemble the reduced face-BSR advection system with tensorized TSLE.
 
@@ -588,8 +709,12 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
     compute : {"default", "3xtf32", "tf32", "bf16x9"}
         ``"3xtf32"``/``"tf32"`` need ``contraction="cutensor"`` and FP32;
         ``"bf16x9"`` needs ``contraction="cublas"`` and FP32.
-    local_solver : {"coop", "cublas", "magma"}
-        Stage 2 batched LU/solve.
+    local_solver : {"coop", "cublas", "magma", "fused"}
+        Stage 2 batched LU/solve. ``"fused"`` needs ``precision="float64"``.
+    chunk_elements : int, optional
+        Elements per pass of stages 1-3 and the scatter (see
+        :func:`tensor_chunk_elements`). The stage buffers are sized for one
+        chunk, so the workspace stays bounded on large meshes.
 
     Returns
     -------
@@ -636,6 +761,10 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         raise ValueError("compute='bf16x9' needs contraction='cublas' and precision='float32'")
     if local_solver == "magma":
         from hybridge.linalg.gpu.magma_batched import lu_solve_batched_magma
+    if local_solver == "fused":
+        if precision != "float64":
+            raise ValueError("local_solver='fused' needs precision='float64'")
+        from hybridge.linalg.gpu.fused_batched_solve import solve_batched_fused
 
     dtype = np.dtype(precision)
     timings: dict[str, float] = {}
@@ -646,6 +775,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
     nqf = int(trace_ref.weights.size)
     ncols = 3 * ntr + 1
     column_major = local_solver != "coop"
+    chunk = tensor_chunk_elements(num_elements, nel, ntr, nqf, chunk_elements=chunk_elements)
 
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=np.float64)
     beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=np.float64)
@@ -667,11 +797,13 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
                        advection_stabilization=advection_stabilization, dtype=dtype)
     timings["raw.tsle_tensor.jit"] = float(kernels["jit_seconds"])
 
-    # Workspace: buffers, tables, and plans for this signature.
+    # Workspace: mesh-wide face weights (the upwind gauge reads neighbours across
+    # chunks), chunk-sized stage buffers, tables, and plans for this signature.
     workspace = RawAdvectionTsleTensorWorkspace() if workspace is None else workspace
     operator_width = 2 * nel + (1 if reaction_is_scalar else nel) + 3 * nqf
     signature = (int(cupy.cuda.runtime.getDevice()), id(cspace), id(trace_ref), num_elements, nel, ntr, nqf,
-                 dtype.name, contraction, compute, local_solver, bool(reaction_is_scalar), bool(mass_is_diagonal))
+                 dtype.name, contraction, compute, local_solver, bool(reaction_is_scalar), bool(mass_is_diagonal),
+                 chunk)
     if workspace.signature != signature:
         workspace.clear()
         workspace.tables.update(_reference_tables(
@@ -682,63 +814,84 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         workspace.buffers.update(
             tau_w=empty(num_elements, 3, nqf, real=np.float64),
             gamma_w=empty(num_elements, 3, nqf, real=np.float64),
-            x_operator=empty(num_elements, operator_width),
-            x_rhs=empty(num_elements, 3 * nqf + nel),
-            operator=empty(num_elements, nel, nel),
-            response=empty(num_elements, ncols, nel) if column_major else empty(num_elements, nel, ncols),
-            lift=empty(num_elements, 3 * ntr, nel),
-            schur=empty(num_elements, 3 * ntr, ncols),
-            trace_mass=empty(num_elements, 3, ntr, ntr),
+            x_operator=empty(chunk, operator_width),
+            x_rhs=empty(chunk, 3 * nqf + nel),
+            operator=empty(chunk, nel, nel),
+            response=empty(chunk, ncols, nel) if column_major else empty(chunk, nel, ncols),
+            lift=empty(chunk, 3 * ntr, nel),
+            schur=empty(chunk, 3 * ntr, ncols),
+            trace_mass=empty(chunk, 3, ntr, ntr),
         )
+        if local_solver in {"fused", "auto"}:
+            workspace.buffers["info"] = cupy.zeros(chunk, dtype=np.int32)
         workspace.signature = signature
     tables, buffers = workspace.tables, workspace.buffers
-    response = buffers["response"]
 
-    # Strided views of the coefficient rows and of the response columns.
-    x_op, x_rhs = buffers["x_operator"], buffers["x_rhs"]
-    tau_view = _strided(cupy, x_op, (num_elements, 3, nqf), (operator_width, nqf, 1), operator_width - 3 * nqf)
-    gamma_view = _strided(cupy, x_rhs, (num_elements, 3, nqf), (3 * nqf + nel, nqf, 1))
-    source_view = _strided(cupy, x_rhs, (num_elements, nel), (3 * nqf + nel, 1), 3 * nqf)
     if column_major:
-        trace_columns = _strided(cupy, response, (num_elements, 3, ntr, nel), (ncols * nel, ntr * nel, nel, 1))
-        trace_modes = "efti"
-        source_column = _strided(cupy, response, (num_elements, nel), (ncols * nel, 1), (ncols - 1) * nel)
-        operator_modes, response_modes = "eji", "eci"
+        trace_modes, operator_modes, response_modes = "efti", "eji", "eci"
     else:
-        trace_columns = _strided(cupy, response, (num_elements, nel, 3, ntr), (nel * ncols, ncols, ntr, 1))
-        trace_modes = "eift"
-        source_column = _strided(cupy, response, (num_elements, nel), (nel * ncols, ncols), ncols - 1)
-        operator_modes, response_modes = "eij", "eic"
+        trace_modes, operator_modes, response_modes = "eift", "eij", "eic"
+
+    def views(count):
+        """Prefix views of the chunk buffers for ``count`` elements, with strided aliases."""
+        x_op, x_rhs = buffers["x_operator"][:count], buffers["x_rhs"][:count]
+        response = buffers["response"][:count]
+        view = dict(
+            count=count, x_op=x_op, x_rhs=x_rhs, response=response, operator=buffers["operator"][:count],
+            lift=buffers["lift"][:count], schur=buffers["schur"][:count],
+            trace_mass=buffers["trace_mass"][:count],
+            tau=_strided(cupy, x_op, (count, 3, nqf), (operator_width, nqf, 1), operator_width - 3 * nqf),
+            gamma=_strided(cupy, x_rhs, (count, 3, nqf), (3 * nqf + nel, nqf, 1)),
+            source=_strided(cupy, x_rhs, (count, nel), (3 * nqf + nel, 1), 3 * nqf),
+        )
+        if column_major:
+            view["trace_columns"] = _strided(cupy, response, (count, 3, ntr, nel), (ncols * nel, ntr * nel, nel, 1))
+            view["source_column"] = _strided(cupy, response, (count, nel), (ncols * nel, 1), (ncols - 1) * nel)
+        else:
+            view["trace_columns"] = _strided(cupy, response, (count, nel, 3, ntr), (nel * ncols, ncols, ntr, 1))
+            view["source_column"] = _strided(cupy, response, (count, nel), (nel * ncols, ncols), ncols - 1)
+        if "info" in buffers:
+            view["info"] = buffers["info"][:count]
+        return view
 
     if contraction == "cutensor":
         descriptor = _compute_descriptor(dtype, compute)
-        plans = workspace.contractions
         operator_table = tables["operator"].reshape(operator_width, nel, nel)
-        if not plans:
-            plans["operator"] = _CutensorContraction(cupy, x_op, "eK", operator_table, "Kij",
-                                                     buffers["operator"], operator_modes, descriptor)
-            plans["trace"] = _CutensorContraction(cupy, gamma_view, "efq", tables["phi_mu"], "fqit",
-                                                  trace_columns, trace_modes, descriptor)
-            plans["source"] = _CutensorContraction(cupy, source_view, "ek", tables["source"], "ki",
-                                                   source_column, "ei", descriptor)
-            plans["lift"] = _CutensorContraction(cupy, tau_view, "efq", tables["phi_mu"], "fqit",
-                                                 buffers["lift"].reshape(num_elements, 3, ntr, nel), "efti", descriptor)
-            plans["schur"] = _CutensorContraction(cupy, buffers["lift"], "eri", response, response_modes,
-                                                  buffers["schur"], "erc", descriptor)
-            plans["trace_mass"] = _CutensorContraction(cupy, gamma_view, "efq", tables["mu_mu"], "qab",
-                                                       buffers["trace_mass"], "efab", descriptor)
 
-        def build_products():
+        def plans_for(v):
+            """cuTENSOR plans for chunks of ``v['count']`` elements (at most two sizes)."""
+            plans = workspace.contractions.get(v["count"])
+            if plans is None:
+                lift = v["lift"].reshape(v["count"], 3, ntr, nel)
+                plans = workspace.contractions[v["count"]] = dict(
+                    operator=_CutensorContraction(cupy, v["x_op"], "eK", operator_table, "Kij",
+                                                  v["operator"], operator_modes, descriptor),
+                    trace=_CutensorContraction(cupy, v["gamma"], "efq", tables["phi_mu"], "fqit",
+                                               v["trace_columns"], trace_modes, descriptor),
+                    source=_CutensorContraction(cupy, v["source"], "ek", tables["source"], "ki",
+                                                v["source_column"], "ei", descriptor),
+                    lift=_CutensorContraction(cupy, v["tau"], "efq", tables["phi_mu"], "fqit",
+                                              lift, "efti", descriptor),
+                    schur=_CutensorContraction(cupy, v["lift"], "eri", v["response"], response_modes,
+                                               v["schur"], "erc", descriptor),
+                    trace_mass=_CutensorContraction(cupy, v["gamma"], "efq", tables["mu_mu"], "qab",
+                                                    v["trace_mass"], "efab", descriptor),
+                )
+            return plans
+
+        def build_products(v):
             """Stage 1 contractions: operator, trace columns, and source column."""
-            plans["operator"](x_op, operator_table, buffers["operator"])
-            plans["trace"](gamma_view, tables["phi_mu"], trace_columns)
-            plans["source"](source_view, tables["source"], source_column)
+            plans = plans_for(v)
+            plans["operator"](v["x_op"], operator_table, v["operator"])
+            plans["trace"](v["gamma"], tables["phi_mu"], v["trace_columns"])
+            plans["source"](v["source"], tables["source"], v["source_column"])
 
-        def condense_products():
+        def condense_products(v):
             """Stage 3 contractions: lift rows, Schur rows, and trace masses."""
-            plans["lift"](tau_view, tables["phi_mu"], buffers["lift"].reshape(num_elements, 3, ntr, nel))
-            plans["schur"](buffers["lift"], response, buffers["schur"])
-            plans["trace_mass"](gamma_view, tables["mu_mu"], buffers["trace_mass"])
+            plans = plans_for(v)
+            plans["lift"](v["tau"], tables["phi_mu"], v["lift"].reshape(v["count"], 3, ntr, nel))
+            plans["schur"](v["lift"], v["response"], v["schur"])
+            plans["trace_mass"](v["gamma"], tables["mu_mu"], v["trace_mass"])
     else:
         def gemm(x, y, out):
             """Row-major ``out = x @ y`` with the selected cuBLAS compute mode."""
@@ -747,19 +900,20 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
             else:
                 cupy.matmul(x, y, out=out)
 
-        def build_products():
+        def build_products(v):
             """Stage 1 GEMMs: operator and response columns (dense block tables)."""
-            gemm(x_op, tables["operator"], buffers["operator"].reshape(num_elements, -1))
-            gemm(x_rhs, tables["response"], response.reshape(num_elements, -1))
+            gemm(v["x_op"], tables["operator"], v["operator"].reshape(v["count"], -1))
+            gemm(v["x_rhs"], tables["response"], v["response"].reshape(v["count"], -1))
 
-        def condense_products():
+        def condense_products(v):
             """Stage 3 GEMMs: lift rows, batched Schur rows, and trace masses."""
-            tau_rows = cupy.ascontiguousarray(tau_view.reshape(num_elements, 3 * nqf))
-            gamma_rows = x_rhs[:, :3 * nqf]
-            gemm(tau_rows, tables["lift"], buffers["lift"].reshape(num_elements, -1))
-            right = response.transpose(0, 2, 1) if column_major else response
-            cupy.matmul(buffers["lift"], right, out=buffers["schur"])
-            gemm(cupy.ascontiguousarray(gamma_rows), tables["trace_mass"], buffers["trace_mass"].reshape(num_elements, -1))
+            count = v["count"]
+            tau_rows = cupy.ascontiguousarray(v["tau"].reshape(count, 3 * nqf))
+            gamma_rows = v["x_rhs"][:, :3 * nqf]
+            gemm(tau_rows, tables["lift"], v["lift"].reshape(count, -1))
+            right = v["response"].transpose(0, 2, 1) if column_major else v["response"]
+            cupy.matmul(v["lift"], right, out=v["schur"])
+            gemm(cupy.ascontiguousarray(gamma_rows), tables["trace_mass"], v["trace_mass"].reshape(count, -1))
 
     # Stage 2 launcher.
     itemsize = dtype.itemsize
@@ -773,11 +927,11 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
             """Launch the cooperative solve on the first ``count`` elements."""
             kernels["solve"]((count,), (block,), (buffers["operator"], rows, np.int64(count)),
                              shared_mem=_solve_shared_bytes(nel, ncols, block, itemsize))
-    else:
+    elif local_solver not in {"fused", "auto"}:
         solve_lu = lu_solve_batched_cublas if local_solver == "cublas" else lu_solve_batched_magma
 
-    def prepare_launch():
-        """Launch the FP64 face-weight and coefficient-row kernels."""
+    def face_weights_launch():
+        """Launch the FP64 face-weight kernel on every mesh element."""
         total = num_elements * 3 * nqf
         kernels["face_weights"](
             ((total + _ELEMENTWISE_BLOCK - 1) // _ELEMENTWISE_BLOCK,), (_ELEMENTWISE_BLOCK,),
@@ -785,21 +939,38 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
              cspace.mesh.normals, cspace.mesh.jacs_el_fc, cspace.mesh.loc2glob_edge, cspace.mesh.edge_side_indices,
              cspace.mesh.orientations, pattern.edge_to_solve_edge, np.int32(1 if zero_boundary_flux else 0),
              np.int64(num_elements)))
-        total = num_elements * nel
+
+    def rows_launch(offset, v):
+        """Launch the FP64 coefficient-row kernel on one chunk."""
+        total = v["count"] * nel
         kernels["rows"](
             ((total + _ELEMENTWISE_BLOCK - 1) // _ELEMENTWISE_BLOCK,), (_ELEMENTWISE_BLOCK,),
-            (x_op, x_rhs, buffers["tau_w"], buffers["gamma_w"], cspace.mesh.aff_jacs, cspace.mesh.inv_aff_mats_t,
-             source_coeffs, beta_coeffs, reaction_coeffs, np.float64(reaction_scalar),
-             np.int32(1 if reaction_is_scalar else 0), np.int32(operator_width), np.int64(num_elements)))
+            (v["x_op"], v["x_rhs"], buffers["tau_w"], buffers["gamma_w"], cspace.mesh.aff_jacs,
+             cspace.mesh.inv_aff_mats_t, source_coeffs, beta_coeffs, reaction_coeffs, np.float64(reaction_scalar),
+             np.int32(1 if reaction_is_scalar else 0), np.int32(operator_width), np.int64(v["count"]),
+             np.int64(offset), np.int64(num_elements)))
 
-    # Pick the coop block on a prefix grid; each trial reloads the prefix response.
+    def scatter_launch(offset, v):
+        """Scatter one chunk's Schur rows and trace masses into the face BSR system."""
+        total = v["count"] * 3 * ntr
+        kernels["scatter_bsr"](
+            ((total + _SCATTER_BLOCK - 1) // _SCATTER_BLOCK,), (_SCATTER_BLOCK,),
+            (pattern.indptr, data, rhs, v["schur"], v["trace_mass"], buffers["tau_w"],
+             cspace.mesh.loc2glob_edge, cspace.mesh.edge_side_indices, cspace.mesh.orientations,
+             pattern.interior_side_index, pattern.edge_to_solve_edge, pattern.side_csr_block_pos,
+             pattern.mass_csr_block_pos, boundary_trace_full.reshape(-1), np.int64(v["count"]),
+             np.int64(offset)))
+
+    # Pick the coop block on a prefix grid of the first chunk; each trial reloads the prefix response.
     if local_solver == "coop":
         block = block if block is not None else _COOP_TUNING_CACHE.get(tune_key)
-        if block is None:
-            prepare_launch()
-            build_products()
-            count = min(num_elements, _COOP_TUNE_LIMIT)
-            original = response[:count].copy()
+        if block is None and num_elements:
+            first = views(min(chunk, num_elements))
+            face_weights_launch()
+            rows_launch(0, first)
+            build_products(first)
+            count = min(first["count"], _COOP_TUNE_LIMIT)
+            original = first["response"][:count].copy()
             scratch = cupy.empty_like(original)
             properties = cupy.cuda.runtime.getDeviceProperties(cupy.cuda.runtime.getDevice())
             shared_limit = int(properties.get("sharedMemPerBlockOptin", 48 * 1024))
@@ -821,51 +992,130 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
             block = min(results, key=results.get)
             _COOP_TUNING_CACHE[tune_key] = block
             del original, scratch
-        timings["raw.tsle_tensor.solve.block_size"] = float(block)
+        timings["raw.tsle_tensor.solve.block_size"] = float(block or 0)
 
-    def solve_stage():
-        """Stage 2: factor every ``A_e`` and overwrite the response in place."""
-        if local_solver == "coop":
-            solve_launch(num_elements, response, block)
+    # Calibrate before timing production stages. The generic selector samples
+    # real systems into private arrays and never factors the build buffers.
+    if local_solver == "auto":
+        from hybridge.linalg.gpu.tuned_batched_solve import select_batched_solver, solve_selected
+        from hybridge.runtime.cuda_tuning import CandidateUnavailable, kernel_attributes
+        props = cupy.cuda.runtime.getDeviceProperties(cupy.cuda.runtime.getDevice())
+        shared_limit = int(props.get("sharedMemPerBlockOptin") or props["sharedMemPerBlock"])
+        coop_storage = {}
+        def cooperative(a, b, info, threads):
+            """Adapt column-major systems to the native cooperative layout."""
+            shared = _solve_shared_bytes(nel, ncols, threads, itemsize)
+            if shared > shared_limit or threads > kernel_attributes(cupy, kernels['solve'])['max_threads_per_block']:
+                raise CandidateUnavailable('cooperative solve resource limits')
+            if a is None:
+                return
+            # cuBLAS/fused arrays are column-major within a system; the
+            # cooperative kernel uses row-major. Include these copies in its
+            # measured cost and reuse the allocations within a chunk size.
+            count = a.shape[0]
+            if coop_storage.get('count') != count:
+                coop_storage.update(count=count, a=cupy.empty((count, nel, nel), dtype=dtype),
+                                    b=cupy.empty((count, nel, ncols), dtype=dtype))
+            ar, br = coop_storage['a'], coop_storage['b']
+            ar[...] = a.transpose(0, 2, 1)
+            br[...] = b.transpose(0, 2, 1)
+            kernels['solve']((count,), (threads,), (ar, br, np.int64(count)), shared_mem=shared)
+            b[...] = br.transpose(0, 2, 1)
+            if info is not None:
+                info[...] = (~cupy.all(cupy.isfinite(br), axis=(1, 2))).astype(cupy.int32)
+        if num_elements:
+            first = views(min(chunk, num_elements, 2048))
+            def prepare_sample():
+                """Build a bounded prefix only when calibration needs inputs."""
+                face_weights_launch()
+                rows_launch(0, first)
+                build_products(first)
+            selected_solver, tuning_report = select_batched_solver(
+                first['operator'], first['response'], cooperative=cooperative,
+                prepare_inputs=prepare_sample,
+                cooperative_source=hashlib.sha256((_TSLE_KERNEL_TEMPLATE + _RAW_FUSED_TEMPLATE).encode()).hexdigest(),
+                workload=dict(order=cspace.order, element_basis=cspace.host.reference.basis_type,
+                              trace_basis=trace_ref.kind, reaction_is_scalar=bool(reaction_is_scalar),
+                              contraction=contraction, compute=compute,
+                              chunk_bucket=max(0, (chunk-1).bit_length()),
+                              mesh_bucket=max(0, (num_elements-1).bit_length())))
         else:
-            solve_lu(buffers["operator"], response, trans=False, workspace=workspace.lu, check_info=False)
+            selected_solver, tuning_report = 'cublas', dict(reused=False, wall_seconds=0.)
+        timings['raw.tsle_tensor.autotune.wall'] = tuning_report['wall_seconds']
+        timings['raw.tsle_tensor.autotune.reused'] = float(tuning_report['reused'])
+        # Numeric IDs preserve the timings mapping's float-only contract;
+        # complete variant/configuration and rejection records live in the cache.
+        timings['raw.tsle_tensor.solve.algorithm'] = float(
+            {'cublas': 0, 'magma': 1, 'coop': 2, 'fused': 3}[selected_solver.split(':')[0]])
 
+    def solve_stage(v):
+        """Stage 2: factor every ``A_e`` of the chunk and overwrite its response in place."""
+        if local_solver == "auto":
+            solve_selected(selected_solver, v['operator'], v['response'], info=v['info'],
+                           workspace=workspace.lu, cooperative=cooperative)
+        elif local_solver == "coop":
+            solve_launch(v["count"], v["response"], block)
+        elif local_solver == "fused":
+            solve_batched_fused(v["operator"], v["response"], info=v["info"])
+        else:
+            solve_lu(v["operator"], v["response"], trans=False, workspace=workspace.lu, check_info=False)
+
+    local_response = (cupy.empty((num_elements, nel, ncols), dtype=np.float64)
+                      if cache_local_response else None)
     timings["raw.input_prepare"] = time.perf_counter() - wall_start
     stream = cupy.cuda.get_current_stream()
-    events = [cupy.cuda.Event() for _ in range(6)]
+    stages = ("prepare", "build", "solve", "condense", "scatter")
+    marks = []
+    info_nonzero = cupy.zeros((), dtype=np.int64)
     launch_start = time.perf_counter()
-    events[0].record(stream)
-    prepare_launch()
-    events[1].record(stream)
-    build_products()
-    events[2].record(stream)
-    solve_stage()
-    events[3].record(stream)
-    condense_products()
-    events[4].record(stream)
-    total = num_elements * 3 * ntr
-    kernels["scatter_bsr"](
-        ((total + _SCATTER_BLOCK - 1) // _SCATTER_BLOCK,), (_SCATTER_BLOCK,),
-        (pattern.indptr, data, rhs, buffers["schur"], buffers["trace_mass"], buffers["tau_w"],
-         cspace.mesh.loc2glob_edge, cspace.mesh.edge_side_indices, cspace.mesh.orientations,
-         pattern.interior_side_index, pattern.edge_to_solve_edge, pattern.side_csr_block_pos,
-         pattern.mass_csr_block_pos, boundary_trace_full.reshape(-1), np.int64(num_elements)))
-    events[5].record(stream)
-    events[5].synchronize()
-    for index, name in enumerate(("prepare", "build", "solve", "condense", "scatter")):
-        timings[f"raw.tsle_tensor.{name}"] = cupy.cuda.get_elapsed_time(events[index], events[index + 1]) / 1000.0
-    timings["raw.tsle_tensor.device"] = cupy.cuda.get_elapsed_time(events[0], events[5]) / 1000.0
+    weights = [cupy.cuda.Event(), cupy.cuda.Event()]
+    weights[0].record(stream)
+    face_weights_launch()
+    weights[1].record(stream)
+    for offset in range(0, num_elements, chunk):
+        v = views(min(chunk, num_elements - offset))
+        events = [cupy.cuda.Event() for _ in range(6)]
+        events[0].record(stream)
+        rows_launch(offset, v)
+        events[1].record(stream)
+        build_products(v)
+        events[2].record(stream)
+        solve_stage(v)
+        events[3].record(stream)
+        condense_products(v)
+        events[4].record(stream)
+        scatter_launch(offset, v)
+        events[5].record(stream)
+        marks.append(events)
+        if local_solver in {"fused", "auto"}:
+            info_nonzero += cupy.count_nonzero(v["info"])
+        elif local_solver != "coop":
+            info_nonzero += cupy.count_nonzero(workspace.lu.info)
+        if local_response is not None:
+            solved = v["response"].transpose(0, 2, 1) if column_major else v["response"]
+            local_response[offset:offset + v["count"]] = solved
+    done = cupy.cuda.Event()
+    done.record(stream)
+    done.synchronize()
+    seconds = dict.fromkeys(stages, 0.0)
+    seconds["prepare"] = cupy.cuda.get_elapsed_time(*weights) / 1000.0
+    for events in marks:
+        for index, name in enumerate(stages):
+            seconds[name] += cupy.cuda.get_elapsed_time(events[index], events[index + 1]) / 1000.0
+    for name in stages:
+        timings[f"raw.tsle_tensor.{name}"] = seconds[name]
+    timings["raw.tsle_tensor.device"] = sum(seconds.values())
+    timings["raw.tsle_tensor.chunks"] = float(len(marks))
+    timings["raw.tsle_tensor.chunk_elements"] = float(chunk)
     timings["raw.tsle_tensor.workspace.bytes"] = float(workspace.nbytes)
+    timings["raw.tsle_tensor.local_response.bytes"] = float(0 if local_response is None else local_response.nbytes)
     if local_solver != "coop":
-        timings["raw.tsle_tensor.solve.info_nonzero"] = float(cupy.count_nonzero(workspace.lu.info))
+        timings["raw.tsle_tensor.solve.info_nonzero"] = float(info_nonzero)
+    if local_solver != "coop" and bool(info_nonzero.item()):
+        raise np.linalg.LinAlgError('Tensor local solve reported a failed system')
     timings["raw.bsr_kernel"] = timings["raw.tsle_tensor.device"]
     timings["raw.kernel.device"] = timings["raw.tsle_tensor.device"]
     timings["raw.kernel.wall"] = time.perf_counter() - launch_start
-
-    local_response = None
-    if cache_local_response:
-        solved = response.transpose(0, 2, 1) if column_major else response
-        local_response = cupy.ascontiguousarray(solved, dtype=np.float64)
     timings["raw.total"] = time.perf_counter() - wall_start
     timings["raw.wall_total"] = timings["raw.total"]
     return RawAdvectionAssemblyResult(
@@ -898,6 +1148,10 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
 
 __all__ = [
     "RawAdvectionTsleTensorWorkspace",
+    "default_tensor_engines",
+    "tensor_chunk_elements",
+    "tensor_memory_sizes",
+    "tensor_workspace_bytes",
     "TENSOR_COMPUTES",
     "TENSOR_CONTRACTIONS",
     "TENSOR_LOCAL_SOLVERS",

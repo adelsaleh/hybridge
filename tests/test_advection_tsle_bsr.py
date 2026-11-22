@@ -160,12 +160,14 @@ def test_p9_split3_256_thread_solve_matches_fused_128() -> None:
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
-def test_split3_autotune_and_workspace_are_reused() -> None:
+def test_split3_autotune_and_workspace_are_reused(tmp_path, monkeypatch) -> None:
     from hybridge.transport.tsle_bsr import (
             RawAdvectionTsleWorkspace,
             clear_tsle_runtime_caches,
         )
 
+    monkeypatch.setenv("HYBRIDGE_CUDA_TUNING_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("HYBRIDGE_CUDA_TUNING", "auto")
     clear_tsle_runtime_caches()
     workspace = RawAdvectionTsleWorkspace()
     _, first = _assemble(3, "legendre-modal", "split3", block_size="auto", workspace=workspace)

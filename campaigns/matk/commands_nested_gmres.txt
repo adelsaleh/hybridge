@@ -1,0 +1,27 @@
+# From scripts/matk. At most FOUR GPUs total across
+# repositories, including background work and queued jobs; one GPU per sbatch.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+
+# Native natural-order block ILU0 and wide-inner GMRES smoke (27722 passedall6):
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-reorder sbatch --time=00:20:00 amgx_strong.sbatch --smoke-test --smoke-blocks 512 --scaling column-max --max-iters 1000 --residual-corrections 0 --timeout 180 --verbosity 3 --candidates fgmres_natural_ilu0_b2_r1000 fgmres_natural_ilu0_b5_r1000 fgmres_natural_ilu0_b10_r1000 fgmres_natural_ilu0_b20_r1000 fgmres4_inner_gmres3000_legacy_ilu0_csr_tol005 fgmres2_inner_gmres6000_legacy_ilu0_csr_tol001
+
+# Full scalar screen27727: FOUR outer steps, each up to3000 native GMRES steps.
+# The inner solve uses ALWAYS reorthogonalization and explicit residual checks.
+# This is an expensive native preconditioner, not an external outer solver.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 sbatch --time=01:05:00 amgx_strong.sbatch --scaling column-max --max-iters 4 --residual-corrections 0 --timeout 3600 --verbosity 3 --candidates fgmres4_inner_gmres3000_legacy_ilu0_csr_tol005
+
+# More expensive two-step screen, only after reviewing the previous result:
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 sbatch --time=01:20:00 amgx_strong.sbatch --scaling column-max --max-iters 2 --residual-corrections 0 --timeout 4500 --verbosity 3 --candidates fgmres2_inner_gmres6000_legacy_ilu0_csr_tol001
+# These outer limits MUST be explicit: the driver overrides proposal max_iters
+# with the CLI value. Keep restart/limit matched for controlled full FGMRES.
+# The8-step proposal is promotion-only, not an automatic launch; it may takehours.
+
+# Natural-order block comparison27728, sequential candidates on one H200:
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 sbatch --time=00:50:00 amgx_strong.sbatch --scaling column-max --max-iters 1000 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_natural_ilu0_b5_r1000 fgmres_natural_ilu0_b2_r1000 fgmres_natural_ilu0_b10_r1000 fgmres_natural_ilu0_b20_r1000
+
+# Live output and machine-readable reports (replaceJOBID):
+# tail -F matk-amgx-strong-JOBID.out
+# ../../run_outputs/matk/amgx-strong-JOBID.json
+# ../../run_outputs/matk/amgx-strong-JOBID_trials/
+# Reasoning, memory estimates and source limitations:
+# ../AMGX/docs/matk_nested_wide_gmres_findings.txt

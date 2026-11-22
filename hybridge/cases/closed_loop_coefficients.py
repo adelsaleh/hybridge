@@ -88,6 +88,31 @@ def closed_loop_velocity(x, y, parameters):
     return _velocity(x, y, radial, chi, parameters)
 
 
+@register_jitable
+def _solution(x, y, chi):
+    """Return the manufactured ``u, u_x, u_y, u_xx, u_xy, u_yy`` from :func:`_geometry`'s ``chi``."""
+    _, gx, gy, hxx, hxy, hyy = chi
+    a = 2*np.pi
+    u, du, ddu = np.sin(a*chi[0]), a*np.cos(a*chi[0]), -a*a*np.sin(a*chi[0])
+    ux, uy = du*gx, du*gy
+    uxx, uxy, uyy = du*hxx+ddu*gx*gx, du*hxy+ddu*gx*gy, du*hyy+ddu*gy*gy
+    for amplitude, m, n in ((0.25, 6, 5), (0.25*0.35, 11, 9)):
+        a, b = m*np.pi, n*np.pi
+        sx, cx, sy, cy = np.sin(a*x), np.cos(a*x), np.sin(b*y), np.cos(b*y)
+        v = amplitude*sx*sy
+        u, ux, uy = u+v, ux+amplitude*a*cx*sy, uy+amplitude*b*sx*cy
+        uxx, uxy, uyy = uxx-a*a*v, uxy+amplitude*a*b*cx*cy, uyy-b*b*v
+    return u, ux, uy, uxx, uxy, uyy
+
+
+@register_jitable
+def closed_loop_exact(x, y, parameters):
+    """Return the manufactured solution ``u`` (Dirichlet data and error reference)."""
+    _, chi = _geometry(x, y, parameters[0])
+    return _solution(x, y, chi)[0]
+
+
+@register_jitable
 def closed_loop_volume(x, y, parameters):
     """Return ``Kxx, Kxy, Kyy, beta_x, beta_y, source`` in one evaluation."""
     hole_radius, eps, _, reaction, variant = parameters
@@ -109,15 +134,6 @@ def closed_loop_volume(x, y, parameters):
         divx = scale*(2*bx*bxx+bxy*by+bx*byy)
         divy = scale*(bxx*by+bx*byx+2*by*byy)
     vx, vy = _velocity(x, y, radial, chi, parameters)
-    a = 2*np.pi
-    u, du, ddu = np.sin(a*chi[0]), a*np.cos(a*chi[0]), -a*a*np.sin(a*chi[0])
-    ux, uy = du*gx, du*gy
-    uxx, uxy, uyy = du*hxx+ddu*gx*gx, du*hxy+ddu*gx*gy, du*hyy+ddu*gy*gy
-    for amplitude, m, n in ((0.25, 6, 5), (0.25*0.35, 11, 9)):
-        a, b = m*np.pi, n*np.pi
-        sx, cx, sy, cy = np.sin(a*x), np.cos(a*x), np.sin(b*y), np.cos(b*y)
-        v = amplitude*sx*sy
-        u, ux, uy = u+v, ux+amplitude*a*cx*sy, uy+amplitude*b*sx*cy
-        uxx, uxy, uyy = uxx-a*a*v, uxy+amplitude*a*b*cx*cy, uyy-b*b*v
+    u, ux, uy, uxx, uxy, uyy = _solution(x, y, chi)
     source = -kxx*uxx-2*kxy*uxy-kyy*uyy-divx*ux-divy*uy+vx*ux+vy*uy+reaction*u
     return kxx, kxy, kyy, vx, vy, source

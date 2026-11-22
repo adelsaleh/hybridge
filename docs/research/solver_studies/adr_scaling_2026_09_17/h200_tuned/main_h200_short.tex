@@ -1,0 +1,336 @@
+% Short version of main_h200_synthesis.tex: the equations, level names, figures and tables only,
+% in that order. Same generated tables and figures (scripts/reports/make_adr_h200_comparison.py).
+% Typeset from this folder:
+%   latexmk -pdf -interaction=nonstopmode -halt-on-error main_h200_short.tex
+% Works in the repository (figures under run_outputs/...) and in a copy laid out as
+%   <dir>/h200_tuned/ (this folder) and <dir>/figures/{h200_tuned,h200_synthesis}/.
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=12mm]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,microtype,adjustbox}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{7pt plus 2pt minus 2pt}
+\renewcommand{\topfraction}{0.94}
+\renewcommand{\bottomfraction}{0.88}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.8}
+\newcommand{\ADRResultsPath}{..}
+\IfFileExists{../figures/h200_synthesis/h200_mesh_p6_fresh.pdf}
+  {\newcommand{\ADRResultsFigurePath}{../figures}}
+  {\newcommand{\ADRResultsFigurePath}{../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}}
+\newcommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
+\newcommand{\Fresh}{Fresh: setup and first solve}
+\newcommand{\Reused}{Reused: second solve on the same setup, LU with its existing factors}
+\newcommand{\NCnote}{NC: run, not passed; NC$^*$: stopped at the FP64 residual floor with the best solution's accuracy}
+\newcommand{\Marks}{Crosses mark a family that did not pass; hollow markers on a dotted line give the time an NC$^*$ run took to reach the FP64 floor}
+\newcommand{\FullFig}[3]{%
+  \begin{figure}[p]\centering
+  \includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/#1}
+  \caption{#2}\label{#3}
+  \end{figure}}
+\newcommand{\WideFig}[3]{%
+  \begin{figure}[ht]\centering
+  \includegraphics[width=\linewidth]{\ADRResultsFigurePath/#1}
+  \caption{#2}\label{#3}
+  \end{figure}}
+\begin{document}
+
+\section*{ADR solvers on one H200 versus PyPardiso LU on a genoa node}
+
+\subsection*{1. Equations}
+
+Every case is the stationary conservative problem, with $f$ manufactured from the exact solution
+$u_\star$, discretized by HDG of degree $p$ and condensed to the trace:
+\begin{equation}
+ -\nabla\cdot(K\nabla u)+\nabla\cdot(\boldsymbol\beta u)+c\,u=f\ \text{in }\Omega,\qquad
+ u=u_\star\ \text{on }\partial\Omega.
+ \label{eq:adr-h200-problem}
+\end{equation}
+\begin{itemize}
+\item \textbf{Domains:} $\Omega_\square=[-1,1]^2$, the five-lobed annulus
+  $\Omega_5=\{0.58<r<1+0.35\cos5\theta\}$ and the nine-lobed annulus
+  $\Omega_9=\{0.63<r<R_9\}$, $R_9=1+0.35\cos9\theta$.
+\item \textbf{Solutions:} $u_s=\sin\pi x\sin\pi y$, $u_q=1+x^2+2y^2$,
+  $u_o=\sin6\pi x\sin5\pi y+0.35\sin11\pi x\sin9\pi y$ and
+  $u_9=\sin2\pi\chi+\tfrac14u_o$, with $\rho=(r-0.63)/(R_9-0.63)$ and
+  $\chi=\rho+0.05\sin5\theta\sin2\pi\rho$.
+\item \textbf{Velocities:} $\boldsymbol\beta_0=(1,\tfrac12)$, $\boldsymbol\beta_v=(1+x,-\tfrac12+y)$,
+  the cellular flows
+  $\boldsymbol\beta_\omega=(1+4\sin\omega\pi x\cos\omega\pi y,\ \tfrac12-4\cos\omega\pi x\sin\omega\pi y)$,
+  and the through-flow $\boldsymbol\beta_\perp=\tfrac{50}{1.8}[1+0.8\sin(13\pi\,e_d\cdot\boldsymbol x)]\,e_t$
+  with $e_d=(\cos\tfrac\pi7,\sin\tfrac\pi7)$, $e_t=e_d^\perp$.
+\item \textbf{Tensors:} $K_{a,b}=R(\tfrac\pi6)\operatorname{diag}(a,b)R(\tfrac\pi6)^T$ and
+  $K_\perp=e_de_d^T+10^{-6}e_te_t^T$.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llllllll}
+\toprule
+class & key & $\Omega$ & $K$ & $\boldsymbol\beta$ & $c$ & $u_\star$ & runs\\
+\midrule
+Trigonometric (smooth high diffusion) & \texttt{trigonometric} & $\Omega_\square$ & $1$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder\\
+Smooth transport & \texttt{advection\_dominated} & $\Omega_\square$; $\Omega_5$ & $10^{-3}$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder; stock\\
+Variable velocity & \texttt{variable\_velocity} & $\Omega_\square$ & $1$ & $\boldsymbol\beta_v$ & $\tfrac12$ & $u_q$ & ladder\\
+Smooth anisotropy & \texttt{anisotropic} & $\Omega_\square$ & $\operatorname{diag}(1,10^{-2})$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder\\
+Oscillatory low diffusion & \texttt{cellular7\_weak} & $\Omega_5$; $\Omega_\square$ & $10^{-5}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & ladder; stock\\
+Closed-loop stress (orthogonal) & \texttt{stress\_main\_orthogonal} & $\Omega_9$ & $K_\perp$ & $\boldsymbol\beta_\perp$ & $10^{-3}$ & $u_9$ & ladder\\
+\midrule
+Oscillatory source & \texttt{oscillatory\_rhs} & $\Omega_\square$, $\Omega_5$ & $10^{-3}$ & $\boldsymbol\beta_0$ & $1$ & $u_o$ & stock\\
+Cellular, four waves & \texttt{cellular4} & $\Omega_\square$ & $10^{-3}$ & $\boldsymbol\beta_4$ & $1$ & $u_o$ & stock\\
+Cellular, seven waves & \texttt{cellular7} & $\Omega_\square$ & $10^{-3}$ & $\boldsymbol\beta_7$ & $1$ & $u_o$ & stock\\
+Cellular, low diffusion & \texttt{cellular7\_low} & $\Omega_\square$ & $10^{-5}$ & $\boldsymbol\beta_7$ & $1$ & $u_o$ & stock\\
+Oscillatory high diffusion & \texttt{cellular7\_high} & $\Omega_\square$, $\Omega_5$ & $1$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+Oscillatory directional & \texttt{cellular7\_directional} & $\Omega_\square$, $\Omega_5$ & $K_{1,10^{-3}}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+Weak anisotropy & \texttt{cellular7\_anisotropic} & $\Omega_\square$, $\Omega_5$ & $K_{10^{-4},10^{-6}}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+\bottomrule
+\end{tabular}
+\caption{Problem classes of Equation~\eqref{eq:adr-h200-problem}. ``Ladder'': the tuned H200
+campaign, L1--L7 (stress L4--L7 and L4b); ``stock'': the stock-kernel H200 run on small meshes. A
+semicolon separates the ladder geometry from the stock one.}
+\label{tab:adr-h200-cases}
+\end{table}
+
+\subsection*{2. Levels}
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/levels_table.tex}}
+\caption{Level names: meshes and trace DOFs per level and degree. L1--L5 and L4b share their mesh
+across degrees; L6 and L7 are defined by trace DOFs (8 and 20 million), so their meshes depend on
+$p$. Lmax is the largest mesh one H200 takes at each degree, $p=2$--9, from 34 million trace DOFs
+at $p=2$ to 14 million at $p=9$ (sizes in Table~\ref{tab:adr-h200-lmax}).}
+\label{tab:adr-h200-levels}
+\end{table}
+
+\subsection*{3. How the kernels were tuned}
+
+\paragraph{Solve kernels.}
+The Blackwell and stock H200 runs use the same kernels. The tuned kernels ran only on the H200, so
+Blackwell ratios combine hardware and kernels. The stock kernels reached about 55\,\% of peak memory
+bandwidth on the Blackwell but about 30\,\% on the H200 (ASM+PP(24), 32{,}768 triangles, $p=6$),
+which is the gap the solver tuning targets. Gains below are against the stock kernel on the H200,
+at 98{,}699 triangles and $p=6$ unless stated.
+\begin{itemize}
+\item \textbf{Face-dense operator.} The stock kernel runs one thread per row over 35-double rows,
+  whose loads do not coalesce. The tuned kernel keeps one thread per row on an interleaved copy of
+  the matrices, so neighbouring threads read adjacent memory: 153 to 84~$\mu$s, 42 to 76\,\% of peak
+  bandwidth, bitwise identical. Launches stayed at 256 threads per block, since sweeping that
+  changed times by only a few per cent.
+\item \textbf{ASM application.} It uses the same interleaved layout, with the inverses stored in
+  FP32 and accumulated in FP64: 249 to 74~$\mu$s (113~$\mu$s in FP64). The result is no longer
+  bitwise, but iterations stayed at 33 on the stress system.
+\item \textbf{Block-Jacobi application.} It is interleaved and stays in FP64, because FP32 raised
+  warm iterations (109 to 146 at $\delta=10^{-3}$). The application itself barely changes (24.7 to
+  23.7~$\mu$s), so the BJ+PP gain comes from the operator and the stopping rule.
+\item \textbf{$p$MG--AMG smoother, residual and transfers.} The stock kernels give each $b\times b$
+  block row a 32-lane block with only $b$ lanes working (7 at $p=6$) and strided loads. The
+  \texttt{graph} preset uses one thread per scalar row on block-transposed copies, fuses the residual
+  with restriction and the prolongation with the first post-smoothing stage, and replays each
+  $p$-sweep as one CUDA graph. The smoother step falls from 155 to 54~$\mu$s and the full solve gains
+  1.44--2.00$\times$ with identical iterations. The AMGX coarse solve is unchanged.
+\item \textbf{GMRES stopping rule (not a kernel).} By default each restart cycle reduces its own
+  residual by \texttt{rtol}, so warm starts and later cycles over-solve. \texttt{true\_target} scales
+  the trigger to $\text{target}\cdot\beta/\|r\|$ and stops near the true target, which cuts iterations
+  on 39 of the 71 matched configurations (ASM+PP, BJ+PP and $p$MG--AMG use it).
+\item \textbf{Setup and data placement.} Local factorizations and the operator layout are built on
+  the device, and the system stays there from assembly to the last solve. Block-preconditioner setup
+  falls from 12--1{,}390~ms on the Blackwell to 4--56~ms at the matched sizes.
+\item \textbf{AMGX: kernels not tuned.} It runs the same library code on both GPUs and gains
+  1.1--1.3$\times$ per iteration. Only the hand-off changed: the matrix is built on the device and
+  passed device to device (setup 1.6--7.5$\times$ faster than the Blackwell), with a zero-copy BSR attachment
+  in the later L4 degree fill and at Lmax to avoid the fine-level copy.
+\end{itemize}
+
+\paragraph{Assembly kernels.}
+These are FP64 assembly studies on their own meshes. Only the CuPy route built the matrices solved
+above; the advection-reaction (AR), diffusion-reaction (DR) and raw ADR rows are assembly-only
+studies. The Blackwell ran its own fastest path and has no H200 tuning. The changes are limited to
+sm\_90 or FP64-rich GPUs, so these Blackwell ratios also combine hardware and kernels. The Blackwell's
+FP64 rate is about 1/40 of the H200's, which is why its choices did not carry over.
+\begin{itemize}
+\item \textbf{AR path choice.} On the Blackwell the tensor path wins only at $p=8$--9. On the H200
+  \texttt{auto} picks it from $p=5$ when its workspace fits, because its contractions run on the
+  FP64 tensor cores: the $p=9$ build at about 117k triangles falls from 56 to 5.7~ms. This also
+  avoids the fused raw kernel, which compiles to 254--255 registers on sm\_90 at $p=7$--9 (80--88 on
+  the Blackwell) and then leaves only 8 warps per SM at 128 threads.
+\item \textbf{AR local solve.} MAGMA's batched LU took 58--63\,\% of the tensor time, so a pivoted
+  fused Gauss-Jordan kernel with a launch tuned per degree replaced it: 24.2 to 11.1~ms at $p=9$.
+  It stays backward stable (residual $1.1\cdot10^{-15}$ at 360k triangles).
+\item \textbf{AR chunking.} The tensor stages loop over element chunks with 16~GiB of stage buffers,
+  against 128~GB without chunking at two million triangles. There $p=9$ takes 379~ms, against about
+  2.0~s for the raw fused kernel.
+\item \textbf{AR split3 volume (opt-in, not default).} An element-batched GEMM pre-pass replaces the
+  inline volume contraction at $p=8$--9: the $p=9$ build falls from 54 to 26~ms with cuBLAS. It stays
+  off because the tensor path is faster still.
+\item \textbf{DR launch selection.} The kernel did not change. The quick tuner's four candidates and
+  its retained-coupling rule (only when FP32:FP64 $\ge16$) came from the Blackwell and settled on 128
+  threads and 8 columns at every $p\ge2$. FP64-rich priors now reach the thorough tuner's result
+  without its search: 1.1--4.1$\times$ faster, most at low degree.
+\item \textbf{ADR raw tensor launch (timing reference only; its matrices are not solved).} The
+  block-size table from earlier sweeps (32, 64, then 128 threads from $p=5$) became 32 at $p\le4$
+  and, for variable coefficients, 256 at $p=8$ and 512 with a non-compact layout and a 128-register
+  cap at $p=9$. One block fits per SM there, so at $p=9$ each doubling of threads gains
+  1.7--1.9$\times$ up to 256, and only 7\,\% more at 512. The H200's 227~KiB of shared memory also keeps the mass factor in shared memory, where the Blackwell's
+  99~KiB forces an external layout at $p\ge7$.
+\item \textbf{ADR explicit mass inverse.} For variable full diffusion at $p\ge7$, an in-place
+  Gauss-Jordan inverse and block-wide products replace the mass LU and triangular solves. With the
+  wider launch: 2{,}796 to 892~ms at 131{,}072 triangles, $p=9$. A smaller volume rule also gained
+  9--29\,\% but was not adopted, because it changes the discretization.
+\item \textbf{CuPy assembly (the matrices solved).} The host route's single-threaded NumPy BLAS and
+  Python topology loops were moved to a device route: 13.1~s to 650~ms warm at 32{,}768 triangles,
+  $p=9$. The Blackwell study predates this route.
+\item \textbf{ADR kernel selection cost.} Keeping the resolved launch choice removes repeated device
+  queries and source hashing: 4.4 to 0.04~ms per call at $p=6$, with bitwise-equal results.
+\item \textbf{ADR recovery (opt-in, production defaults do not use it).} Each degree picks among raw
+  tiled, compact tiled and reference-product GEMM assembly and cuBLAS, MAGMA or fused dense solves:
+  1.7--5.2$\times$ when reusing cached flux maps and 1.2--3.5$\times$ when rebuilding.
+\end{itemize}
+
+\subsection*{4. Figures}
+
+\FullFig{h200_synthesis/h200_mesh_p6_fresh.pdf}{H200 and genoa LU, mesh refinement at $p=6$, fresh solve. \Fresh. Each cell: time in ms and iterations, configuration below; shading: slowdown against the fastest passing family; green border: winner. \NCnote; dash: not run or not measured.}{fig:adr-h200-synth-p6}
+\FullFig{h200_synthesis/h200_mesh_p6_reused.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, reused solve. \Reused.}{fig:adr-h200-synth-p6-reused}
+\FullFig{h200_synthesis/h200_mesh_p2_fresh.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=2$, fresh solve.}{fig:adr-h200-synth-p2}
+\FullFig{h200_synthesis/h200_mesh_p2_reused.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=2$, reused solve.}{fig:adr-h200-synth-p2-reused}
+\FullFig{h200_synthesis/h200_mesh_p9_fresh.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=9$, fresh solve. L7 at $p=9$ exceeds one H200's memory.}{fig:adr-h200-synth-p9}
+\FullFig{h200_synthesis/h200_mesh_p9_reused.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=9$, reused solve.}{fig:adr-h200-synth-p9-reused}
+\FullFig{h200_synthesis/h200_degree_L4_fresh.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, degree sweep at L4 (the same mesh at every degree), fresh solve.}{fig:adr-h200-synth-degree}
+\FullFig{h200_synthesis/h200_degree_L4_reused.pdf}{As Figure~\ref{fig:adr-h200-synth-degree}, reused solve.}{fig:adr-h200-synth-degree-reused}
+\clearpage
+\WideFig{h200_synthesis/h200_h_crossover.pdf}{Fresh (top) and reused (bottom) time under refinement at $p=6$; LU points carry their thread count. \Marks.}{fig:adr-h200-synth-h}
+\WideFig{h200_synthesis/h200_p_crossover.pdf}{As Figure~\ref{fig:adr-h200-synth-h}, against the degree at L4.}{fig:adr-h200-synth-pfe}
+\clearpage
+\WideFig{h200_synthesis/h200_hard_cases_p6.pdf}{Hard cases under refinement at $p=6$: fresh (top) and reused (bottom) time, with the genoa LU where measured. Only ASM+PP and BJ+PP were run on the stress case. \Marks.}{fig:adr-h200-synth-hard6}
+\WideFig{h200_synthesis/h200_hard_cases_p9.pdf}{As Figure~\ref{fig:adr-h200-synth-hard6}, at $p=9$. L7 does not fit one H200 at this degree; the last point is Lmax.}{fig:adr-h200-synth-hard9}
+\clearpage
+\FullFig{h200_synthesis/h200_degree_lmax_fresh.pdf}{As Figure~\ref{fig:adr-h200-synth-p6}, degree sweep on the largest mesh per degree (Lmax; L7 at $p=6$), fresh solve. LU exists only at $p=6$.}{fig:adr-h200-synth-lmax-grid}
+\FullFig{h200_synthesis/h200_degree_lmax_reused.pdf}{As Figure~\ref{fig:adr-h200-synth-lmax-grid}, reused solve.}{fig:adr-h200-synth-lmax-grid-reused}
+\clearpage
+\WideFig{h200_synthesis/h200_p_lmax.pdf}{Fresh (top) and reused (bottom) time against the degree on the largest mesh per degree (Lmax; L7 at $p=6$), smooth classes. \Marks.}{fig:adr-h200-synth-lmax-smooth}
+\WideFig{h200_synthesis/h200_p_lmax_hard.pdf}{As Figure~\ref{fig:adr-h200-synth-lmax-smooth}, hard classes.}{fig:adr-h200-synth-lmax-hard}
+\clearpage
+\WideFig{h200_tuned/speedup_matched.pdf}{Blackwell time over H200 time for each matched configuration, against trace DOFs.}{fig:adr-h200-speedup}
+\WideFig{h200_tuned/h200_ladder_amortized.pdf}{Amortized solve time (setup and two solves, per solve) along the ladder for the trigonometric case: H200 iterative families and PyPardiso LU on a genoa node (dashed). Missing iterative points did not pass; hollow markers on a dotted line are NC$^*$ runs. The LU point at L7 is at the residual floor too. The last points at $p=2$ and $p=9$ are Lmax, without LU.}{fig:adr-h200-ladder}
+
+\clearpage
+\subsubsection*{Assembly kernels}
+
+\WideFig{h200_assembly/assembly_machines.pdf}{Assembly kernels, FP64, H200 against the Blackwell on matched problems. Top: kernel time. Bottom: Blackwell time over H200 time. \textbf{AR:} star mesh, tangent walls, conflict-averaged upwind, BSR. ``Blackwell'' and ``before tuning'' are the fastest of fused and split3 at any measured block; ``tuned'' is the tensor path with the fused local solve, measured from $p=5$. The tuned ratio uses the Blackwell's fastest path, cuTENSOR included. Triangles: 117{,}439 (Blackwell), 117{,}421 (before), 117{,}465 (tuned). \textbf{DR:} CSR, Schur LU cache, Legendre trace; 100{,}000 triangles on the Blackwell and 100{,}352 on the H200, not rescaled. ``Before'' is the quick tuner with the old priors. \textbf{ADR:} BSR, best block of 32, 64 and 128. The Blackwell has timings only at $p=2$, 4 and 6, and tuning changes this kernel only at $p\ge7$, so there is no tuned ratio.}{fig:asm-machines}
+\WideFig{h200_assembly/assembly_tuning_steps.pdf}{Each tuning step on the H200, FP64. The DR thorough tuner and the new priors coincide by design. CuPy: warm assembly of the vendored assembler on the trigonometric case; ``host'' is the old route.}{fig:asm-steps}
+\clearpage
+\WideFig{h200_assembly/assembly_details.pdf}{Where the assembly time went and what was chosen, on the H200. ADR launch: variable full tensor with mass LU. ADR phases: phase-clock build, about 2.6\,\% overhead; the last bar has the explicit inverse. AR local solve: fastest launch of cooperative and fused per degree. AR stages: split3 has no separate prepare or condense stage. Split3 volume: the opt-in pre-pass, not used by default. DR reconstruction: FP64-rich priors, by cached factor.}{fig:asm-details}
+\WideFig{h200_assembly/assembly_ladder.pdf}{Assembly along the tuned ADR campaign's ladder, median over the classes per level, excluding L4b. The CuPy device route built the matrices solved in this report. The raw tensor kernel is a different discretization, timed on the same mesh and case as a reference. Raw rows extend to L8 at $p=2$ and 6, where no solver fits; the CuPy route has no row at L7, $p=9$.}{fig:asm-ladder}
+\WideFig{h200_assembly/adr_recovery_h200.pdf}{ADR recovery and projection on the H200 (job 29580, existing figure), per 100{,}000 triangles. Opt-in; production defaults do not use it.}{fig:asm-recovery}
+
+\clearpage
+\subsection*{5. Tables}
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_crossover_table.tex}}
+\caption{Crossover against the genoa LU per case and degree, over all 114 H200 systems (L1--L7): the smallest measured trace DOFs from which the best iterative solver is faster at that and every larger measured size (``--'': not reached), and the ratio at the largest measured size.}
+\label{tab:adr-h200-node-crossover}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/synthesis_largest_table.tex}}
+\caption{Largest system per case and degree with a passing iterative solve on the H200: fresh and reused time in ms (iterations). \NCnote; ``--'': not run on that case.}
+\label{tab:adr-h200-largest}
+\end{table}
+
+\begin{table}[ht]
+\centering\small
+\adjustbox{max width=\linewidth,max totalheight=.88\textheight}{\input{\ADRResultsPath/h200_tuned/stress_table.tex}}
+\caption{Closed-loop stress, orthogonal control, on the H200 (ms). P-LU rows: the genoa LU on the same system, fresh/reused thread counts in the subscript.}
+\label{tab:adr-h200-stress}
+\end{table}
+
+\begin{table}[p]
+\centering
+\adjustbox{max width=\linewidth,max totalheight=.9\textheight}{\input{\ADRResultsPath/h200_tuned/lmax_table.tex}}
+\caption{The largest mesh per degree on one H200 (Lmax). Time in ms (iterations). \NCnote; ``--'': not run on that class.}
+\label{tab:adr-h200-lmax}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/stock_oscillatory_table.tex}}
+\caption{Classes outside the tuned ladder, stock kernels on the H200 against the genoa LU: largest system per class with both (ms). Fresh: setup and first solve; repeated: second solve on the same setup. Families: fastest fresh / fastest repeated.}
+\label{tab:adr-h200-oscillatory}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/end_to_end_table.tex}
+\caption{Assembly plus one fresh solve (ms). genoa: host-pipeline assembly at its fastest thread count plus the LU campaign's fresh solve (subscripts: threads); reconstruction excluded. H200: device assembly plus the fastest passed fresh iterative solve. Last column: genoa time over H200 time; above one the H200 is faster.}
+\label{tab:adr-h200-e2e}
+\end{table}
+
+\clearpage
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/summary_table.tex}}
+\caption{Blackwell time divided by H200 time on matched configurations: median and range. Stock: unified campaign 21958 on the H200 (27 matched configurations); tuned: the tuned campaign. Per-iteration: repeated time per iteration, which removes the effect of a different iteration count.}
+\label{tab:adr-h200-summary}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/family_table.tex}
+\caption{Fastest passing family per system for the repeated solve (ms), and the P-LU reused solve on the Blackwell workstation's host CPU. ``BW'': Blackwell.}
+\label{tab:adr-h200-family}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_table.tex}}
+\caption{Fastest passing iterative solver on the H200 against PyPardiso LU on a genoa CPU node, L1--L4 (ms; $t$: threads of the fastest LU measurement). The ratios are iterative over LU; below one the iterative solver is faster.}
+\label{tab:adr-h200-node-lu}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_large_table.tex}}
+\caption{As Table~\ref{tab:adr-h200-node-lu}, L4b--L7. $\dagger$: LU solve at the residual floor ($1.10$--$1.36\cdot10^{-10}$). FP64$^*$: no iterative family passed, but a run stopped at the FP64 residual floor with the best solution's accuracy.}
+\label{tab:adr-h200-node-lu-large}
+\end{table}
+
+\begin{table}[ht]
+\centering\small
+\input{\ADRResultsPath/h200_tuned/outcome_table.tex}
+\caption{H200 job outcomes per level and family. ``FP64 floor$^*$'': not passed, but stopped at the FP64 residual floor with the best solution's accuracy.}
+\label{tab:adr-h200-outcomes}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/extension_table.tex}
+\caption{H200, levels beyond the Blackwell study: medians over the passed jobs of all classes (ms). Different families pass on different classes, so the medians are not a like-for-like ranking; Table~\ref{tab:adr-h200-outcomes} gives the coverage.}
+\label{tab:adr-h200-extension}
+\end{table}
+
+\clearpage
+\subsubsection*{Assembly kernels}
+
+\begin{table}[ht]
+\centering\small
+\input{\ADRResultsPath/h200_tuned/assembly_kernels_table.tex}
+\caption{Assembly kernels on matched problems (ms, FP64), the values of Figure~\ref{fig:asm-machines}. Blackwell: its fastest measured path; BW / before compares the raw-CUDA fused and split3 kernels only (AR) and BW / tuned uses the fastest path. ``--'': not measured. ADR on the Blackwell has no timings at $p\ge7$.}
+\label{tab:asm-kernels}
+\end{table}
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/assembly_steps_table.tex}}
+\caption{Assembly tuning steps on the H200 (ms, FP64), the values of Figure~\ref{fig:asm-steps} and the two-million-triangle AR case. Gain: start over tuned. The steps column names start; middle; tuned, or start; tuned where there is no middle step.}
+\label{tab:asm-steps}
+\end{table}
+
+\end{document}

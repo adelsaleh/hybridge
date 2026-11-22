@@ -205,7 +205,10 @@ def test_workspace_limit_is_a_clear_configuration_error():
 def test_tensor_overintegrated_quadrature(cp, order, basis, diffusion, kind, rule):
     """Overintegrated volume rules for the n-Gamma D-BDF2 plan: Duffy p+5 points or the
     42-point degree-14 Dunavant rule; production traces keep 2p+1 GLL face points."""
-    from hybridge.mixed.raw_cuda.tensor import tensor_workspace
+    from hybridge.mixed.raw_cuda.tensor import (
+            TENSOR_MAX_BATCH_COLUMNS,
+            tensor_shared_bytes,
+        )
     from hybridge.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
     from hybridge.mixed.raw_cuda.adr_operator import (
             reconstruct_projected_adr_local_unknowns_raw_cuda,
@@ -229,9 +232,18 @@ def test_tensor_overintegrated_quadrature(cp, order, basis, diffusion, kind, rul
     actual = operator.assembly
     np.testing.assert_allclose(dense_device(cp, actual), dense_host(numba), rtol=2e-10, atol=3e-10)
     np.testing.assert_allclose(cp.asnumpy(actual.rhs), numba.rhs, rtol=2e-10, atol=3e-10)
+    # The default launch is tuned: it times several layouts (batch width,
+    # compact coupling, thread count) and keeps the fastest, which may use more
+    # than 48 KiB of shared memory through the device opt-in. So the reported
+    # shared size is checked against the reported layout, not a fixed one.
+    timings = actual.timings
     kinds = prepare_diffusion(diffusion, space).kinds
-    batch, _, shared = tensor_workspace(space.el_dof, kinds, space.quad_data.Krf_w.size, trace.weights.size)
-    assert actual.timings['raw.shared_bytes'] == shared and actual.timings['raw.batch_columns'] == batch
+    batch = int(timings['raw.batch_columns'])
+    assert 1 <= batch <= TENSOR_MAX_BATCH_COLUMNS
+    assert timings['raw.external_mass'] == 0 and timings['raw.mass_inverse'] == 0
+    _, shared = tensor_shared_bytes(space.el_dof, int(kinds.max()), space.quad_data.Krf_w.size,
+                                    trace.weights.size, batch, compact=bool(timings['raw.compact_coupling']))
+    assert timings['raw.shared_bytes'] == shared <= timings['raw.shared_limit']
     trace_values = np.sin(np.arange(mesh.num_edg*(order+1))+.2)
     reference = reconstruct_projected_adr_local_unknowns_numba(trace_values, prepared, space,
                                                                trace_space=trace, diffusion=diffusion)

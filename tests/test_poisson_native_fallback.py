@@ -5,6 +5,9 @@ GPU assembly, Krylov solvers and field reconstruction are mocked; importing or
 running these tests does not compile kernels or perform time integration.
 """
 
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -17,7 +20,6 @@ from hybridge.transport import cuda as advection_cuda, cupy
 from hybridge.mixed import cupy as diffusion_cupy
 from hybridge.mixed.raw_cuda import identity as diffusion_raw_cuda
 import hybridge.linalg.gpu.sparse as gpu_sparse
-import hybridge.runtime.optional as runtime_optional
 import hybridge.linalg.amgx.device_solver as amgx_device_solver
 import hybridge.core.device as core_device
 from hybridge.linalg.multigrid.face_hp import FaceBlockHpMgPcgResult
@@ -27,6 +29,12 @@ from hybridge.solvers import diffusion_raw_cuda as raw_cuda_driver
 
 @pytest.fixture(params=("standard", "fast"))
 def poisson_handoff(monkeypatch, request):
+    """Keep imported dependency gates real while mocking only this handoff."""
+    # Dispatch imports this module lazily. Load it before replacing the global
+    # optional gate so its module-level binding cannot retain our fake CuPy.
+    from hybridge.mixed.raw_cuda import poisson
+    assert poisson.require_cupy is runtime_optional.require_cupy
+
     matrix = np.diag([2.0, 4.0])
     rhs = np.array([2.0, 8.0])
     exact_solution = np.array([1.0, 2.0])
@@ -82,6 +90,7 @@ def poisson_handoff(monkeypatch, request):
     monkeypatch.setattr(cupy, "require_cupy", lambda: cp)
     monkeypatch.setattr(runtime_optional, "require_cupy", lambda: cp)
     monkeypatch.setattr(advection_cuda, "require_cupy", lambda: cp)
+    monkeypatch.setattr(amgx_device_solver, "require_cupy", lambda: cp)
     monkeypatch.setattr(runtime_optional, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(diffusion_cupy, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(core_device, "as_cupy_space", lambda _: cspace)
@@ -214,3 +223,27 @@ def test_native_dispatch_supplies_original_assembly_action_and_rechecks_result(p
     assert h.physical_matvec.call_count == 2
     np.testing.assert_array_equal(h.physical_matvec.call_args_list[0].args[1], probe)
     np.testing.assert_array_equal(h.physical_matvec.call_args_list[1].args[1], h.exact_solution)
+
+
+def test_handoff_fixture_preserves_lazy_poisson_dependency_after_teardown():
+    """A cold import during host mocks must not poison later real GPU solves."""
+    code = '''
+import sys
+import pytest
+from hybridge.runtime import optional
+
+original = optional.require_cupy
+assert "hybridge.mixed.raw_cuda.poisson" not in sys.modules
+result = pytest.main([
+    "-q", "-p", "no:cacheprovider", "-o", "addopts=",
+    "tests/test_poisson_native_fallback.py::test_native_solution_requires_and_reports_original_matrix_residual",
+])
+assert result == 0
+from hybridge.mixed.raw_cuda import poisson
+assert optional.require_cupy is original
+assert poisson.require_cupy is original, "Poisson retained the fixture's fake CuPy gate"
+'''
+    result = subprocess.run([sys.executable, "-B", "-c", code],
+                            cwd=Path(__file__).resolve().parents[1],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr

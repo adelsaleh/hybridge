@@ -90,5 +90,5 @@ flow, trapping identities, boundary data, scalar/array parity, geometry-specific
 caches and mocked direct-check scheduling. They do not establish compiled
 CPU/GPU parity, discretization accuracy or campaign convergence.
 
-See the [runner instructions](../research/solver_studies/adr_closed_loop_stress_runner.md)
+See the [runner instructions](../research/solver_studies/adr_scaling_2026_09_17/closed_loop_stress/adr_closed_loop_stress_runner.md)
 for the campaign command and bounded PyPardiso checks.

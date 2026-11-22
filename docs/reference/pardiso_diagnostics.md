@@ -57,4 +57,4 @@ The process high-water mark is cumulative, includes validation, and does not
 reset between trials; it must not be labelled as exact LU-only allocated bytes.
 The internal estimate and the observed process peak answer different questions.
 
-See [the full ADR campaign protocol](../research/solver_studies/adr_pardiso_campaign.md).
+See [the full ADR campaign protocol](../research/solver_studies/adr_scaling_2026_09_17/pardiso_lu/adr_pardiso_campaign.md).

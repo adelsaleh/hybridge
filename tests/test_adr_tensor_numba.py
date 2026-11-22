@@ -61,6 +61,8 @@ def test_tensor_solve_matches_numpy(diffusion, kind, basis, order):
 def test_exact_classification_does_not_drop_small_couplings():
     space = DGSpace(rectangle_mesh(1,1), 1)
     assert prepare_diffusion((2.,1e-15,2.),space).counts['constant-full'] == 2
+    tensor = prepare_diffusion((2.,0.,2.),space)
+    assert tensor.counts is tensor.counts  # classified once; the instance is frozen
     assert prepare_diffusion((2.,0.,2.),space).counts['constant-isotropic'] == 2
     assert prepare_diffusion(space.constant(2.),space).counts['constant-isotropic'] == 2
 

@@ -1,0 +1,104 @@
+# Run these commands from the HYBRIDGE repository root:
+cd /path/to/hybridge
+
+# Dependencies. Existing environment already supplies NumPy/SciPy/PyPardiso/CuPy/PyAMGX;
+# h5py is additionally required. No import of the hybridge package is used.
+.venv/bin/python -m pip install h5py
+
+# Logging for BOTH scripts: --verbosity/-v 0, 1, 2 or 3 (default 2), --quiet = 0.
+# 0: final result and errors; 1: loading/setup/solve stages;
+# 2: timings, true residuals, iterations, matrix/configuration diagnostics;
+# 3: additionally native PARDISO statistics / AMGX iteration output.
+# Output is flushed live and every AMGX worker also has its own .log file.
+# PARDISO script messages/tables carry [matK]; verbosity 3 brackets the unmodified
+# native statistics with [PARDISO native | phase ...] BEGIN/END markers.
+
+# Load the actual full matrix and RHS, check indices/mappings and print statistics.
+# This reads ~7.1 GiB of CSR data, but does not factorize or use a GPU.
+.venv/bin/python scripts/matk/benchmark_pardiso.py --inspect-only --output run_outputs/matk/inspection.json
+
+# Print the eleven nonsymmetric AMGX configurations (no GPU required).
+.venv/bin/python scripts/matk/benchmark_amgx.py --list-configs --output /tmp/matk-unused.json
+
+# Submit full real nonsymmetric LU on one exclusive Genoa node (192 CPUs, all RAM).
+# Fixed MKL threads, MKL default nonsymmetric LU, in-core factors; three solves
+# reuse one factorization. This is the existing campaign preset, not a claim
+# that 192 threads is fastest for this new matrix. Output includes actual MKL threads.
+sbatch scripts/matk/pardiso.sbatch --verbosity 2
+
+# CPU utilization by phase, sampled every 0.2 seconds in a separate process:
+sbatch scripts/matk/pardiso.sbatch --verbosity 3 --profile-cpu --cpu-sample-interval 0.2
+# From scripts/matk instead:
+# MATK_REPO="$(realpath ../..)" sbatch pardiso.sbatch --verbosity 3 --profile-cpu
+# CPU profile files go beside the JSON report in run_outputs/matk/:
+# pardiso-JOBID.cpu.csv: live total CPU equivalents, active/runnable thread counts, RSS
+# pardiso-JOBID.cpu_threads.csv: each thread's CPU time, state, last observed CPU
+# pardiso-JOBID.cpu_events.jsonl: timestamps marking phases
+# Final JSON: cpu_profile.phases has exact CPU-clock phase averages and sampled peaks.
+# Nested *.native phases isolate the existing ctypes PARDISO call from wrapper work.
+# CPU equivalents include spin waits, and do not measure useful-work efficiency.
+# Sampling intervals spanning phase boundaries are excluded from phase peak summaries.
+# Thread activity is sampled, not exact simultaneous hardware occupancy.
+# Live monitoring example (replace JOBID):
+# tail -F run_outputs/matk/pardiso-JOBID.cpu.csv
+# Generate a standalone timeline plot after the profiled run completes:
+# .venv/bin/python scripts/matk/plot_cpu_profile.py run_outputs/matk/pardiso-JOBID.json
+
+# Optional independent 96-thread comparison (same whole-node memory reservation).
+# Only if desired: each extra submission performs another full factorization.
+MATK_THREADS=96 sbatch scripts/matk/pardiso.sbatch
+
+# Submit the full eleven-configuration FP64 CSR sweep on one H200.
+# FGMRES(100), BiCGStab, AMG classical/aggregation, DILU, ILU(0), plus FGMRES(200).
+# No SPD assumption, CG, Cholesky, normal equations or synthetic RHS.
+# Each configuration runs in a separate process with a 30-minute total timeout.
+sbatch scripts/matk/amgx.sbatch --verbosity 3
+
+# Or submit only the primary FGMRES AMG candidates (alternative to the full sweep).
+sbatch scripts/matk/amgx.sbatch --candidates fgmres_classical_dilu fgmres_classical_ilu0 fgmres_aggregation_dilu fgmres_classical_dilu_r200
+
+# Optional overrides: absolute matrix path, tolerance, iteration budget and timeout.
+# MATK_MATRIX=/path/to/matK.h5 sbatch scripts/matk/amgx.sbatch --rtol 1e-10 --max-iters 2000 --timeout 3600
+# For a full sweep with a 1-hour timeout per trial, also increase the allocation:
+# MATK_MATRIX=/path/to/matK.h5 sbatch --time=14:00:00 scripts/matk/amgx.sbatch --timeout 3600
+# MATK_PYTHON=/path/to/python MATK_OUTPUT=/path/to/result.json sbatch scripts/matk/pardiso.sbatch
+# If submitting from another directory, set MATK_REPO=../hybridge.
+
+# Run directly INSIDE an existing allocation of the appropriate type:
+# CPU:
+# .venv/bin/python -u scripts/matk/benchmark_pardiso.py --threads 192 --output run_outputs/matk/pardiso.json
+# H200:
+# source campaigns/common/hopper_env.sh
+# bash scripts/gpu/run_cuda13.sh .venv/bin/python -u scripts/matk/benchmark_amgx.py --output run_outputs/matk/amgx.json
+
+# Run the small import/mapping/regression tests (CPU, no full matrix or GPU needed).
+.venv/bin/python -m unittest discover -s scripts/matk -p 'test_*.py' -v
+
+# Monitor jobs and reports:
+squeue -u "$USER"
+ls run_outputs/matk/
+# cat run_outputs/matk/pardiso-JOBID.json
+# cat run_outputs/matk/amgx-JOBID.json
+# less run_outputs/matk/amgx-JOBID_trials/fgmres_classical_dilu.log
+
+# Interpretation:
+# - JSON reports include dimensions, nnz, detected index base, RHS norm, machine,
+#   setup/factorization, repeated solve times, and independently recomputed ||Ax-b||/||b||.
+# - If b=0, the residual check uses the absolute norm instead.
+# - Load, residual validation, logging and GPU transfers are outside solve timing.
+# - PARDISO solve timing includes PyPardiso's matrix hash/check and index conversion;
+#   it is wrapper wall time, not a native phase-33 kernel-only measurement.
+# - AMGX ranking includes only candidates with native success AND true residual <= rtol,
+#   ordered by setup + first solve. Inspect all failures/timeouts in the aggregate report.
+# - GPU trials reread the HDF5 file to isolate failures and avoid retaining old hierarchies.
+# - The GPU stores AMGX-owned CSR. To obtain a CuPy CSR separately in your own code:
+#     from cupyx.scipy.sparse import csr_matrix
+#     import cupy
+#     A_gpu = csr_matrix(A_cpu)
+#     b_gpu = cupy.asarray(b_cpu)
+#   Do not create that extra full CSR copy during this benchmark.
+
+# Default input for both scripts is scripts/matk/matK.h5 (local copy, ignored by Git).
+
+# The stronger second AMGX benchmark is benchmark_amgx_strong.py.
+# See scripts/matk/commands_strong.txt for its smoke test, full sweep and parameters.

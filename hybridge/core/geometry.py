@@ -346,7 +346,9 @@ def polygon_from_geo(path, *, samples_per_curve=1024):
     previous = gmsh.model.getCurrent()
     model = "boundary_" + uuid4().hex
     gmsh.model.add(model)
+    terminal = gmsh.option.getNumber("General.Terminal")
     try:
+        gmsh.option.setNumber("General.Terminal", 0)  # reading a boundary is not worth two "Info" lines
         gmsh.merge(str(path))
         surfaces = gmsh.model.getEntities(2)
         if len(surfaces) != 1:
@@ -376,6 +378,7 @@ def polygon_from_geo(path, *, samples_per_curve=1024):
             raise ValueError("boundary is not closed")
         return PolygonDomain(np.concatenate([piece[:-1] for piece in ordered]))
     finally:
+        gmsh.option.setNumber("General.Terminal", terminal)
         gmsh.model.remove()
         if started:
             gmsh.finalize()

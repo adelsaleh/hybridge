@@ -56,7 +56,6 @@ The package metadata defines these pip-resolvable groups. The `pardiso` and
 |---|---|---|
 | `test` | pytest, Matplotlib, and tomli on Python 3.10 | Contract and regression tests, including exercised plotting and package-metadata paths |
 | `mesh` | gmsh | Recommended Gmsh geometry paths (optional dependency) |
-| `manufactured` | SymPy | Regenerate continuous n–Gamma manufactured forcing; not needed to evaluate committed data |
 | `plot` | Matplotlib, PyVista | Plotting and visualization |
 | `holoviz` | CUDA 13 Holoscan and CuPy, Matplotlib, Pillow, imageio-ffmpeg | NVIDIA GPU scalar panels and movie recording; see the [Holoviz guide](../backends/holoviz.md) |
 | `release` | build, twine | Distribution construction and metadata checks |
@@ -71,19 +70,6 @@ For example:
 ```bash
 python -m pip install -e '.[test,mesh,plot]'
 ```
-
-To regenerate the repository's n–Gamma continuous manufactured evaluators:
-
-```bash
-python -m pip install -e '.[manufactured]'
-python -m scripts.n_gamma.manufactured
-python -m scripts.n_gamma.manufactured --check
-```
-
-The committed `scripts/n_gamma/cases/forcing.py` uses NumPy or CuPy and never
-imports SymPy. Its coordinates are `x=R-3, y=Z`; use `stationary=True` to freeze
-the fields at zero phase and remove their time derivatives. Sources include
-the cylindrical divergence and take no timestep or numerical history inputs.
 
 PETSc/petsc4py, CUDA-specific CuPy wheels, PyAMGX/AMGX are not
 declared as generic extras because they require ABI-, CUDA-, MPI-, or

@@ -150,7 +150,8 @@ def main():
     parser.add_argument('--bases',nargs='+',choices=['legacy-lagrange','legendre-modal'],
                         default=['legacy-lagrange','legendre-modal'])
     parser.add_argument('--matrix-formats',nargs='+',choices=['coo','csr','bsr'],default=['coo','csr','bsr'])
-    parser.add_argument('--block-sizes',type=int,nargs='+',choices=[1,32,64,128],default=[32,64,128])
+    parser.add_argument('--block-sizes',type=lambda value: value if value=='auto' else int(value),nargs='+',
+                        choices=['auto',1,32,64,128],default=[32,64,128])
     parser.add_argument('--cache-local-factors',choices=['none','schur-lu','schur-lu+mass'],default='schur-lu+mass')
     parser.add_argument('--reconstruction',action='store_true')
     parser.add_argument('--gpu-lock',type=Path,default=Path(__file__).resolve().parents[3]/'.cache/gpu-campaign.lock')

@@ -141,10 +141,12 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     def solve_once(reusable=None, reuse_preconditioner=False):
         """One AMGX solve, optionally on a persistent solver."""
         return solve_reduced_system_amgx_device(
-            assembly, config=amgx_config, tolerance=options.solver_rtol, atol=options.solver_atol,
+            assembly, config=amgx_config, retry_attempts=options.amgx_retry_attempts,
+            tolerance=options.solver_rtol, atol=options.solver_atol,
             maxiter=options.maxiter, initial_guess=options.initial_guess, scale_system=options.scale_system,
             reusable_solver=reusable, reuse_primary_preconditioner=reuse_preconditioner,
-            materialize_host_solution=options.materialize_host_solution, verbose=_solver_verbosity(verbosity))
+            materialize_host_solution=options.materialize_host_solution, verbose=_solver_verbosity(verbosity),
+            borrow_csr=bool(getattr(options, "amgx_borrow_csr", False)) and reusable is None)
 
     def solve():
         """Solve, reusing a cached AMGX solver per ``options.amgx_reuse``."""
@@ -263,4 +265,4 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     (local_unknowns, trace, total_flux_star, post_field, post_flux), post_seconds = _timed_call(
         finish_label, verbosity, finish, multiline=_detailed_logging(verbosity))
     timings=AdvectionDiffusionReactionTimings(preparation=0.,trace_assembly=assembly_seconds,solve=solve_seconds,reconstruction=reconstruction,postprocessing=post_seconds,total=time.perf_counter()-total_start,details={**assembly.timings, **reconstruction_timings})
-    return AdvectionDiffusionReactionResult(field=field,flux=flux,total_flux=total_flux,trace=trace,timings=timings,postprocessed_field=post_field,postprocessed_flux=post_flux,local_unknowns=local_unknowns,matrix_rows=assembly.rows,matrix_cols=assembly.cols,matrix_data=assembly.data,matrix_indptr=assembly.indptr,matrix_indices=assembly.indices,matrix_format=assembly.matrix_format,diffusion_structure=operator.diffusion_structure,rhs=rhs,boundary_trace=boundary,reduction=None,element_boundary_mats=prepared.element_boundary,tau_advection=face_samples["tau_advection"],tau_diffusion=face_samples["tau_diffusion"],beta_dot_normal=face_samples["beta_dot_normal"],assembly_backend="raw-cuda",reconstruction_backend="raw-cuda",postprocessing_backend=("none" if post_mode == "none" else _reported_postprocessing_backend(options.postprocessing_backend,post_mode)),global_solve_result=solve_result)
+    return AdvectionDiffusionReactionResult(field=field,flux=flux,total_flux=total_flux,trace=trace,timings=timings,postprocessed_field=post_field,postprocessed_flux=post_flux,local_unknowns=local_unknowns,matrix_rows=assembly.rows,matrix_cols=assembly.cols,matrix_data=assembly.data,matrix_indptr=assembly.indptr,matrix_indices=assembly.indices,matrix_format=assembly.matrix_format,diffusion_structure=operator.diffusion_structure,rhs=rhs,boundary_trace=boundary,reduction=None,element_boundary_mats=prepared.element_boundary,tau_advection=face_samples["tau_advection"],tau_diffusion=face_samples["tau_diffusion"],beta_dot_normal=face_samples["beta_dot_normal"],assembly_backend="raw-cuda",reconstruction_backend="raw-cuda",postprocessing_backend=("none" if post_mode == "none" else _reported_postprocessing_backend(options.postprocessing_backend,post_mode)),global_solve_result=solve_result,recovery_data=prepared)

@@ -1,7 +1,10 @@
 """Analytic coefficients for the September 2026 ADR stress proposal.
 
-NumPy only: importing this module never meshes, assembles, solves or JITs.
-All derivatives are analytic; finite differences are reserved for tests.
+Importing this module never meshes, assembles, solves or JITs, and needs only NumPy.
+The annular formulas evaluate in the array module of their inputs, so CuPy quadrature
+points stay on the device (H200 campaign: no host fallback in device assembly);
+NumPy inputs give the same results as before. All derivatives are analytic;
+finite differences are reserved for tests.
 """
 from __future__ import annotations
 
@@ -72,6 +75,15 @@ def square_coefficients():
     return sys.modules[name]
 
 
+def _array_module(*values):
+    """CuPy when any input is a CuPy array, otherwise NumPy (CuPy is never imported here)."""
+    for value in values:
+        module = type(value).__module__
+        if module.startswith("cupy"):
+            return sys.modules["cupy"]
+    return np
+
+
 def square_parameters(parameters, normalization=1.0):
     return (parameters.epsilon, parameters.speed/normalization,
             parameters.reaction, VARIANTS.index(parameters.variant))
@@ -92,13 +104,14 @@ def polar_points(rho, phi, hole_radius):
 
 def coordinates(x, y, hole_radius):
     """Return rho and chi as (value, dx, dy, dxx, dxy, dyy)."""
-    x, y = np.broadcast_arrays(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
-    r = np.hypot(x, y)
-    if np.any(r == 0):
+    xp = _array_module(x, y)
+    x, y = xp.broadcast_arrays(xp.asarray(x, dtype=float), xp.asarray(y, dtype=float))
+    r = xp.hypot(x, y)
+    if bool(xp.any(r == 0)):
         raise ValueError("Polar stress coefficients are undefined at the origin")
-    phi = np.arctan2(y, x)
-    width = 1 + 0.35*np.cos(9*phi) - hole_radius
-    wp, wpp = -3.15*np.sin(9*phi), -28.35*np.cos(9*phi)
+    phi = xp.arctan2(y, x)
+    width = 1 + 0.35*xp.cos(9*phi) - hole_radius
+    wp, wpp = -3.15*xp.sin(9*phi), -28.35*xp.cos(9*phi)
     rho = (r-hole_radius)/width
     rx, ry, px, py = x/r, y/r, -y/r**2, x/r**2
     rxx, rxy, ryy = y*y/r**3, -x*y/r**3, x*x/r**3
@@ -110,9 +123,9 @@ def coordinates(x, y, hole_radius):
     hxy = drp*(rx*py+ry*px)+dpp*px*py+dr*rxy+dp*pxy
     hyy = 2*drp*ry*py+dpp*py*py+dr*ryy+dp*pyy
     rho_data = (rho, gx, gy, hxx, hxy, hyy)
-    a, q = 2*np.pi, 0.05*np.sin(5*phi)
-    qp, qpp = 0.25*np.cos(5*phi), -1.25*np.sin(5*phi)
-    sn, cs = np.sin(a*rho), np.cos(a*rho)
+    a, q = 2*np.pi, 0.05*xp.sin(5*phi)
+    qp, qpp = 0.25*xp.cos(5*phi), -1.25*xp.sin(5*phi)
+    sn, cs = xp.sin(a*rho), xp.cos(a*rho)
     fr, fp = 1+a*q*cs, qp*sn
     frr, frp, fpp = -a*a*q*sn, a*qp*cs, qpp*sn
     chi = (rho+q*sn, fr*gx+fp*px, fr*gy+fp*py,
@@ -124,14 +137,15 @@ def coordinates(x, y, hole_radius):
 
 def exact_data(x, y, hole_radius):
     """Manufactured primal value, gradient and Hessian in Cartesian coordinates."""
+    xp = _array_module(x, y)
     _, (chi, cx, cy, cxx, cxy, cyy) = coordinates(x, y, hole_radius)
     a = 2*np.pi
-    u, du, ddu = np.sin(a*chi), a*np.cos(a*chi), -a*a*np.sin(a*chi)
+    u, du, ddu = xp.sin(a*chi), a*xp.cos(a*chi), -a*a*xp.sin(a*chi)
     data = [u, du*cx, du*cy, du*cxx+ddu*cx*cx,
             du*cxy+ddu*cx*cy, du*cyy+ddu*cy*cy]
     for amplitude, m, n in ((0.25, 6, 5), (0.25*0.35, 11, 9)):
         a, b = m*np.pi, n*np.pi
-        sx, cx, sy, cy = np.sin(a*x), np.cos(a*x), np.sin(b*y), np.cos(b*y)
+        sx, cx, sy, cy = xp.sin(a*x), xp.cos(a*x), xp.sin(b*y), xp.cos(b*y)
         v = amplitude*sx*sy
         terms = (v, amplitude*a*cx*sy, amplitude*b*sx*cy,
                  -a*a*v, amplitude*a*b*cx*cy, -b*b*v)
@@ -143,14 +157,15 @@ def diffusion_data(x, y, parameters):
     """Return Kxx, Kxy, Kyy and the two components of div(K)."""
     if parameters.geometry == "square":
         return square_coefficients().square_diffusion_data(x, y, square_parameters(parameters))
+    xp = _array_module(x, y)
     eps = parameters.epsilon
     if parameters.variant == "orthogonal":
         c, s = np.cos(np.pi/7), np.sin(np.pi/7)
-        zero = np.zeros(np.broadcast(x, y).shape)
+        zero = xp.zeros(xp.broadcast(x, y).shape)
         return (zero+c*c+eps*s*s, zero+(1-eps)*c*s,
                 zero+s*s+eps*c*c, zero, zero)
     _, (_, gx, gy, hxx, hxy, hyy) = coordinates(x, y, parameters.hole_radius)
-    norm = np.hypot(gx, gy)
+    norm = xp.hypot(gx, gy)
     bx, by = gy/norm, -gx/norm
     nx, ny = (gx*hxx+gy*hxy)/norm, (gx*hxy+gy*hyy)/norm
     bxx, bxy = hxy/norm-bx*nx/norm, hyy/norm-bx*ny/norm
@@ -166,14 +181,15 @@ def unscaled_velocity(x, y, parameters):
     if parameters.geometry == "square":
         values = (parameters.epsilon, 1.0, parameters.reaction, VARIANTS.index(parameters.variant))
         return square_coefficients().square_velocity(x, y, values)
+    xp = _array_module(x, y)
     if parameters.variant == "orthogonal":
         c, s = np.cos(np.pi/7), np.sin(np.pi/7)
-        g = (1+0.8*np.sin(13*np.pi*(c*x+s*y)))/1.8
+        g = (1+0.8*xp.sin(13*np.pi*(c*x+s*y)))/1.8
         return -s*g, c*g
     rho_data, chi_data = coordinates(x, y, parameters.hole_radius)
     if parameters.variant == "trap":
         chi, cx, cy = chi_data[:3]
-        factor = np.sin(8*np.pi*chi)
+        factor = xp.sin(8*np.pi*chi)
         return factor*cy, -factor*cx
     rho, rx, ry = rho_data[:3]
     envelope = 16*rho**2*(1-rho)**2
@@ -181,7 +197,7 @@ def unscaled_velocity(x, y, parameters):
     value = dx = dy = 0.0
     for amplitude, m, n, denominator in ((1.0, 13, 11, 13), (0.35, 17, 19, 19)):
         a, b, d = m*np.pi, n*np.pi, denominator*np.pi
-        sx, cx, sy, cy = np.sin(a*x), np.cos(a*x), np.sin(b*y), np.cos(b*y)
+        sx, cx, sy, cy = xp.sin(a*x), xp.cos(a*x), xp.sin(b*y), xp.cos(b*y)
         value = value+amplitude*sx*sy/d
         dx = dx+amplitude*a*cx*sy/d
         dy = dy+amplitude*b*sx*cy/d

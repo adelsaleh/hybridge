@@ -33,6 +33,13 @@ from hybridge.linalg.results import (
 _PYAMGX_RUNTIME_INITIALIZED = False
 
 
+def _compact_amgx_banner(messages) -> str:
+    """Join AMGX's startup lines into one, without the notice about PyAMGX's own deprecated call."""
+    lines = [line.strip() for message in messages for line in message.splitlines()]
+    kept = [line for line in lines if line and "AMGX_initialize_plugins" not in line]
+    return "; ".join(kept) + "\n" if kept else ""
+
+
 def initialize_pyamgx_once():
     """Initialize AMGX once per process.
 
@@ -44,6 +51,8 @@ def initialize_pyamgx_once():
     global _PYAMGX_RUNTIME_INITIALIZED
     amgx = require_pyamgx()
     if not _PYAMGX_RUNTIME_INITIALIZED:
+        banner = []
+        amgx.register_print_callback(banner.append)
         amgx.initialize()
         _PYAMGX_RUNTIME_INITIALIZED = True
         # AMGX's default printf callback becomes block-buffered under terminal
@@ -56,6 +65,7 @@ def initialize_pyamgx_once():
 
         flush_native_stdio()
         amgx.register_print_callback(write_native_solver_output)
+        write_native_solver_output(_compact_amgx_banner(banner))
     return amgx
 
 
@@ -199,9 +209,8 @@ _PYAMGX_DTYPE_SUPPORT: dict[str, bool] = {}
 def pyamgx_supports_real_dtype(dtype) -> bool:
     """Whether the loaded PyAMGX binding accepts ``dtype`` arrays in its matching mode.
 
-    The default build of the PyAMGX fork hard-codes float64 arrays, so FP32
-    (``dFFI``) needs the mode-aware binding from
-    ``scripts/dev/build_pyamgx_precision.py``. The probe uploads one tiny
+    The integrated PyAMGX fork supports mode-aware FP32/FP64 uploads; older
+    bindings can still hard-code float64 arrays. The probe uploads one tiny
     vector once per process per dtype, on the shared AMGX resources. Only
     the binding's dtype rejection counts as unsupported; any other failure
     propagates.

@@ -1,0 +1,18 @@
+# DEFERRED: these are not part of the current native AMGX configuration search.
+# No automatic search uses these paths. They require --experimental.
+# Retained for later work, after the native configuration search.
+
+# Expanded zero-block patterns (native numerical solver, custom structural preprocessing):
+# sbatch amgx_strong.sbatch --experimental --candidates fgmres_expanded2_ilu0_b20 fgmres_expanded3_ilu0_b20 --verbosity 3
+# Native scalar GMRES on a custom expanded pattern:
+# sbatch amgx_strong.sbatch --experimental --candidates gmres_expanded2_ilu0_csr_r1000 --verbosity 3
+# Additional block row normalization:
+# sbatch amgx_strong.sbatch --experimental --block-normalize 20 --candidates fgmres_expanded2_ilu0_b20 --verbosity 3
+# Block graph RCM ordering:
+# sbatch amgx_strong.sbatch --experimental --ordering block-rcm --block-normalize 20 --candidates gmres_expanded2_ilu0_csr_r1000 --verbosity 3
+# HYBRIDGE outer GMRES + AMGX preconditioner diagnostics:
+# sbatch amgx_strong.sbatch --experimental --candidates hybridge_gmres_natural_ilu0_b20 hybridge_gmres_ilu1_b4 --verbosity 3
+
+# These are equivalent-system transforms or extra zero-pattern fill, not geometric
+# ASM. No mesh or face topology is inferred. Original A and b define acceptance.
+# Expanded-pattern ILU(0) is not described as level-of-fill ILU(2)/ILU(3).

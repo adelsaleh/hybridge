@@ -8,6 +8,7 @@ release checklists, or application-specific research notes.
 
 | Topic | Contents |
 |---|---|
+| [`assembly/`](assembly/README.md) | GPU assembly of the condensed HDG systems for AR, DR and ADR: every algorithm variant, switches and selection policy, plus one folder per test architecture (H200 sm_90, RTX PRO 5000 sm_120, Quadro RTX 6000 sm_75) with experiments and timings. |
 | [`advection_diffusion_reaction/`](advection_diffusion_reaction/) | Combined conservative flux, static condensation, incidence-wise transmission assembly, and postprocessing. |
 | [`advection_reaction/`](advection_reaction/) | Upwind HDG fluxes, upwind-SCC ordering, and block Gauss-Seidel preconditioning. |
 | [`diffusion_reaction/`](diffusion_reaction/) | Mixed HDG formulation, static condensation, assembly, and postprocessing. |
@@ -25,7 +26,10 @@ and are not tracked.
 - CUDA implementation paths and launch policy belong in
   [`../backends/`](../backends/).
 - Qualification plans belong in [`../development/`](../development/).
-- Dated timings and solver studies belong in [`../research/`](../research/).
+- Dated timings and solver studies belong in [`../research/`](../research/);
+  the exception is [`assembly/`](assembly/README.md), which keeps one folder of
+  assembly experiments and timings per test architecture next to the
+  algorithm descriptions.
 
 Algorithm notes may describe implementation correspondence, but they do not
 expand the supported API or backend matrix. Support claims remain governed by

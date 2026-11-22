@@ -407,14 +407,91 @@ def test_split3_memory_sizes_count_an_existing_workspace():
     assert split3_memory_sizes(space, trace, other)[1] == split3_memory_sizes(space, trace)[1]
 
 
+@pytest.mark.parametrize("order", [5, 6])
+@pytest.mark.parametrize("split3_fits", [True, False])
+def test_auto_local_assembly_times_split3_when_memory_allows(monkeypatch, order, split3_fits):
+    """``raw_local_assembly="auto"`` has no degree threshold: it times the pipelines.
+
+    ``hybridge.transport.pipeline_tuning.select_pipeline`` passes every
+    pipeline whose workspace fits a quarter of the free device memory to the
+    tuner, and returns the tuner's choice. With an advection field of degree
+    p + 1 the tensor route is not a candidate (it needs the field in the
+    solution space). The device description below is fake; no GPU is used.
+    """
+    from types import SimpleNamespace
+
+    from hybridge.transport import pipeline_tuning, tsle_bsr, tsle_tensor, tuning_sample
+
+    space, beta, _, _ = _problem(order, order + 1, mesh=rectangle_mesh(2, 2))
+    trace = space.trace_space("legendre-modal")
+    cspace = SimpleNamespace(host=space, el_dof=space.el_dof, edg_dof=trace.edg_dof)
+    free = 10**9
+    cp = SimpleNamespace(cuda=SimpleNamespace(runtime=SimpleNamespace(memGetInfo=lambda: (free, 2 * free))),
+                         get_default_memory_pool=lambda: SimpleNamespace(free_bytes=lambda: 0))
+    monkeypatch.setattr(pipeline_tuning, "device_signature", lambda cp: {
+        "sharedMemPerBlockOptin": 232448, "maxThreadsPerBlock": 1024, "fp32_fp64_ratio": 2})
+    split3_bytes = free // 8 if split3_fits else free // 2
+    monkeypatch.setattr(tsle_bsr, "split3_memory_sizes", lambda *args: (split3_bytes, free))
+    monkeypatch.setattr(tsle_tensor, "tensor_memory_sizes", lambda *args: (free // 8, free))
+    monkeypatch.setattr(tuning_sample, "sample_raw_options", lambda *a, **kw: pytest.fail("allocated a sample"))
+    timed = {}
+
+    def select(**kwargs):
+        timed.update(candidates=kwargs["candidates"], baseline=kwargs["baseline"])
+        # Stand-in for the measurement: the last candidate is the fastest.
+        return kwargs["candidates"][-1], None, dict(reused=False, source="measured", wall_seconds=0.0)
+
+    monkeypatch.setattr(pipeline_tuning, "select_variant", select)
+    nbeta = beta.components[0].space.el_dof
+    options = dict(cspace=cspace, trace_ref=trace, beta_coeffs=np.zeros((2, space.mesh.num_tri, nbeta)),
+                   beta_face_basis=None, block_size="auto", matrix_format="bsr", reaction_is_scalar=False,
+                   use_sparse_advection=False, mass_is_diagonal=True, advection_stabilization=None,
+                   zero_boundary_flux=True, cache_local_response=False)
+    selected, _ = pipeline_tuning.select_pipeline(cp, options)
+    assemblies = {name.split(":")[0] for name in timed["candidates"]}
+    assert timed["baseline"].startswith("fused:")
+    assert assemblies == ({"fused", "split3"} if split3_fits else {"fused"})
+    assert selected.name == timed["candidates"][-1]
+    assert selected.assembly == ("split3" if split3_fits else "fused")
+
+
 @cuda_only
-@pytest.mark.parametrize("order,expected", [(5, "fused"), (6, "split3")])
-def test_auto_local_assembly_picks_split3_from_p6_when_memory_allows(order, expected):
+@pytest.mark.parametrize("order", [5, 6])
+def test_auto_local_assembly_records_an_equivalent_measured_pipeline(order):
+    """``raw_local_assembly="auto"`` picks the faster of fused and split3 by timing.
+
+    The choice depends on the device, so the test checks what is guaranteed:
+    the chosen route is recorded in the timings and is the kernel that ran,
+    the matrix and right-hand side equal both explicit routes, and a second
+    assembly of the same problem reuses the stored choice.
+    """
+    import cupy as cp
+    from hybridge.runtime.cuda_tuning import tuning_mode
+
     space, beta, source, reaction = _problem(order, order + 1, mesh=rectangle_mesh(3, 2))
-    solver = AdvectionReactionHDGSolver(
-        space, source=source, beta=beta, reaction=reaction, boundary_condition=None,
-        boundary_mode="zero-flux", trace_basis="legendre-modal", assembly_backend="raw-cuda",
-        raw_local_assembly="auto", solver="amgx", verbose=0)
-    assembly = solver.assemble_tangent_boundary_raw_cuda_bsr()
-    used = "split3" if any(key.startswith("raw.raw.tsle.") or key.startswith("raw.tsle.") for key in assembly.timings) else "fused"
-    assert used == expected
+
+    def assemble(local_assembly):
+        solver = AdvectionReactionHDGSolver(
+            space, source=source, beta=beta, reaction=reaction, boundary_condition=None,
+            boundary_mode="zero-flux", trace_basis="legendre-modal", assembly_backend="raw-cuda",
+            raw_local_assembly=local_assembly, solver="amgx", verbose=0)
+        return solver.assemble_tangent_boundary_raw_cuda_bsr()
+
+    auto = assemble("auto")
+    algorithm = auto.timings["raw.pipeline.algorithm_id"]
+    # 0 is fused and 1 is split3; the tensor route (2) needs the field in the solution space.
+    assert algorithm in (0.0, 1.0)
+    ran_split3 = any(key.startswith(("raw.raw.tsle.", "raw.tsle.")) for key in auto.timings)
+    assert ran_split3 == (algorithm == 1.0)
+    shape = (auto.rhs.size,) * 2
+    matrix, rhs = _device_matrix(auto, "bsr", shape), cp.asnumpy(auto.rhs)
+    for local_assembly in ("fused", "split3"):
+        explicit = assemble(local_assembly)
+        expected = _device_matrix(explicit, "bsr", shape)
+        np.testing.assert_allclose(matrix, expected, rtol=1e-11, atol=1e-12 * np.abs(expected).max())
+        expected_rhs = cp.asnumpy(explicit.rhs)
+        np.testing.assert_allclose(rhs, expected_rhs, rtol=1e-11, atol=1e-12 * np.abs(expected_rhs).max())
+    if tuning_mode() == "auto":
+        again = assemble("auto")
+        assert again.timings["raw.pipeline.autotune.reused"] == 1.0
+        assert again.timings["raw.pipeline.algorithm_id"] == algorithm

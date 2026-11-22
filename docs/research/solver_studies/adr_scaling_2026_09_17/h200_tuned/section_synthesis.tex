@@ -1,0 +1,522 @@
+% H200 synthesis: block-preconditioned and multigrid solvers on one H200 against PyPardiso LU on
+% a genoa CPU node. Figures and tables: scripts/reports/make_adr_h200_comparison.py
+% (grids and envelopes drawn with the Blackwell synthesis' own functions); no solver execution.
+\section{H200 synthesis: iterative solvers on the GPU versus PyPardiso LU on a CPU node}
+\label{sec:adr-h200-synthesis}
+
+This section repeats the synthesis of the Blackwell study for the H200: every solver family on
+one NVIDIA H200 NVL with the tuned kernels (\texttt{campaigns/adr\_h200\_tuned}, 28--29 October
+2026), against multithreaded PyPardiso LU on a CPU node of the same cluster (genoa partition, two
+AMD EPYC 9655, 192 cores, 754~GiB; PARDISO v2 campaign, jobs 24478 and 24482,
+\texttt{campaigns/adr\_pardiso/records/unified\_l5\_pardiso\_v2}). The LU did not run on the H200
+node's own host CPUs (two 64-core sockets). LU and the iterative solvers see the same discrete
+systems (mesh, degree, case and coefficients, joined by the plan key), assembled twice: the LU
+campaign factorized the stock-kernel exports of the unified device campaign, and the tuned
+campaign assembled its own. The two assemblies hash differently: on four checked systems the
+mesh topology is identical and the blocks and right-hand side agree to $5\cdot10^{-14}$ to
+$6\cdot10^{-12}$ relative.
+
+\paragraph{Problems.} Every case is the stationary conservative problem
+\begin{equation}
+ -\nabla\cdot(K\nabla u)+\nabla\cdot(\boldsymbol\beta u)+c\,u=f\ \text{in }\Omega,\qquad
+ u=u_\star\ \text{on }\partial\Omega,
+ \label{eq:adr-h200-problem}
+\end{equation}
+with $f$ manufactured from the exact solution $u_\star$, discretized by HDG of degree $p$ and
+condensed to the trace. Table~\ref{tab:adr-h200-cases} lists the coefficients, using
+\begin{itemize}
+\item \textbf{domains} $\Omega_\square=[-1,1]^2$, the five-lobed annulus
+  $\Omega_5=\{0.58<r<1+0.35\cos5\theta\}$ and the nine-lobed annulus
+  $\Omega_9=\{0.63<r<R_9\}$, $R_9=1+0.35\cos9\theta$;
+\item \textbf{solutions} $u_s=\sin\pi x\sin\pi y$, $u_q=1+x^2+2y^2$,
+  $u_o=\sin6\pi x\sin5\pi y+0.35\sin11\pi x\sin9\pi y$ and
+  $u_9=\sin2\pi\chi+\tfrac14u_o$, with $\rho=(r-0.63)/(R_9-0.63)$ and
+  $\chi=\rho+0.05\sin5\theta\sin2\pi\rho$;
+\item \textbf{velocities} $\boldsymbol\beta_0=(1,\tfrac12)$, $\boldsymbol\beta_v=(1+x,-\tfrac12+y)$
+  ($\nabla\cdot\boldsymbol\beta_v=2$), the cellular flows
+  $\boldsymbol\beta_\omega=(1+4\sin\omega\pi x\cos\omega\pi y,\ \tfrac12-4\cos\omega\pi x\sin\omega\pi y)$,
+  and the through-flow $\boldsymbol\beta_\perp=\tfrac{50}{1.8}[1+0.8\sin(13\pi\,e_d\cdot\boldsymbol x)]\,e_t$
+  with $e_d=(\cos\tfrac\pi7,\sin\tfrac\pi7)$, $e_t=e_d^\perp$;
+\item \textbf{tensors} $K_{a,b}=R(\tfrac\pi6)\operatorname{diag}(a,b)R(\tfrac\pi6)^T$ and
+  $K_\perp=e_de_d^T+10^{-6}e_te_t^T$.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llllllll}
+\toprule
+class & key & $\Omega$ & $K$ & $\boldsymbol\beta$ & $c$ & $u_\star$ & runs\\
+\midrule
+Trigonometric (smooth high diffusion) & \texttt{trigonometric} & $\Omega_\square$ & $1$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder\\
+Smooth transport & \texttt{advection\_dominated} & $\Omega_\square$; $\Omega_5$ & $10^{-3}$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder; stock\\
+Variable velocity & \texttt{variable\_velocity} & $\Omega_\square$ & $1$ & $\boldsymbol\beta_v$ & $\tfrac12$ & $u_q$ & ladder\\
+Smooth anisotropy & \texttt{anisotropic} & $\Omega_\square$ & $\operatorname{diag}(1,10^{-2})$ & $\boldsymbol\beta_0$ & $1$ & $u_s$ & ladder\\
+Oscillatory low diffusion & \texttt{cellular7\_weak} & $\Omega_5$; $\Omega_\square$ & $10^{-5}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & ladder; stock\\
+Closed-loop stress (orthogonal) & \texttt{stress\_main\_orthogonal} & $\Omega_9$ & $K_\perp$ & $\boldsymbol\beta_\perp$ & $10^{-3}$ & $u_9$ & ladder\\
+\midrule
+Oscillatory source & \texttt{oscillatory\_rhs} & $\Omega_\square$, $\Omega_5$ & $10^{-3}$ & $\boldsymbol\beta_0$ & $1$ & $u_o$ & stock\\
+Cellular, four waves & \texttt{cellular4} & $\Omega_\square$ & $10^{-3}$ & $\boldsymbol\beta_4$ & $1$ & $u_o$ & stock\\
+Cellular, seven waves & \texttt{cellular7} & $\Omega_\square$ & $10^{-3}$ & $\boldsymbol\beta_7$ & $1$ & $u_o$ & stock\\
+Cellular, low diffusion & \texttt{cellular7\_low} & $\Omega_\square$ & $10^{-5}$ & $\boldsymbol\beta_7$ & $1$ & $u_o$ & stock\\
+Oscillatory high diffusion & \texttt{cellular7\_high} & $\Omega_\square$, $\Omega_5$ & $1$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+Oscillatory directional & \texttt{cellular7\_directional} & $\Omega_\square$, $\Omega_5$ & $K_{1,10^{-3}}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+Weak anisotropy & \texttt{cellular7\_anisotropic} & $\Omega_\square$, $\Omega_5$ & $K_{10^{-4},10^{-6}}$ & $\boldsymbol\beta_7$ & $10^{-2}$ & $u_o$ & stock\\
+\bottomrule
+\end{tabular}
+\caption{Problem classes of Equation~\eqref{eq:adr-h200-problem}. ``Ladder'': the tuned H200
+campaign, L1--L7 (stress L4--L7 and L4b); ``stock'': the stock-kernel H200 run on small meshes
+(Section~\ref{sec:adr-h200-synth-oscillatory}). A semicolon separates the ladder geometry from the
+stock one. Definitions: \texttt{scripts/advection\_diffusion\_reaction/cases/}.}
+\label{tab:adr-h200-cases}
+\end{table}
+
+\paragraph{Protocol.}
+\begin{itemize}
+\item \textbf{Fresh} is setup plus the first solve. For the iterative families the setup covers
+  the preconditioner (local factorizations, polynomial, AMG hierarchy); for LU it covers CSR
+  conversion, analysis and numerical factorization.
+\item \textbf{Reused} is the second solve on the same setup, or a solve with the existing LU
+  factors.
+\item For each system, LU keeps the fastest thread count per metric, chosen among 8--192
+  threads; the subscript of P-LU gives it.
+\item An iterative solve passes when the solver reports convergence to its internal target
+  ($10^{-11}$) and the recomputed true relative residual is at most $10^{-10}$; on variable
+  velocity, whose exact solution is quadratic, its $L^2$ error must also stay below $2\cdot10^{-8}$.
+  Outcomes are recorded, non-convergence included, and the fastest passing member of each family
+  is shown.
+\item $^*$ \textbf{FP64 floor.} On the trigonometric and anisotropic classes the round-off floor
+  of the FP64 residual, $\varepsilon\||A||x|\|/\|b\|$, grows in proportion to the DOFs: it
+  exceeds the internal target from L4--L5 and the acceptance from L7. NC$^*$ (FP64$^*$ in the LU
+  tables) marks a run that stopped there with the best solution's accuracy: not a solver failure.
+  The graphs show such a run as a hollow marker on a dotted line, at the time its first solve took
+  to reach that floor; the grids and tables keep NC$^*$ (Section~\ref{sec:adr-h200-tuned},
+  paragraph on the FP64 residual floor).
+\end{itemize}
+
+\paragraph{Coverage.} The tuned campaign exported all 114 of its systems (L1--L7 and the stress
+mesh L4b) in the layout PyPardiso reads, and all 114 have an LU measurement:
+\begin{itemize}
+\item 46 from the PARDISO v2 campaign, whose plan came from the unified campaign's exports;
+\item 68 from a follow-up run of the same worker on the tuned exports (jobs 26536, 26551 and
+  26578), up to L7 at 20 million trace DOFs.
+\end{itemize}
+The Lmax tier (Section~\ref{sec:adr-h200-synth-lmax}) adds 42 systems of 14--35 million
+DOFs without LU. Fresh LU takes 36--53~s at L7, with at most 141~GiB of memory. PyPardiso's 32-bit MKL interface
+limits the matrix's own indices (fewer than $2^{31}$ entries), not the factor. Three L7 LU solves
+end at a true relative residual of $1.10$--$1.36\cdot10^{-10}$, just above the target: the FP64
+floor that the iterative solvers also meet there. Their timings are shown like the others.
+
+\paragraph{Problem sizes.} Table~\ref{tab:adr-h200-levels} gives every level's mesh. L1--L5 and
+L4b share their mesh across degrees; L6 and L7 are defined by trace DOFs (8 and 20 million), so
+their meshes depend on $p$. Edges are the trace-unknown edges (trace DOFs over $p+1$). The
+square mesh serves the trigonometric, transport, variable-velocity and anisotropic cases; the
+two annular classes have their own meshes, the stress class from L4.
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/levels_table.tex}}
+\caption{Meshes and trace DOFs per level and degree.}
+\label{tab:adr-h200-levels}
+\end{table}
+
+\subsection{Overview}
+
+Figures~\ref{fig:adr-h200-synth-p6}--\ref{fig:adr-h200-synth-degree-reused} show every family on every
+system. Each cell gives the time in ms and the iteration count, with the configuration below.
+Shading is the slowdown against the fastest passing family on that system, and a green border
+marks the winner.
+
+``NC'' (red) means not passed. ``NC$^*$'' (amber) means stopped at the FP64 residual floor
+with the best solution's accuracy (Protocol; 83 runs, all trigonometric or anisotropic, L4--L7 and Lmax;
+Table~\ref{tab:adr-h200-outcomes}). A dash marks a family that
+was not run on that class. These families were pruned in advance from the Blackwell and unified
+results, where they rarely or never converged, or were far slower than the block
+preconditioners:
+\begin{itemize}
+\item BJ+PP on the anisotropic and cellular classes;
+\item $p$MG--AMG on the cellular annulus;
+\item AMGX and $p$MG--AMG on the closed-loop stress class.
+\end{itemize}
+A dash in the LU column means no LU measurement (see Coverage).
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p6_fresh.pdf}
+\caption{H200 and genoa LU, mesh refinement at $p=6$: fresh solve (setup and first solve). Mesh sizes in Table~\ref{tab:adr-h200-levels}; NC$^*$: FP64 residual floor (Protocol).}
+\label{fig:adr-h200-synth-p6}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p6_reused.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-p6}: reused solve (second solve on the same setup; LU with its existing factors).}
+\label{fig:adr-h200-synth-p6-reused}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p2_fresh.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=2$: fresh solve (setup and first solve). Mesh sizes in Table~\ref{tab:adr-h200-levels}; NC$^*$: FP64 residual floor (Protocol).}
+\label{fig:adr-h200-synth-p2}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p2_reused.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-p2}: reused solve (second solve on the same setup; LU with its existing factors).}
+\label{fig:adr-h200-synth-p2-reused}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p9_fresh.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-p6}, at $p=9$: fresh solve (setup and first solve). Mesh sizes in Table~\ref{tab:adr-h200-levels}; NC$^*$: FP64 residual floor (Protocol). L7 at $p=9$ exceeds one H200's memory.}
+\label{fig:adr-h200-synth-p9}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_mesh_p9_reused.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-p9}: reused solve (second solve on the same setup; LU with its existing factors).}
+\label{fig:adr-h200-synth-p9-reused}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_degree_L4_fresh.pdf}
+\caption{H200 and genoa LU, degree sweep at L4 (the same mesh at every degree): fresh solve.
+Mesh sizes in Table~\ref{tab:adr-h200-levels}; NC$^*$: FP64 residual floor (Protocol).}
+\label{fig:adr-h200-synth-degree}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_degree_L4_reused.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-degree}: reused solve.}
+\label{fig:adr-h200-synth-degree-reused}
+\end{figure}
+
+
+\subsection{Crossovers under refinement and increasing degree}
+
+Figures~\ref{fig:adr-h200-synth-h} and \ref{fig:adr-h200-synth-pfe} follow the smooth cases,
+where the families compete most closely. Table~\ref{tab:adr-h200-node-crossover} gives, per
+case and degree, the smallest size from which the best iterative solver stays faster than LU.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_h_crossover.pdf}
+\caption{Fresh (top) and reused (bottom) time under refinement at $p=6$; LU points carry their
+thread count. Crosses above a panel mark a family that did not pass at that level, one row per
+family in its colour. On variable velocity ASM+PP and BJ+PP converge to true residuals below
+$10^{-11}$ but miss the case's $L^2$ bound of $2\cdot10^{-8}$ (by 5--53 times at L5--L7; Protocol).
+Hollow markers on a dotted line (NC$^*$) give the time a run that did not pass took to reach the
+FP64 residual floor with the best accuracy (Protocol).}
+\label{fig:adr-h200-synth-h}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_p_crossover.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-h}, against the degree at L4.}
+\label{fig:adr-h200-synth-pfe}
+\end{figure}
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_crossover_table.tex}}
+\caption{Iterative versus genoa LU per case and degree, over all 114 H200 systems (L1--L7).
+Systems without a passed iterative solve do not count as crossings.}
+\label{tab:adr-h200-node-crossover}
+\end{table}
+
+\subsection{Hard cases: anisotropy, oscillatory annulus and closed-loop stress}
+
+Figures~\ref{fig:adr-h200-synth-hard6} and \ref{fig:adr-h200-synth-hard9} follow the three cases
+where reused LU factors win almost everywhere, now up to L7. The exceptions are the anisotropic
+square at L5, $p=6$ and 9, where AMGX's repeated solve takes 0.54 and 0.96 of the reused LU time.
+On the cellular annulus LU also keeps the fresh solve from L5 on (1.5--2.2 times faster), and on
+stress at L6, $p=2$, and L7. On the anisotropic square at L6--L7 no iterative family passes,
+while LU solves every system (at L7, $p=6$, at the residual floor). On the anisotropic square,
+ASM+PP(48) and $p$MG--AMG pass up to L4 (L3 at $p=9$). AMGX passes up to L5 and is the only
+family left there. On the cellular annulus ASM+PP(24) leads from L2 to L5 and AMGX takes over at
+L6--L7, where its iteration count (500--600) is below its counts on the coarse meshes. Table~\ref{tab:adr-h200-largest} lists the
+largest passed system of every case and degree, the counterpart of the million-DOF table of the
+Blackwell synthesis.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_hard_cases_p6.pdf}
+\caption{Hard cases under refinement at $p=6$: fresh (top) and reused (bottom) time, with the
+genoa LU where it was measured. Only ASM+PP and BJ+PP were run on the stress case; its L4b point is
+the Blackwell study's second stress mesh (148{,}848 triangles). Crosses and hollow markers as in
+Figure~\ref{fig:adr-h200-synth-h}.}
+\label{fig:adr-h200-synth-hard6}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_hard_cases_p9.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-hard6}, at $p=9$. L7 does not fit one H200 at this degree; the last point is Lmax (14 million trace DOFs).}
+\label{fig:adr-h200-synth-hard9}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/synthesis_largest_table.tex}}
+\caption{Largest system per case and degree with a passing iterative solve on the H200: fresh
+and reused time in ms (iterations). ``NC'': run, not passed; NC$^*$: stopped at the FP64
+residual floor (Protocol); ``--'': not run on that case.}
+\label{tab:adr-h200-largest}
+\end{table}
+
+\subsubsection{Closed-loop stress}
+\label{sec:adr-h200-synth-stress}
+
+The Blackwell study's stress campaign tested three arrangements on a tightly pinched annulus:
+trapping, crossing and an orthogonal control (Section~\ref{sec:adr-closed-loop-stress}, where
+included). Only the orthogonal control passed there: eight of 60 comparisons, all from ASM+PP,
+BJ+PP and $p$MG--AMG, while every AMGX candidate failed. The H200 campaign therefore ran the
+orthogonal control only, with the two block preconditioners at PP degree 96:
+\begin{itemize}
+\item \textbf{Excluded, trapping and crossing:} no candidate converged on Blackwell.
+\item \textbf{Excluded, AMGX:} its smoothers converged on no stress system.
+\item \textbf{Excluded, $p$MG--AMG:} it converges, but 92--110 times slower than ASM+PP.
+\end{itemize}
+It extends the control from the Blackwell meshes (L4, 98{,}699 triangles; L4b, 148{,}848) to
+L7 at 20 million trace DOFs (Table~\ref{tab:adr-h200-stress}).
+
+\begin{itemize}
+\item \textbf{ASM+PP is the stress solver.} It passes every level at $p=2$ and $p=6$ up to L7
+  and at $p=9$ up to L5. At $p=6$ its iterations grow from 33 (L4) to 293 (L7), with a reused
+  solve of 0.55~s at $10^6$ DOFs and 90~s at $2\cdot10^7$. BJ+PP passes the same systems with
+  1.5--9 times as many iterations and is 1.1--6 times slower on reused solves. The one exception
+  is $p=2$ at L7, where BJ+PP is 6\,\% faster than ASM+PP. At L6, $p=9$, neither passed.
+\item \textbf{Against the Blackwell on the same meshes} ($p=6$): ASM+PP's reused solve takes
+  0.55~s on the H200 against 5.20~s on Blackwell at 98{,}699 triangles (9.4 times faster), and
+  1.10~s against 12.08~s at 148{,}848 (11.0 times). Its fresh solve is 9.8 and 10.5 times
+  faster. The iterations fall from 58 to 33 and from 82 to 45 (true-target trigger). BJ+PP is
+  7.8--8.0 times faster on reused solves.
+\item \textbf{Against LU, up to L7.} At L4 the genoa LU needs 2.17~s fresh and 0.23~s reused at
+  $p=6$, and 0.83~s and 0.05~s at $p=2$; the Blackwell host's LU needed 3.99~s and 0.66~s on the
+  $p=6$ system.
+  \begin{itemize}
+  \item Fresh: the H200 wins at L4, L4b and L5 (the best iterative time is 0.44--0.89 of the
+    LU's at L5) and at L6, $p=6$ (0.90). LU wins at L6, $p=2$ (1.2 times faster) and at L7 (1.7
+    at $p=6$, 3.1 at $p=2$; 52 and 48~s).
+  \item Reused: LU's factors stay faster at every level, 3.8--5.2 times at L5 and 8.5 and 26
+    times at L7 (10.6 and 5.6~s against ASM+PP's 90~s at $p=6$ and BJ+PP's 147~s at $p=2$).
+  \end{itemize}
+\end{itemize}
+
+\begin{table}[ht]
+\centering\small
+\input{\ADRResultsPath/h200_tuned/stress_table.tex}
+\caption{Closed-loop stress, orthogonal control, on the H200 (ms). P-LU rows: the genoa LU on
+the same system, fresh/reused thread counts in the subscript.}
+\label{tab:adr-h200-stress}
+\end{table}
+
+\subsection{Largest mesh per degree}
+\label{sec:adr-h200-synth-lmax}
+
+A further tier (level Lmax; \texttt{campaigns/adr\_h200\_tuned/README.md}, finished 30 October
+2026) solves every class at $p=2$--9 on the largest mesh one H200 takes at that degree: 34
+million trace DOFs at $p=2$ down to 14 million at $p=9$ (Table~\ref{tab:adr-h200-lmax}). $p=6$
+was not rerun, because L7 sits at its limit; the degree sweeps take it from L7. This fills the
+degrees the L4 sweep left out (Figures~\ref{fig:adr-h200-synth-lmax-grid}--\ref{fig:adr-h200-synth-lmax-hard}).
+There is no LU at these sizes: the 42 Lmax systems are listed for it in
+\texttt{lu\_followup\_systems.csv}.
+\begin{itemize}
+\item \textbf{Variable velocity:} $p$MG--AMG passes at every degree in 0.87--2.0~s fresh and
+  0.57--0.82~s reused, with 37--40 iterations, 2.6--5 times faster than AMGX (3.3--5.3~s). ASM+PP
+  and BJ+PP converge but miss the case's $L^2$ bound (Protocol).
+\item \textbf{Transport:} AMGX needs 25--35 iterations, 4.1--8.2~s fresh and 2.5--4.8~s reused;
+  $p$MG--AMG takes 19--27~s, ASM+PP 29--81~s and BJ+PP 35--53~s (not passed at $p=2$, 3).
+\item \textbf{Trigonometric and anisotropic: no family passes, almost all at the FP64 floor.}
+  ASM+PP, AMGX and $p$MG--AMG end at true relative residuals of $1.0$--$8.0\cdot10^{-10}$, the
+  floor of 14--34 million DOFs (NC$^*$). AMGX and $p$MG--AMG reach it in about 1.5--14~s fresh,
+  ASM+PP in 65--150~s. ASM+PP at $p=8$--9 (trigonometric) and $p=9$ (anisotropic) stagnates at
+  the same level but misses the best accuracy; BJ+PP (trigonometric only) stalls for real.
+\item \textbf{Cellular annulus:} AMGX passes at $p=3$--9 (68--100~s fresh, 493--862 iterations)
+  and diverges at $p=2$; ASM+PP passes only at $p=9$ (139~s, 1{,}805 iterations).
+\item \textbf{Closed-loop stress:} ASM+PP passes at every degree, from 417~s (1{,}204 iterations)
+  at $p=2$ to 48~s (168) at $p=9$. BJ+PP passes at $p=2$--4, where it is the faster of the two
+  at $p=2$ (356~s), and fails from $p=5$.
+\item \textbf{The degree on a full GPU.} With the mesh as large as the memory allows, the time
+  per solve is nearly flat in $p$ for AMGX on transport and falls with $p$ for $p$MG--AMG on
+  variable velocity (2.0 to 0.87~s) and for ASM+PP on stress (from 12 to 3.5~$\mu$s per trace
+  DOF).
+\end{itemize}
+
+\begin{table}[p]
+\centering
+\adjustbox{max width=\linewidth,max totalheight=.9\textheight}{\input{\ADRResultsPath/h200_tuned/lmax_table.tex}}
+\caption{The largest mesh per degree on one H200 (Lmax). Time in ms (iterations); ``NC'': run,
+not passed; NC$^*$: stopped at the FP64 residual floor (Protocol); ``--'': not run on that
+class.}
+\label{tab:adr-h200-lmax}
+\end{table}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_degree_lmax_fresh.pdf}
+\caption{H200, degree sweep on the largest mesh per degree (Lmax; L7 at $p=6$): fresh solve.
+Sizes in Table~\ref{tab:adr-h200-lmax}; LU exists only at $p=6$. NC$^*$: FP64 residual floor
+(Protocol).}
+\label{fig:adr-h200-synth-lmax-grid}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\linewidth,height=.93\textheight,keepaspectratio]{\ADRResultsFigurePath/h200_synthesis/h200_degree_lmax_reused.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-lmax-grid}: reused solve.}
+\label{fig:adr-h200-synth-lmax-grid-reused}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_p_lmax.pdf}
+\caption{Fresh (top) and reused (bottom) time against the degree on the largest mesh per degree,
+smooth classes: 7.6 million triangles (34 million trace DOFs) at $p=2$ down to 0.94 million (14
+million) at $p=9$; L7 at $p=6$ (1.9 million triangles). Per-degree sizes in
+Table~\ref{tab:adr-h200-lmax}. Crosses and hollow markers as in Figure~\ref{fig:adr-h200-synth-h}.}
+\label{fig:adr-h200-synth-lmax-smooth}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_synthesis/h200_p_lmax_hard.pdf}
+\caption{As Figure~\ref{fig:adr-h200-synth-lmax-smooth}, hard classes: 7.6 to 0.93 million
+triangles on the square and the two annuli (Table~\ref{tab:adr-h200-lmax}).}
+\label{fig:adr-h200-synth-lmax-hard}
+\end{figure}
+
+\subsection{Oscillatory classes with the stock kernels}
+\label{sec:adr-h200-synth-oscillatory}
+
+The tuned ladder left out the oscillatory classes of the Blackwell synthesis: high diffusion,
+directional and anisotropic cellular coefficients, the oscillatory right-hand side and the other
+cellular variants. The stock-kernel H200 run (unified campaign 21958, with the study's own
+configurations) solved 37 of the systems that the LU campaign measured on those classes and on
+the two classes the ladder has only on the other geometry. All of them are small: original
+meshes, L1 and L2, at most 85{,}120 trace DOFs, $p=1$--6. Table~\ref{tab:adr-h200-oscillatory}
+gives the largest system per class.
+\begin{itemize}
+\item \textbf{Reused LU factors win.} The best repeated stock solve beats them on 2 of the 37
+  systems only, the annular transport and oscillatory right-hand-side systems (9.6 against 11.1
+  and 11.5~ms). Elsewhere the repeated iterative solve takes a median 6.9 times the reused LU
+  time, up to 41 times.
+\item \textbf{Fresh solves split by class.} The GPU wins 12 of 37:
+  \begin{itemize}
+  \item 7 of the 12 high-diffusion systems ($p$MG--AMG);
+  \item the annular transport, oscillatory right-hand-side and anisotropic cellular systems;
+  \item one of the six directional annulus systems;
+  \item one of the two anisotropic cellular squares.
+  \end{itemize}
+  LU keeps the fresh solve on the cellular squares (low diffusion, the original cellular cases)
+  and on the directional square, where ASM+PP needs 2.0 times the LU time at 85{,}120 DOFs.
+\item \textbf{Stock kernels at small sizes, so no crossover.} Below $10^5$ DOFs the tuned kernels
+  gain only 1.0--3.4 times (Section~\ref{sec:adr-h200-tuned}), so these results would not change
+  much with them. Where these classes cross LU needs the tuned kernels at L3--L5; the ladder did
+  not run them.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/stock_oscillatory_table.tex}}
+\caption{Classes outside the tuned ladder, stock kernels on the H200 against the genoa LU:
+largest system per class with both (ms). Fresh: setup and first solve; repeated: second solve on
+the same setup. Families: fastest fresh / fastest repeated.}
+\label{tab:adr-h200-oscillatory}
+\end{table}
+
+\subsection{End to end: assembly and one solve}
+\label{sec:adr-h200-synth-e2e}
+
+The comparisons above start from an assembled matrix. Table~\ref{tab:adr-h200-e2e} adds the
+assembly, on the 24 systems that both the H200 and hybridge's host pipeline on a genoa node ran
+(the \texttt{cpu\_adr\_scaling} campaign, same plan keys).
+\begin{itemize}
+\item \textbf{genoa:} the Numba assembly of the host pipeline (its warm run, at the fastest of
+  1--192 threads) plus the LU campaign's fresh solve of the same system (analysis, factorization
+  and first solve). The pipeline's own warm solve is not used: PyPardiso skips the factorization
+  when it is handed the matrix it factored last, so that solve reused the cold run's factors.
+  Reconstruction and postprocessing come on top on both machines and are left out.
+\item \textbf{H200:} the device assembly of the system job (one cold assembly in the solver
+  process), plus the fastest passed fresh iterative solve.
+\end{itemize}
+Findings:
+\begin{itemize}
+\item \textbf{From L3 the H200 is faster end to end on every shared system}, cellular annulus
+  included.
+  \begin{itemize}
+  \item L4: 5.8 times on trigonometric, 5.7 on variable velocity, 3.3 on anisotropic and 3.0 on
+    stress (where the host assembly alone takes 0.95~s).
+  \item L3: 4.1 on transport, 3.5 on variable velocity, 2.0 on trigonometric and anisotropic,
+    1.3 on the cellular annulus.
+  \end{itemize}
+\item \textbf{At L2, $p=6$, the two are about even} (1.0--1.4 times), except on the cellular
+  annulus, where genoa needs 0.58 of the H200 time.
+\item \textbf{At L1, and at L2 with $p=2$, genoa is faster} (0.20--0.55 of the H200 time). Here
+  the H200's cold assembly (143--374~ms) costs more than genoa's assembly and LU together.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/end_to_end_table.tex}
+\caption{Assembly plus one fresh solve (ms). genoa: host-pipeline assembly at its fastest thread
+count plus the LU campaign's fresh solve (subscripts: threads); reconstruction excluded. H200:
+device assembly plus the fastest passed fresh iterative solve. Last column: genoa time over H200
+time; above one the H200 is faster.}
+\label{tab:adr-h200-e2e}
+\end{table}
+
+\subsection{Practical interpretation}
+
+\begin{itemize}
+\item \textbf{One solve per matrix: use the GPU, except on the hard cases at scale.} Setup plus
+  the first solve beats LU's analysis and factorization on 89 of the 104 systems with a passed
+  iterative solve. On the smooth cases the GPU needs 2--18\,\% of the LU time at L5--L7 (36--53~s
+  of LU at L7). LU keeps the fresh solve on the smallest meshes (L1 at $p=2$, cellular at L1--L2),
+  on the cellular annulus from L5 (1.5--2.2 times faster) and on closed-loop stress at L6, $p=2$,
+  and L7 (1.2--3.1 times).
+\item \textbf{Many solves with one matrix: smooth cases go to the GPU, hard cases to LU.} A
+  reused LU solve takes about 3~ms at $3.6\cdot10^4$ DOFs, 0.23--0.25~s at $10^6$ and 5--11~s at
+  $2\cdot10^7$. The GPU wins 42 of the 104 repeated solves:
+  \begin{itemize}
+  \item transport (15 of 20), variable velocity (14 of 20) and trigonometric (11 of 18), from
+    $3\cdot10^4$--$3.4\cdot10^5$ DOFs at $p=6$ and 9;
+  \item at $p=2$ these cases cross only from about $4\cdot10^5$ (variable velocity) or 8 million
+    DOFs (transport, trigonometric);
+  \item the anisotropic square only at L5, $p=6$ and 9.
+  \end{itemize}
+  At the largest size where an iterative solve passed, the repeated solve takes 0.06--0.10 of
+  the reused LU time on variable velocity ($p$MG--AMG, up to 20 million DOFs), 0.29--0.36 on
+  trigonometric (AMGX, 8 million) and 0.33--0.71 on transport (AMGX, 8--20 million). On the cellular annulus and on
+  closed-loop stress the reused factors stay faster at every size up to L7 (3.5--35 and 1.3--26
+  times). On the anisotropic square at L6--L7 LU is the only solver that meets the target.
+\item \textbf{Which GPU family at scale.}
+  \begin{itemize}
+  \item AMGX keeps 15--27 iterations up to L7. It wins the trigonometric case at L5--L6, the
+    anisotropic case at L5, transport at L6--L7 and the cellular annulus at L6--L7, at every
+    degree it was run.
+  \item $p$MG--AMG wins variable velocity at every level from L5 (and from L3 at $p=6$).
+  \item ASM+PP wins transport and the cellular annulus at L5 and the closed-loop stress case at
+    L5--L7, where only the block preconditioners were run; BJ+PP takes stress at L7, $p=2$.
+  \end{itemize}
+  LU's memory is not the limit on a genoa node (at most 141~GiB at L7, out of 754~GiB). Its
+  time is: 36--53~s fresh at L7, against 1.0--1.2~s for $p$MG--AMG on variable velocity and
+  5.2--5.5~s for AMGX on transport.
+\item \textbf{The largest problem on one H200} (34 million trace DOFs at $p=2$, 14 million at
+  $p=9$): the smooth classes solve in seconds ($p$MG--AMG 0.9--2.0~s on variable velocity, AMGX
+  4--8~s on transport), the hard ones in minutes (AMGX 68--100~s on the cellular annulus, ASM+PP
+  48--417~s on stress). On the trigonometric and anisotropic classes no solver can meet the fixed
+  residual target there; the FP64 floor is above it.
+\item \textbf{Compared with the Blackwell workstation.} The genoa LU is 1.1--1.9 times faster
+  fresh and 1.5--3.2 times faster reused than the Blackwell host's LU, and the H200 iterative
+  solves are up to 8 times faster than the Blackwell's (Section~\ref{sec:adr-h200-tuned}). The
+  net effect: the fresh-solve picture moves further towards the GPU, while the reused-solve
+  crossovers sit at somewhat larger meshes than against the Blackwell host LU.
+\end{itemize}

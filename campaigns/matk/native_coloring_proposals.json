@@ -1,0 +1,94 @@
+{
+  "fgmres_native_ilu1_parallel_greedy_x1000_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 2,
+          "matrix_coloring_scheme": "PARALLEL_GREEDY",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "block_ilu_backend": "amgx",
+          "print_coloring_info": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "legacy",
+        "gmres_n_restart": 1000,
+        "scope": "matk_outer"
+      },
+      "block_format": "ROW_MAJOR"
+    },
+    "probe_only": true,
+    "required_library_sha256": "1c5f728bf6ba0dd6f9b9f2f7d2349607991504ed8390ed56c179e5a3e860a7fb",
+    "host_scaling": "column-max",
+    "right_scale_multiplier": 1000.0,
+    "note": "Native distance-two coloring changes ILU elimination order and realized fill; no external permutation. Synthetic qualification required before full use."
+  },
+  "fgmres_native_ilu1_greedy_minmax2_x1000_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 2,
+          "matrix_coloring_scheme": "GREEDY_MIN_MAX_2RING",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "block_ilu_backend": "amgx",
+          "print_coloring_info": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "legacy",
+        "gmres_n_restart": 1000,
+        "scope": "matk_outer"
+      },
+      "block_format": "ROW_MAJOR"
+    },
+    "probe_only": true,
+    "required_library_sha256": "1c5f728bf6ba0dd6f9b9f2f7d2349607991504ed8390ed56c179e5a3e860a7fb",
+    "host_scaling": "column-max",
+    "right_scale_multiplier": 1000.0,
+    "note": "Native distance-two coloring changes ILU elimination order and realized fill; no external permutation. Synthetic qualification required before full use."
+  }
+}

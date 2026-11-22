@@ -144,13 +144,15 @@ HEAT=[
 OVERVIEW_FAMILIES=(('asm',ASM_LABEL,is_asm),('bj',BJ_LABEL,is_bj),('amg','AMG',is_amg),('native',PMG,is_native),('lu','P-LU$_n$',is_lu))
 
 
-def overview_cells(records,sweep):
+def overview_cells(records,sweep,heat=None,systems_fn=None):
+    """Best member per family per system; ``heat`` and ``systems_fn`` default to this study's."""
+    heat=heat or HEAT;systems_fn=systems_fn or systems
     cells=[]
-    for index,(suite,case,geometry,title) in enumerate(HEAT):
-        for column,group in enumerate(systems(records,suite,case,geometry,sweep)):
+    for index,(suite,case,geometry,title) in enumerate(heat):
+        for column,group in enumerate(systems_fn(records,suite,case,geometry,sweep)):
             for metric in ('fresh','hot'):
                 passing=[best(group,pred,metric) for _,_,pred in OVERVIEW_FAMILIES]
-                minimum=min(r[metric] for r in passing if r)
+                minimum=min((r[metric] for r in passing if r),default=None)
                 for family_id,_,predicate in OVERVIEW_FAMILIES:
                     attempted=[r for r in group if predicate(r)];chosen=best(group,predicate,metric)
                     degree=chosen['pp_degree'] if chosen else None
@@ -164,7 +166,10 @@ def overview_cells(records,sweep):
                     cells.append(dict(sweep=sweep,suite=suite,case=case,geometry=geometry,case_index=index,
                                       column=column,n=group[0]['n'],p=group[0]['p'],triangles=group[0]['triangles'],
                                       dofs=group[0]['dofs'],metric=metric,family=family_id,
-                                      status='passed' if chosen else 'NC' if attempted else 'not_tested',
+                                      # NC*: no member passed, one stopped at the FP64 residual floor
+                                      # (records flag it as ``fp64_floor``; this study's never do).
+                                      status='passed' if chosen else ('NC*' if any(r.get('fp64_floor') for r in attempted)
+                                                                      else 'NC') if attempted else 'not_tested',
                                       time_ms=chosen[metric] if chosen else None,
                                       iterations=iteration_count(chosen,metric) if chosen else None,
                                       slowdown=chosen[metric]/minimum if chosen else None,
@@ -174,70 +179,130 @@ def overview_cells(records,sweep):
     return cells
 
 
-def comparison_overview(records,sweep):
-    """Time, corresponding iteration count and outcome for every solver family."""
-    cells=overview_cells(records,sweep)
-    columns=4 if sweep=='h' else 5
-    fig,axes=plt.subplots(1,2,figsize=(7.15,9.15),sharey=True)
-    gap=.45;stride=len(OVERVIEW_FAMILIES)+gap;height=len(HEAT)*stride-gap
+OVERVIEW_CASE_LABELS=['Oscillatory low diffusion\nSquare','Oscillatory low diffusion\nAnnulus',
+                      'Oscillatory directional\nSquare','Oscillatory directional\nAnnulus',
+                      'Oscillatory high diffusion\nSquare','Oscillatory high diffusion\nAnnulus',
+                      'Smooth anisotropy\nSquare','Smooth transport\nSquare',
+                      'Variable velocity\nSquare','Smooth high diffusion\nSquare']
+
+
+def comparison_overview(records,sweep,*,heat=None,case_labels=None,column_labels=None,heading=None,mesh=None,
+                        stem=None,figsize=(7.15,9.15),systems_fn=None,figures=None,metrics=('fresh','hot')):
+    """Time, corresponding iteration count and outcome for every solver family.
+
+    The keyword arguments let another study (the H200 report) draw the same grid from its own
+    records; their defaults reproduce this study's two figures. ``metrics`` selects the panels
+    (one panel per figure keeps many columns readable on a portrait page)."""
+    heat=heat or HEAT
+    cells=overview_cells(records,sweep,heat,systems_fn)
+    if column_labels is None:column_labels=['1','2','3','4'] if sweep=='h' else ['1','2','3','4','6']
+    columns=len(column_labels)
+    fig,axes=plt.subplots(1,len(metrics),figsize=figsize,sharey=True,squeeze=False);axes=axes[0]
+    gap=.45;stride=len(OVERVIEW_FAMILIES)+gap;height=len(heat)*stride-gap
     cmap=plt.get_cmap('Blues');norm=Normalize(0,6)
-    for ax,metric,title in zip(axes,('fresh','hot'),('Fresh · setup + first solve','Reused · second solve')):
+    titles={'fresh':'Fresh · setup + first solve','hot':'Reused · second solve'}
+    for ax,metric in zip(axes,metrics):
+        title=titles[metric]
         ax.set_xlim(-.5,columns-.5);ax.set_ylim(height-.5,-.5)
         ax.set_title(title,fontsize=8.3,pad=10)
-        ax.set_xticks(range(columns),['1','2','3','4'] if sweep=='h' else ['1','2','3','4','6'])
+        ax.set_xticks(range(columns),column_labels)
         ax.xaxis.tick_top();ax.tick_params(axis='both',length=0)
-        ax.set_yticks([i*stride+j for i in range(len(HEAT)) for j in range(len(OVERVIEW_FAMILIES))],
-                      [label for _ in HEAT for _,label,_ in OVERVIEW_FAMILIES],fontsize=6.6)
+        ax.set_yticks([i*stride+j for i in range(len(heat)) for j in range(len(OVERVIEW_FAMILIES))],
+                      [label for _ in heat for _,label,_ in OVERVIEW_FAMILIES],fontsize=6.6)
         for spine in ax.spines.values():spine.set_visible(False)
         for cell in (c for c in cells if c['metric']==metric):
             x=cell['column'];y=cell['case_index']*stride+[v[0] for v in OVERVIEW_FAMILIES].index(cell['family'])
             status=cell['status'];passing=status=='passed'
             shade=min(6,np.log2(cell['slowdown'])) if passing else None
-            face=cmap(norm(shade)) if passing else '#fbe9e7' if status=='NC' else '#f2f4f7'
+            face=cmap(norm(shade)) if passing else {'NC':'#fbe9e7','NC*':'#fdf1d8'}.get(status,'#f2f4f7')
             ax.add_patch(Rectangle((x-.49,y-.48),.98,.96,facecolor=face,
                                    edgecolor='#14532d' if cell['winner'] else 'white',
                                    linewidth=1.1 if cell['winner'] else .6))
-            color='white' if passing and shade>3.5 else '#912018' if status=='NC' else '#17212e'
-            value=(f"{cell['time_ms']:.0f}" if cell['time_ms']>=1000 else f"{cell['time_ms']:.1f}") if passing else 'NC' if status=='NC' else '—'
+            color='white' if passing and shade>3.5 else {'NC':'#912018','NC*':'#7a4a00'}.get(status,'#17212e')
+            value=(f"{cell['time_ms']:.0f}" if cell['time_ms']>=1000 else f"{cell['time_ms']:.1f}") if passing else status if status in ('NC','NC*') else '—'
             if passing and cell['iterations'] is not None:value+=f" ({cell['iterations']:.0f})"
             offset=-.225 if cell['configuration'] else 0
             ax.text(x,y+offset,value,ha='center',va='center',fontsize=6.1,
                     fontweight='bold' if cell['winner'] else 'normal',color=color)
             if cell['configuration']:ax.text(x,y+.265,cell['configuration'],ha='center',va='center',fontsize=5.2,color=color)
-    axes[1].tick_params(labelleft=False)
+    for ax in axes[1:]:ax.tick_params(labelleft=False)
     fig.subplots_adjust(left=.295,right=.993,top=.918,bottom=.098,wspace=.075)
-    case_labels=['Oscillatory low diffusion\nSquare','Oscillatory low diffusion\nAnnulus',
-                 'Oscillatory directional\nSquare','Oscillatory directional\nAnnulus',
-                 'Oscillatory high diffusion\nSquare','Oscillatory high diffusion\nAnnulus',
-                 'Smooth anisotropy\nSquare','Smooth transport\nSquare',
-                 'Variable velocity\nSquare','Smooth high diffusion\nSquare']
-    for i,label in enumerate(case_labels):
+    for i,label in enumerate(case_labels or OVERVIEW_CASE_LABELS):
         y=axes[0].get_position().y1-(i*stride+2)/height*axes[0].get_position().height
         fig.text(.007,y,label,fontsize=7.0,va='center',linespacing=1.3)
-    heading=(r'Mesh refinement at $p_{\mathrm{FE}}=6$ · columns are refinement levels' if sweep=='h'
+    heading=heading or (r'Mesh refinement at $p_{\mathrm{FE}}=6$ · columns are refinement levels' if sweep=='h'
              else r'Degree sweep · columns are finite-element degree $p_{\mathrm{FE}}$')
     fig.suptitle(heading,fontsize=9.3,y=.992)
-    if sweep=='h':
+    if mesh is None and sweep=='h':
         mesh='Triangles by level: square 2,048 / 8,192 / 32,768 / 99,458; annulus 2,043 / 8,039 / 33,174 / 99,984.'
-    else:mesh='Fixed mesh: square 8,192 triangles; annulus 8,039 triangles.'
+    elif mesh is None:mesh='Fixed mesh: square 8,192 triangles; annulus 8,039 triangles.'
     fig.text(.5,.96,mesh,ha='center',fontsize=6.6)
     fig.text(.5,.072,'Cell: time in ms (k iterations); selected configuration below. Green border: fastest passing family.',ha='center',fontsize=6.5)
     fig.text(.5,.052,'PP(d): degree; F/B: Krylov; S/R: policy; P-LU: subscript = CPU threads, no Krylov count.',ha='center',fontsize=6.4)
+    if any(c['status']=='NC*' for c in cells):
+        fig.text(.5,.034,'NC: not passed. NC*: stopped at the FP64 residual floor with the best accuracy (untimed).',
+                 ha='center',fontsize=6.4,color='#7a4a00')
     cbax=fig.add_axes([.32,.019,.55,.011]);cb=fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap=cmap),cax=cbax,orientation='horizontal')
     cb.set_ticks([0,1,2,3,4,5,6],labels=['1×','2×','4×','8×','16×','32×','≥64×']);cb.ax.tick_params(labelsize=6,length=2)
     fig.text(.01,.019,'Time / fastest passing time',fontsize=6.5,va='center')
-    save_publication_figure(fig,FIGURES/('solver_mesh_comparison' if sweep=='h' else 'solver_degree_comparison'));plt.close(fig)
+    save_publication_figure(fig,(figures or FIGURES)/(stem or ('solver_mesh_comparison' if sweep=='h' else 'solver_degree_comparison')));plt.close(fig)
     return cells
 
 
-def plot_envelope(ax,groups,metric,show_bj=False,callouts=False,xmode='h'):
+FLOOR_MARKER=(6,2,0)  # asterisk: NC*, stopped at the FP64 residual floor (records flag ``fp64_floor``)
+
+
+def floor_time(group,predicate,metric):
+    """Fastest time of a family's members that stopped at the FP64 residual floor (``floor_<metric>``:
+    time to their lowest residual), or None; this study's records never carry one."""
+    times=[v[f'floor_{metric}'] for v in group if predicate(v) and v.get('fp64_floor') and v.get(f'floor_{metric}')]
+    return min(times) if times else None
+
+
+def floor_curve(ax,x,groups,predicate,metric,color,marker):
+    """Hollow markers at the floor times of a family where it did not pass, dotted from its last
+    passing point."""
+    chosen=[best(g,predicate,metric) for g in groups]
+    points=[(xx,floor_time(g,predicate,metric)) for xx,r,g in zip(x,chosen,groups) if r is None]
+    points=[(xx,t) for xx,t in points if t]
+    if not points:return
+    before=[(xx,r[metric]) for xx,r in zip(x,chosen) if r and xx<points[0][0]]
+    ax.plot(*zip(*(before[-1:]+points)),color=color,linestyle=':',linewidth=1.1)
+    ax.plot(*zip(*points),color=color,marker=marker,linestyle='none',markerfacecolor='white',markersize=5,
+            markeredgewidth=1.1)
+
+
+def nc_mark(ax,xx,row,color,group,predicate,metric=None):
+    """Above the panel, one row per family (AMG 0, pMG--AMG 1, ASM+PP 2, BJ+PP 3): a cross for a family
+    that did not pass, an asterisk when one of its members stopped at the FP64 residual floor without
+    a recorded time (this study's records never carry that flag, so its crosses keep their heights).
+    Nothing when :func:`floor_curve` plots its floor time."""
+    if metric and floor_time(group,predicate,metric):return
+    floor=any(predicate(v) and v.get('fp64_floor') for v in group)
+    ax.plot(xx,1.04+.08*row if floor else (1.035,1.09,1.145,1.20)[row],marker=FLOOR_MARKER if floor else 'x',color=color,
+            transform=ax.get_xaxis_transform(),clip_on=False,linestyle='none',markersize=6)
+
+
+def plot_envelope(ax,groups,metric,show_bj=False,callouts=False,xmode='h',lu_curve=None,mark_local_nc=False):
+    """Family envelopes against the LU curve; ``lu_curve(ax, groups, metric, xmode)`` replaces this
+    study's confirmed-LU lookup when another study supplies its own LU rows. ``mark_local_nc`` also
+    crosses ASM+PP and BJ+PP where they did not pass (this study marks only AMG and pMG--AMG)."""
     x=[g[0]['p'] if xmode=='p' else g[0]['dofs'] for g in groups]
-    lu.curve(ax,[g[0] for g in groups],groups[0][0]['suite'],metric,'p' if xmode=='p' else 'dofs')
+    if lu_curve is None:lu.curve(ax,[g[0] for g in groups],groups[0][0]['suite'],metric,'p' if xmode=='p' else 'dofs')
+    else:lu_curve(ax,groups,metric,xmode)
     styles=[(ASM_LABEL,lambda r:family(r)=='ASM+PP','#0072B2','s','-')]
     if show_bj:styles.append((BJ_LABEL,lambda r:family(r)=='BJ+PP','#E69F00','^','--'))
     for label,pred,color,marker,line in styles:
         sel=[best(g,lambda r,p=pred:is_local(r) and p(r),metric) for g in groups]
         ax.plot(x,[r[metric] if r else np.nan for r in sel],color=color,marker=marker,linestyle=line,label=label,markeredgecolor='white',markeredgewidth=.5)
+        floor_curve(ax,x,groups,lambda r,p=pred:is_local(r) and p(r),metric,color,marker)
+    for i,(label,pred,color,marker,line) in enumerate(styles):
+        # Without mark_local_nc the polynomial families get a mark only for NC*, so this study's
+        # figures are unchanged.
+        local=lambda r,p=pred:is_local(r) and p(r)
+        for xx,r,g in zip(x,[best(g,local,metric) for g in groups],groups):
+            if r is None and any(local(v) and (mark_local_nc or v.get('fp64_floor')) for v in g):
+                nc_mark(ax,xx,2+i,color,g,local,metric)
     for i,(label,pred,color,marker,line) in enumerate(styles):
         selected=[best(g,lambda r,p=pred:is_local(r) and p(r),metric) for g in groups]
         passing=[r for r in selected if r]
@@ -250,14 +315,15 @@ def plot_envelope(ax,groups,metric,show_bj=False,callouts=False,xmode='h'):
                 ax.annotate(polynomial_label(r),(xx,r[metric]),xytext=(-3,-12),textcoords='offset points',ha='right',fontsize=6.2,color=color)
     chosen_native=[best(g,is_native,metric) for g in groups]
     ax.plot(x,[r[metric] if r else np.nan for r in chosen_native],color='#7F3C8D',marker='P',linestyle='-.',label=PMG)
+    floor_curve(ax,x,groups,is_native,metric,'#7F3C8D','P')
     for xx,r,g in zip(x,chosen_native,groups):
-        if r is None and any(is_native(v) for v in g):
-            ax.plot(xx,1.09,marker='x',color='#7F3C8D',transform=ax.get_xaxis_transform(),clip_on=False,linestyle='none',markersize=6)
+        if r is None and any(is_native(v) for v in g):nc_mark(ax,xx,1,'#7F3C8D',g,is_native,metric)
     chosen=[best(g,is_amg,metric) for g in groups]
     ax.plot(x,[r[metric] if r else np.nan for r in chosen],color='#D55E00',label='AMG')
+    floor_curve(ax,x,groups,is_amg,metric,'#D55E00','o')
     for xx,r,g in zip(x,chosen,groups):
         if r:ax.plot(xx,r[metric],marker='D' if outer(r)=='BiCGSTAB' else 'o',color='#D55E00',markeredgecolor='white',markeredgewidth=.5)
-        elif any(is_amg(v) for v in g):ax.plot(xx,1.035,marker='x',color='#D55E00',transform=ax.get_xaxis_transform(),clip_on=False,linestyle='none',markersize=6)
+        elif any(is_amg(v) for v in g):nc_mark(ax,xx,0,'#D55E00',g,is_amg,metric)
         if callouts:
             core=[v for v in g if (is_local(v) or is_amg(v) or is_native(v) or is_lu(v)) and v['status']=='passed' and v[metric] is not None];other=best(g,is_other,metric)
             if other and core and other[metric]<min(v[metric] for v in core):
@@ -277,18 +343,28 @@ def oscillatory_figure(records):
     handles.append(lu.handle())
     fig.legend(handles=handles,loc='lower center',ncol=3,frameon=False,bbox_to_anchor=(.52,-.01));fig.subplots_adjust(left=.105,right=.99,top=.88,bottom=.27,wspace=.11,hspace=.29);save_publication_figure(fig,FIGURES/'oscillatory_local_advantage');plt.close(fig)
 
-def focused_figure(records,sweep,stem):
-    cases=('Transport dominated','Variable velocity','High diffusion');fig,axs=plt.subplots(2,3,figsize=(7.1,4.15),sharey='row')
+def focused_figure(records,sweep,stem,*,cases=None,titles=None,suite='focused_scaling',systems_fn=None,lu_curve=None,
+                   level_labels=None,figures=None,degree_label=r'$p_{\mathrm{FE}}$ (8,192 triangles)',title_pad=7,hspace=.17,
+                   tick_rotation=0,mark_local_nc=False):
+    """Fresh and reused envelopes per case; the keyword arguments serve the H200 report, defaults this study.
+    ``title_pad`` and ``hspace`` make room for the not-converged markers above a panel; ``tick_rotation``
+    keeps level labels of close sizes apart; ``mark_local_nc`` as in :func:`plot_envelope`."""
+    cases=cases or ('Transport dominated','Variable velocity','High diffusion');titles=titles or cases;systems_fn=systems_fn or systems
+    fig,axs=plt.subplots(2,3,figsize=(7.1,4.15),sharey='row')
     for i,metric in enumerate(('fresh','hot')):
         for j,case in enumerate(cases):
-            g=systems(records,'focused_scaling',case,'square',sweep);plot_envelope(axs[i,j],g,metric,show_bj=True,callouts=True,xmode=sweep);axs[i,j].set_title(case if i==0 else '',pad=7)
-            if sweep=='h':axs[i,j].set_xticks([v[0]['dofs'] for v in g],['L1','L2','L3','L4']);axs[i,j].minorticks_off()
-            else:axs[i,j].set_xscale('linear');axs[i,j].set_xticks([1,2,3,4,6])
-            if i==1:axs[i,j].set_xlabel('Refinement level' if sweep=='h' else r'$p_{\mathrm{FE}}$ (8,192 triangles)')
+            g=systems_fn(records,suite,case,'square',sweep);plot_envelope(axs[i,j],g,metric,show_bj=True,callouts=True,xmode=sweep,lu_curve=lu_curve,mark_local_nc=mark_local_nc);axs[i,j].set_title(titles[j] if i==0 else '',pad=title_pad)
+            if sweep=='h':axs[i,j].set_xticks([v[0]['dofs'] for v in g],level_labels(g) if level_labels else ['L1','L2','L3','L4'],rotation=tick_rotation);axs[i,j].minorticks_off()
+            else:axs[i,j].set_xscale('linear');axs[i,j].set_xticks(sorted({v[0]['p'] for v in g}) if level_labels else [1,2,3,4,6])
+            if i==1:axs[i,j].set_xlabel('Refinement level' if sweep=='h' else degree_label)
         axs[i,0].set_ylabel('Fresh time (ms)' if metric=='fresh' else 'Reused time (ms)')
     handles=[Line2D([],[],color='#0072B2',marker='s',label=ASM_LABEL),Line2D([],[],color='#E69F00',marker='^',linestyle='--',label=BJ_LABEL),Line2D([],[],color='#D55E00',marker='o',label='AMG · FGMRES'),Line2D([],[],color='#D55E00',marker='D',label='AMG · BiCGSTAB'),Line2D([],[],color='#7F3C8D',marker='P',linestyle='-.',label=PMG),Line2D([],[],color='#555555',marker='*',linestyle='none',label='Additional fastest solver')]
     handles.append(lu.handle())
-    fig.legend(handles=handles,loc='lower center',ncol=3,frameon=False,bbox_to_anchor=(.52,-.01));fig.subplots_adjust(left=.10,right=.99,top=.93,bottom=.27,wspace=.11,hspace=.17);save_publication_figure(fig,FIGURES/stem);plt.close(fig)
+    if any(r.get('fp64_floor') for r in records):
+        handles+=[Line2D([],[],color='#555555',marker='x',linestyle='none',label='Above panel: NC'),
+                  Line2D([],[],color='#555555',marker='o',markerfacecolor='white',linestyle=':',
+                         label='NC*: time to FP64 residual floor')]
+    fig.legend(handles=handles,loc='lower center',ncol=3,frameon=False,bbox_to_anchor=(.52,-.01));fig.subplots_adjust(left=.10,right=.99,top=.93,bottom=.27,wspace=.11,hspace=hspace);save_publication_figure(fig,(figures or FIGURES)/stem);plt.close(fig)
 
 def fmt(v):return '--' if v is None else f'{v:.1f}'
 ROW=r'\\'
@@ -414,12 +490,17 @@ MAIN=r'''% Block-preconditioner synthesis with confirmed multithreaded PyPardiso
 \renewcommand{\bottomfraction}{0.88}
 \renewcommand{\textfraction}{0.05}
 \newcommand{\ADRResultsPath}{.}
-\newcommand{\ADRResultsFigurePath}{../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+% Figures: the repository's run_outputs tree, or figures/ beside this file in a copied bundle.
+\IfFileExists{figures/synthesis/focused_h_crossover.pdf}
+  {\newcommand{\ADRResultsFigurePath}{figures}}
+  {\newcommand{\ADRResultsFigurePath}{../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}}
 \newcommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
 \begin{document}
 \input{section_synthesis.tex}
 \clearpage
 \input{\ADRResultsPath/closed_loop_stress/section.tex}
+\clearpage
+\input{\ADRResultsPath/h200_tuned/section.tex}
 \end{document}
 '''
 

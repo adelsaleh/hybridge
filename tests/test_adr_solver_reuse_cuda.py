@@ -4,6 +4,8 @@ Bounded stationary solves on a 12-triangle mesh: the problem data change
 between solves (as in a time step) while the space, diffusion and AMGX config
 stay fixed. No time integration.
 """
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -104,3 +106,62 @@ def test_failed_stale_solve_retries_with_fresh_setup(cp, monkeypatch):
     state = next(iter(solver._raw_cache['amgx'].values()))
     assert state['since_refresh'] == 0
     solver.close()
+
+
+def test_amgx_retry_attempts_need_raw_cuda():
+    host_space = space()
+    with pytest.raises(ValueError, match='amgx_retry_attempts needs'):
+        solve_advection_diffusion_reaction_hdg(
+            1., (host_space*host_space).field((host_space.constant(1.), host_space.constant(0.))),
+            1., BOUNDARY, host_space, diffusion=DIFFUSION, assembly_backend='numba', solver='amgx',
+            hdg_postprocess='none', verbose=False, amgx_retry_attempts=({'residual_correction': True},))
+
+
+def correction_case(*, primary=1e-4, physical=1e-9, correction=1e-7, max_iters=None, count=1):
+    """L1-PBiCGStab stopped early enough that only a correction can meet the physical target."""
+    from hybridge.linalg.amgx.config import load_amgx_config
+    path = Path(__file__).parents[1]/'configs/amgx/adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json'
+    first, _ = load_amgx_config(path, tolerance=primary)
+    second, _ = load_amgx_config(path, tolerance=correction, maxiter=max_iters)
+    attempts = tuple({'label': f'correction-{k+1}', 'config': second, 'use_initial_guess': False,
+                      'use_best_solution': True, 'residual_correction': True} for k in range(count))
+    dg = DGSpace(rectangle_mesh(8, 8), 3, basis_type='dub_orth')
+    return dg, {**options(amgx_reuse='solver', amgx_config=first, amgx_retry_attempts=attempts),
+                'solver_rtol': physical}
+
+
+def test_bounded_correction_repairs_a_physical_miss(cp):
+    dg, selected = correction_case()
+    problem = next(problems(dg))
+    solver = AdvectionDiffusionReactionHDGSolver(dg, **selected)
+    try:
+        result = solver.set_problem(*problem).solve()
+        solve = result.global_solve_result
+        assert solve.converged and solve.status == 'converged'
+        assert solve.amgx_attempt_count == 2
+        first, second = solve.amgx_attempts
+        assert not first['success'] and first['failure_reason'] == 'residual-target-not-met'
+        assert first['physical_residual'] > first['physical_target']
+        assert second['success'] and second['residual_correction']
+        # The acceptance values are those of b-A(x+d) on the original system.
+        assert solve.physical_residual_norm == second['physical_residual'] <= solve.physical_residual_target
+        fresh =solve_advection_diffusion_reaction_hdg(*problem, dg, **options())
+        np.testing.assert_allclose(cp.asnumpy(result.local_unknowns), cp.asnumpy(fresh.local_unknowns),
+                                   rtol=1e-5, atol=1e-6)
+    finally:
+        solver.close()
+
+
+def test_exhausted_correction_raises_with_every_attempt_recorded(cp):
+    from hybridge import LinearSolveConvergenceError
+    dg, selected = correction_case(max_iters=1, count=2)
+    solver = AdvectionDiffusionReactionHDGSolver(dg, **selected)
+    try:
+        with pytest.raises(LinearSolveConvergenceError) as failure:
+            solver.set_problem(*next(problems(dg))).solve()
+        assert [entry['label'] for entry in failure.value.amgx_attempts] == [
+            'primary-zero', 'correction-1', 'correction-2']
+        assert not any(entry['success'] for entry in failure.value.amgx_attempts)
+        assert not failure.value.result.converged
+    finally:
+        solver.close()

@@ -5,13 +5,16 @@ q = -diffusion grad(u), prescribed Dirichlet trace on the whole boundary
 Numerical normal flux: q.n + beta.n*uhat + tau*(u-uhat),
     tau = stabilization + max(beta.n, 0) at face quadrature points
 
-CPU quadrature supports constant or callable velocity components. CUDA mode
-accelerates local inversion, condensation and global block assembly; coefficient
-integration, boundary elimination and reconstruction remain on the CPU.
+CPU quadrature supports constant or callable velocity components. The CuPy
+backend has two routes (``cupy_route``): 'host' integrates coefficients, builds
+local matrices, face topology and Dirichlet elimination on the CPU and only
+inverts, condenses and assembles global blocks on the GPU; 'device'
+(hdgfem.backends.cupy_adr_assembly) does all mesh-sized assembly work on the
+GPU. Reconstruction remains on the CPU.
 The opt-in Numba CPU backend parallelizes sampled tensor mass/advection
 integration, local inverses and condensation without projecting coefficients.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from time import perf_counter
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -34,6 +37,7 @@ class ADRAssembly:
     source_rhs: np.ndarray
     local_matrix: np.ndarray
     timings: dict
+    info: dict = dataclass_field(default_factory=dict)
 
 
 @dataclass
@@ -125,10 +129,46 @@ def prepare_adr_local_matrices(source, beta, reaction, space, *, diffusion=1., s
     return a, b, c, d, rhs
 
 
+CUPY_ROUTES = ('device', 'host')
+
+
+def resolve_cupy_route(route=None):
+    """Return the CuPy assembly route: explicit argument, HDGFEM_CUPY_ADR_ROUTE, or 'device'."""
+    import os
+    route = route if route is not None else os.environ.get('HDGFEM_CUPY_ADR_ROUTE', 'device')
+    if route not in CUPY_ROUTES:
+        raise ValueError(f"cupy_route must be one of {CUPY_ROUTES}; got {route!r}")
+    return route
+
+
 def assemble_advection_diffusion_reaction(source, beta, reaction, boundary_condition, space,
-                                         *, diffusion=1., stabilization=1., backend='numpy'):
+                                         *, diffusion=1., stabilization=1., backend='numpy',
+                                         cupy_route=None, element_chunk=None,
+                                         return_local_matrix=None):
+    """Assemble the statically condensed ADR trace system.
+
+    ``backend='cupy'`` has two routes. ``cupy_route='host'`` builds every local
+    matrix with NumPy, copies it to the GPU for inversion, condensation and
+    global block assembly, and builds face topology on the host. ``'device'``
+    samples coefficients and builds local matrices, face topology, global
+    blocks, Dirichlet data and elimination on the GPU, in element chunks
+    (``element_chunk`` elements, default from free device memory). Both return
+    host arrays. The device route returns ``local_matrix=None`` unless
+    ``return_local_matrix=True``, because copying it back costs as much as the
+    local inverse; the other routes always return it.
+    """
     if backend not in ('numpy', 'cupy', 'numba'):
         raise ValueError("backend must be 'numpy', 'cupy' or 'numba'")
+    if backend == 'cupy' and resolve_cupy_route(cupy_route) == 'device':
+        from ..backends.cupy_adr_assembly import assemble_adr_device
+        start = perf_counter()
+        timings = {}
+        out = assemble_adr_device(source, beta, reaction, boundary_condition, space,
+            diffusion=diffusion, stabilization=stabilization, element_chunk=element_chunk,
+            return_local_matrix=bool(return_local_matrix), timings=timings)
+        timings['assembly_total'] = perf_counter()-start
+        return ADRAssembly(out['system'], out['element_blocks'], out['local_solver'], out['boundary'],
+                           out['source_rhs'], out['local_matrix'], timings, out['info'])
     if backend == 'numba':
         from ..kernels.common import NUMBA_AVAILABLE
         if not NUMBA_AVAILABLE:
@@ -139,7 +179,9 @@ def assemble_advection_diffusion_reaction(source, beta, reaction, boundary_condi
     a,b,c,d,rhs = prepare_adr_local_matrices(source,beta,reaction,space,
         diffusion=diffusion,stabilization=stabilization,
         backend='numba' if backend == 'numba' else 'numpy', timings=timings)
+    t = perf_counter()
     topology = build_face_topology(space.mesh.loc2glob_edge)
+    timings['host_topology'] = perf_counter()-t
     timings['host_preparation'] = perf_counter()-start
     xp = np
     if backend == 'cupy':
@@ -175,6 +217,7 @@ def assemble_advection_diffusion_reaction(source, beta, reaction, boundary_condi
         from ..backends.cupy_assembly import CuPyGlobalFaceAssembler
         assembler = CuPyGlobalFaceAssembler.from_topology(space.mesh.loc2glob_edge,topology,
             block_size=f, active_row_faces=space.mesh.interior_face_mask)
+        sync(); timings['host_contribution_layout'] = perf_counter()-t
         global_blocks = assembler.assemble(blocks)
     else:
         global_blocks = assemble_global_face_blocks(blocks,space.mesh.loc2glob_edge,topology,
@@ -188,12 +231,17 @@ def assemble_advection_diffusion_reaction(source, beta, reaction, boundary_condi
     interior_rhs = np.zeros((space.mesh.num_edg,f))
     ie, jf = space.mesh.interior_elements, space.mesh.interior_faces
     np.add.at(interior_rhs,space.mesh.loc2glob_edge[ie,jf],local_rhs[ie,jf])
+    timings['host_interior_rhs'] = perf_counter()-t
+    t1 = perf_counter()
     bc = hdg.boundary_trace_coefficients(boundary_condition,space)
+    timings['host_boundary_trace'] = perf_counter()-t1
+    t1 = perf_counter()
     system = eliminate_dirichlet_faces(global_blocks,topology,interior_rhs,bc,
                                         space.mesh.int_edges_inds)
+    timings['host_dirichlet_elimination'] = perf_counter()-t1
     timings['rhs_and_boundary'] = perf_counter()-t
     timings['assembly_total'] = perf_counter()-start
-    return ADRAssembly(system,blocks,inv,b,rhs,a,timings)
+    return ADRAssembly(system,blocks,inv,b,rhs,a,timings,dict(route='host' if backend == 'cupy' else backend))
 
 
 def _csr(system):

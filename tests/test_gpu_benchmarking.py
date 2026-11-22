@@ -14,6 +14,25 @@ from scripts.gpu import benchmark_poisson_assembly as benchmark
 from scripts.reports.run_provenance import changed_snapshot_files, source_snapshot
 
 
+@pytest.mark.parametrize("step,job,expected", [("2", "1,2", "2"), ("", "1", "1"), ("", "", None)])
+def test_slurm_reservation_probes_only_allocated_gpus(monkeypatch, step, job, expected):
+    monkeypatch.setenv("SLURM_JOB_ID", "123")
+    monkeypatch.setenv("SLURM_STEP_GPUS", step)
+    monkeypatch.setenv("SLURM_JOB_GPUS", job)
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="")
+
+    monkeypatch.setattr(benchmarking.subprocess, "run", run)
+    assert benchmarking.gpu_compute_processes() == []
+    if expected:
+        assert calls[0][-2:] == ["--id", expected]
+    else:
+        assert "--id" not in calls[0]
+
+
 def test_reservation_waits_for_compute_jobs_and_releases_after_error(tmp_path, monkeypatch):
     probes = iter([["123, python"], []])
     monkeypatch.setattr(benchmarking, "gpu_compute_processes", lambda: next(probes))
@@ -67,6 +86,22 @@ def test_failed_device_probe_does_not_start_benchmark(tmp_path, monkeypatch):
             pytest.fail("failed probe was treated as idle")
     with lock_path.open("a") as other:
         fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_slurm_probe_uses_visible_uuid_when_physical_index_is_unavailable(monkeypatch):
+    monkeypatch.setenv('SLURM_JOB_ID', '123')
+    monkeypatch.setenv('SLURM_STEP_GPUS', '4')
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command[:])
+        if command[-1] == '4':
+            raise subprocess.CalledProcessError(6, command)
+        if '--query-gpu=uuid' in command:
+            return subprocess.CompletedProcess(command, 0, stdout='GPU-visible\n')
+        return subprocess.CompletedProcess(command, 0, stdout='')
+    monkeypatch.setattr(benchmarking.subprocess, 'run', run)
+    assert benchmarking.gpu_compute_processes() == []
+    assert calls[-1][-2:] == ['--id', 'GPU-visible']
 
 
 def test_measure_releases_previous_results_and_excludes_warmups():

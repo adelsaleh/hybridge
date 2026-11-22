@@ -1,0 +1,362 @@
+{
+  "bicgstab_unpreconditioned_reference": {
+    "block_size": 1,
+    "host_scaling": "none",
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "BICGSTAB",
+        "max_iters": 1000,
+        "tolerance": 1e-08,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER"
+      }
+    },
+    "reference_job": 26696,
+    "reference_relative_residual": 0.03225993887220962,
+    "note": "Historical BICGSTAB configurations ignored their preconditioner. This explicit NOSOLVER reproduces that unpreconditioned operation."
+  },
+  "bicgstab_unpreconditioned_absolute": {
+    "block_size": 1,
+    "host_scaling": "none",
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "BICGSTAB",
+        "max_iters": 10000,
+        "tolerance": 0.010463057375140307,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 100
+      }
+    },
+    "note": "Controlled zero/warm-start comparison. ABSOLUTE tolerance is a residual norm, so pass inner-rtol=rtol*norm(original RHS); no host left scaling."
+  },
+  "gmres_natural_ilu0_csr_r6000_absolute": {
+    "block_size": 1,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "GMRES",
+        "max_iters": 6000,
+        "tolerance": 0.010463057375140307,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "MIN_MAX",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0,
+          "block_ilu_backend": "cusparse_legacy",
+          "verbosity_level": 3
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 6000,
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1,
+        "scope": "matk_outer",
+        "verbosity_level": 3,
+        "print_solve_stats_interval": 100
+      }
+    },
+    "probe_only": true,
+    "host_scaling": "column-max",
+    "right_scale_multiplier": 1.0,
+    "note": "Native GMRES with natural-order ILU0, same physical absolute tolerance for zero/warm starts; CLI inner-rtol is an absolute residual norm."
+  },
+  "bicgstab_long_column_max_csr": {
+    "block_size": 1,
+    "host_scaling": "column-max",
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "BICGSTAB",
+        "max_iters": 100000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 1000
+      }
+    },
+    "note": "Native unpreconditioned scalar BiCGSTAB on a diagonally equilibrated equivalent system. Compare against the unscaled100000-step reference; always accept using original-system residual. Inner-rtol is a relative native tolerance for this candidate.",
+    "right_scale_multiplier": 1.0
+  },
+  "bicgstab_long_ruiz_csr": {
+    "block_size": 1,
+    "host_scaling": "ruiz",
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "BICGSTAB",
+        "max_iters": 100000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 1000
+      }
+    },
+    "note": "Native unpreconditioned scalar BiCGSTAB on a diagonally equilibrated equivalent system. Compare against the unscaled100000-step reference; always accept using original-system residual. Inner-rtol is a relative native tolerance for this candidate.",
+    "right_scale_multiplier": 1.0
+  },
+  "gmres_legacy_ilu0_csr_ordering": {
+    "block_size": 1,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "GMRES",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "MIN_MAX",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0,
+          "block_ilu_backend": "cusparse_legacy",
+          "verbosity_level": 3
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 1000,
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1,
+        "scope": "matk_outer",
+        "verbosity_level": 3,
+        "print_solve_stats_interval": 25
+      }
+    },
+    "probe_only": true,
+    "host_scaling": "column-max",
+    "right_scale_multiplier": 1.0,
+    "note": "Controlled natural versus exported PARDISO ordering comparison: scalar CSR, native legacy ILU0, column-max scaling, no factorization or direct-solver seed from PARDISO."
+  },
+  "pbicgstab_legacy_ilu0_csr_ordering": {
+    "block_size": 1,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "PBICGSTAB",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "MIN_MAX",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0,
+          "block_ilu_backend": "cusparse_legacy",
+          "verbosity_level": 3
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "scope": "matk_outer",
+        "verbosity_level": 3,
+        "print_solve_stats_interval": 25
+      }
+    },
+    "probe_only": true,
+    "host_scaling": "column-max",
+    "right_scale_multiplier": 1.0,
+    "note": "Controlled natural versus exported PARDISO ordering comparison: scalar CSR, native legacy ILU0, column-max scaling, no factorization or direct-solver seed from PARDISO."
+  },
+  "bicgstab_unpreconditioned_csr": {
+    "block_size": 1,
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "BICGSTAB",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 25,
+        "scaling": "NONE",
+        "bsr_spmv_backend": "cusparse_generic"
+      }
+    },
+    "note": "PARDISO-ordering baseline: native scalar solver with NOSOLVER, zero initial guess in launch commands; CLI selects none/column-max/Ruiz scaling, and physical acceptance always checks original A,b.",
+    "right_scale_multiplier": 1.0
+  },
+  "gmres_unpreconditioned_csr": {
+    "block_size": 1,
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "GMRES",
+        "max_iters": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 25,
+        "scaling": "NONE",
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 1000,
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1
+      }
+    },
+    "note": "PARDISO-ordering baseline: native scalar solver with NOSOLVER, zero initial guess in launch commands; CLI selects none/column-max/Ruiz scaling, and physical acceptance always checks original A,b.",
+    "right_scale_multiplier": 1.0
+  },
+  "gmres_unpreconditioned_csr_r3000": {
+    "block_size": 1,
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "GMRES",
+        "max_iters": 3000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 100,
+        "scaling": "NONE",
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 3000,
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1
+      }
+    },
+    "note": "PARDISO-ordering unpreconditioned GMRES with wider unrestarted space; zero start, selected host scaling, and original1e-8 residual acceptance. Restart6000 has prior scalar full-matrix memory qualification.",
+    "right_scale_multiplier": 1.0
+  },
+  "gmres_unpreconditioned_csr_r6000": {
+    "block_size": 1,
+    "probe_only": true,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "scope": "matk_outer",
+        "solver": "GMRES",
+        "max_iters": 6000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "preconditioner": "NOSOLVER",
+        "print_solve_stats_interval": 100,
+        "scaling": "NONE",
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 6000,
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1
+      }
+    },
+    "note": "PARDISO-ordering unpreconditioned GMRES with wider unrestarted space; zero start, selected host scaling, and original1e-8 residual acceptance. Restart6000 has prior scalar full-matrix memory qualification.",
+    "right_scale_multiplier": 1.0
+  }
+}

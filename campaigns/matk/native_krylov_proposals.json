@@ -1,0 +1,154 @@
+{
+  "fgmres_native_ilu0_bfs_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 6000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "block_ilu_backend": "amgx",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "SERIAL_GREEDY_BFS",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0,
+          "print_coloring_info": 1
+        },
+        "gmres_n_restart": 1000
+      }
+    }
+  },
+  "fgmres_native_ilu0_ido_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 6000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "block_ilu_backend": "amgx",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "SERIAL_GREEDY_BFS",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0,
+          "print_coloring_info": 1,
+          "coloring_custom_arg": "IDO"
+        },
+        "gmres_n_restart": 1000
+      }
+    }
+  },
+  "pbicgstab_native_ilu0_bfs_b4": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "PBICGSTAB",
+        "max_iters": 6000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "block_ilu_backend": "amgx",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "SERIAL_GREEDY_BFS",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0,
+          "print_coloring_info": 1
+        }
+      }
+    }
+  },
+  "fgmres_native_ilu0_minmax_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 6000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "block_ilu_backend": "amgx",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "MIN_MAX",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0,
+          "print_coloring_info": 1
+        },
+        "gmres_n_restart": 1000
+      }
+    }
+  }
+}

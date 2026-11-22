@@ -115,8 +115,11 @@ def prepare_mesh(parameters, target, directory, *, neck_elements=8, boundary_poi
         return path, record
     from hybridge.core.mesh import gmsh_smooth_star_mesh_with_background_sizes, gmsh_rectangle_mesh
     search_target = min(target, 0.99*max_triangles)
-    minimum_size = 0.0 if square else parameters.neck_width/neck_elements
-    bulk_size = max(1.01*minimum_size, np.sqrt((9.24 if square else 9)/search_target))
+    # The bulk size is not floored at the neck size (neck_width/neck_elements): the background
+    # sizes are min(bulk, gap/neck_elements), so a finer bulk only resolves the neck with more
+    # than neck_elements. The former floor saturated the search at about 1.75M triangles
+    # (neck_width 0.02, 12 elements), which the L7+ stress meshes exceed.
+    bulk_size = float(np.sqrt((9.24 if square else 9)/search_target))
     trialpath = directory/"trials.json"
     trials = json.loads(trialpath.read_text()) if trialpath.exists() else []
     fine, coarse = None, None
@@ -136,10 +139,11 @@ def prepare_mesh(parameters, target, directory, *, neck_elements=8, boundary_poi
             fine = record["bulk_size"]
         else:
             coarse = record["bulk_size"]
-        bulk_size = ((fine+coarse)/2 if fine and coarse else
-                     record["bulk_size"]*np.sqrt(record["triangles"]/search_target))
-    bulk_size = max(minimum_size, float(bulk_size))
-    for attempt in range(len(trials), max_attempts):
+        bulk_size = float((fine+coarse)/2 if fine and coarse else
+                          record["bulk_size"]*np.sqrt(record["triangles"]/search_target))
+    # Retained trials seed the bracket but do not consume this run's attempt budget; otherwise a
+    # retry after max_attempts failures raised before searching at all.
+    for attempt in range(len(trials), len(trials)+max_attempts):
         if square:
             mesh = gmsh_rectangle_mesh(bulk_size, xlim=(-1, 1), ylim=(-1, 1),
                                        cache=False, log_cache=False, num_threads=1, verbosity=0)
@@ -180,7 +184,6 @@ def prepare_mesh(parameters, target, directory, *, neck_elements=8, boundary_poi
             fine = bulk_size
         else:
             coarse = bulk_size
-        next_size = (fine+coarse)/2 if fine and coarse else bulk_size*np.sqrt(mesh.num_tri/search_target)
-        bulk_size = max(minimum_size, float(next_size))
+        bulk_size = float((fine+coarse)/2 if fine and coarse else bulk_size*np.sqrt(mesh.num_tri/search_target))
     raise RuntimeError(f"Could not match {target} triangles within {count_rtol:.1%}; "
                        "Trials are retained; annular neck refinement, if applicable, was preserved.")

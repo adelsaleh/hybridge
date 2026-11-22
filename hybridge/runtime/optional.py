@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from typing import Any
+
+# CuPy's own modules trigger this on import. Nothing here can act on it, and it splits log lines.
+warnings.filterwarnings("ignore", message=r"cupyx\.jit\.rawkernel is experimental", category=FutureWarning)
 
 try:  # pragma: no cover - depends on optional runtime dependency.
     import cupyx.scipy.sparse as cupyx_sparse

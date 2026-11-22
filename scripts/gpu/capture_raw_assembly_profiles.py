@@ -51,9 +51,9 @@ def main():
     parser.add_argument("--formats", nargs="+", choices=("coo", "csr", "bsr"), default=["coo", "csr", "bsr"])
     parser.add_argument("--cache-policies", nargs="+", choices=("none", "schur-lu", "schur-cholesky"), default=["none", "schur-lu", "schur-cholesky"])
     args = parser.parse_args()
-    max_order = 6 if "adr" in args.cases else 9
+    max_order = 9
     if any(order < 1 or order > max_order for order in args.orders) or any(nx < 1 for nx in args.sizes) or args.repeats < 1:
-        parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1; ADR is limited to p<=6")
+        parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1")
     args.output.mkdir(parents=True, exist_ok=True)
     source_paths = [BENCHMARK, Path(__file__), ROOT / "hybridge/mixed/raw_cuda/identity.py",
                     ROOT / "hybridge/mixed/raw_cuda/poisson.py", ROOT / "hybridge/mixed/raw_cuda/poisson_source.py",

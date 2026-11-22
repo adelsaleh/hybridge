@@ -22,6 +22,11 @@ from hybridge.linalg.additive_schwarz import (
 )
 from hybridge.linalg.block_jacobi import build_face_block_jacobi_preconditioner
 from hybridge.linalg.gpu.cublas_batched import invert_batched_cublas
+from hybridge.linalg.gpu.face_dense import (
+    GroupedGatherGemv,
+    InterleavedGatherGemv,
+    face_dense_threads_per_block,
+)
 from hybridge.runtime.optional import device_arrays_overlap, require_cupy_device
 
 
@@ -91,6 +96,26 @@ def _build_raw_batched_mv_kernel(cp: Any, dtype: Any) -> Any:
     )
 
 
+# ASM applications that apply the local inverses straight from the global vector and prolong
+# without atomics: "fused" (a thread per local row) and "coalesced" (a lane group per element),
+# "interleaved" (a thread per local row on an interleaved copy of the inverses, bitwise equal to
+# "fused") and "interleaved_f32" (the same with single-precision inverses, double accumulation).
+_FUSED_APPLICATIONS = frozenset({"fused", "coalesced", "interleaved", "interleaved_f32"})
+_INTERLEAVED_APPLICATIONS = frozenset({"interleaved", "interleaved_f32"})
+
+
+def _interleaved_application(cp: Any, dtype: Any, application: str, matrices: Any, *, rows: int,
+                             slots: int, block: int, identity: bool) -> tuple[Any, Any]:
+    """Return ``(kernel, interleaved matrices)`` for an interleaved application, else ``(None, None)``."""
+    if application not in _INTERLEAVED_APPLICATIONS:
+        return None, None
+    kernel = InterleavedGatherGemv(
+        cp, dtype, rows=rows, slots=slots, block=block, identity=identity, skip_absent=False,
+        matrix_dtype=np.float32 if application == "interleaved_f32" else None,
+    )
+    return kernel, kernel.interleave(cp, matrices)
+
+
 def _launch_raw_batched_mv(
     kernel: Any,
     matrices: Any,
@@ -98,10 +123,11 @@ def _launch_raw_batched_mv(
     output: Any,
     *,
     matrix_size: int,
+    threads: int | None = None,
 ) -> None:
     """Launch the corresponding preallocated CUDA kernel."""
     total_rows = int(matrices.shape[0]) * int(matrix_size)
-    threads = 256
+    threads = face_dense_threads_per_block(threads)
     blocks = (total_rows + threads - 1) // threads
     kernel(
         (blocks,),
@@ -196,7 +222,7 @@ class CuPyFaceBlockJacobiPreconditioner:
     inverse_residuals: Any | None = None
     factorization_info: np.ndarray | None = None
     inversion_info: np.ndarray | None = None
-    application: str = "matmul"
+    application: str = "auto"
 
     def __post_init__(self) -> None:
         """Validate and normalize the initialized data."""
@@ -211,10 +237,15 @@ class CuPyFaceBlockJacobiPreconditioner:
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported block-Jacobi local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
-        if self.application not in {"matmul", "raw"}:
+        self.application_requested = self.application
+        self.tuning_report = None
+        self._tuned_threads = None
+        if self.application == "auto" and not use_inverse:
+            self.application = "matmul"
+        if self.application not in {"auto", "matmul", "raw", "coalesced"} | _INTERLEAVED_APPLICATIONS:
             raise ValueError(f"unsupported block-Jacobi application: {self.application}")
         if not use_inverse and self.application != "matmul":
-            raise ValueError("raw application requires precomputed inverse blocks")
+            raise ValueError("raw, coalesced and interleaved applications require precomputed inverse blocks")
         matrices = self.inverse_blocks if use_inverse else self.local_blocks
         if not isinstance(matrices, cp.ndarray):
             name = "inverse_blocks" if use_inverse else "local_blocks"
@@ -231,6 +262,18 @@ class CuPyFaceBlockJacobiPreconditioner:
             raise ValueError("face blocks are on the wrong CUDA device")
         self._cp = cp
         self._batch_matrices = matrices
+        if self.application == "auto":
+            from hybridge.linalg.gpu.solver_tuning import module_source_fingerprint, select_gather_gemv
+
+            def run_baseline(kernel, values, index, x, out, groups, threads):
+                """Apply the existing inverse blocks with unchanged row sums."""
+                _launch_raw_batched_mv(kernel, values, x, out,
+                                       matrix_size=self.block_size, threads=threads)
+            self.application, self._tuned_threads, self.tuning_report = select_gather_gemv(
+                cp, matrices, None, operation="face-block-jacobi-apply", block=self.block_size,
+                baseline="raw", baseline_source=module_source_fingerprint(__file__),
+                compile_baseline=lambda: _build_raw_batched_mv_kernel(cp, self.dtype),
+                run_baseline=run_baseline, identity=True, skip_absent=False)
         self._output = cp.empty((self.num_faces, self.block_size), dtype=self.dtype)
         self._matmul_output = (
             cp.empty((self.num_faces, self.block_size, 1), dtype=self.dtype)
@@ -242,6 +285,15 @@ class CuPyFaceBlockJacobiPreconditioner:
             if use_inverse and self.application == "raw"
             else None
         )
+        self._coalesced_apply = (
+            GroupedGatherGemv(cp, self.dtype, rows=self.block_size, slots=1, block=self.block_size, identity=True)
+            if use_inverse and self.application == "coalesced"
+            else None
+        )
+        self._interleaved_apply, self._interleaved_inverse = _interleaved_application(
+            cp, self.dtype, self.application if use_inverse else "", matrices,
+            rows=self.block_size, slots=1, block=self.block_size, identity=True,
+        )
 
     @classmethod
     def from_system(
@@ -251,7 +303,7 @@ class CuPyFaceBlockJacobiPreconditioner:
         device_id: int | None = None,
         dtype: np.dtype | type | None = None,
         local_solver: str = "cpu_inverse",
-        application: str = "matmul",
+        application: str = "auto",
         inverse_residual_tolerance: float | None = None,
     ) -> "CuPyFaceBlockJacobiPreconditioner":
         """Construct the object from the supplied operator or system."""
@@ -419,7 +471,17 @@ class CuPyFaceBlockJacobiPreconditioner:
                 x_faces,
                 out_faces,
                 matrix_size=self.block_size,
+                threads=self._tuned_threads,
             )
+            return
+        if self.application == "coalesced":
+            assert self._coalesced_apply is not None
+            self._coalesced_apply(self.inverse_blocks, None, x_faces, out_faces,
+                                  num_groups=self.num_faces, threads=self._tuned_threads)
+            return
+        if self._interleaved_apply is not None:
+            self._interleaved_apply(self._interleaved_inverse, None, x_faces, out_faces,
+                                    num_groups=self.num_faces, threads=self._tuned_threads)
             return
 
         cp.matmul(
@@ -961,7 +1023,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
     inverse_residuals: Any | None = None
     factorization_info: np.ndarray | None = None
     inversion_info: np.ndarray | None = None
-    application: str = "matmul"
+    application: str = "auto"
     face_element_slots: Any | None = None
 
     def __post_init__(self) -> None:
@@ -977,11 +1039,16 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported ASM local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
-        if self.application not in {"matmul", "raw", "fused"}:
+        self.application_requested = self.application
+        self.tuning_report = None
+        self._tuned_threads = None
+        if self.application == "auto" and not use_inverse:
+            self.application = "matmul"
+        if self.application not in {"auto", "matmul", "raw"} | _FUSED_APPLICATIONS:
             raise ValueError(f"unsupported ASM application: {self.application}")
         if not use_inverse and self.application != "matmul":
             raise ValueError(
-                "raw and fused applications require precomputed inverse matrices"
+                "raw, fused, coalesced and interleaved applications require precomputed inverse matrices"
             )
         matrices = self.inverse_matrices if use_inverse else self.local_matrices
         matrix_name = "inverse_matrices" if use_inverse else "local_matrices"
@@ -1031,7 +1098,25 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if maximum_face >= self.num_system_faces:
             raise ValueError("element_system_faces contains an out-of-range row id")
 
-        if self.application == "fused":
+        if self.application == "auto":
+            from hybridge.linalg.gpu.solver_tuning import module_source_fingerprint, select_gather_gemv
+
+            suffix = "f32" if self.dtype == cp.float32 else "f64"
+            def compile_baseline():
+                """Compile the existing fused ASM local application reference."""
+                return cp.RawKernel(_FUSED_ASM_KERNEL_SOURCE, f"fused_asm_local_{suffix}")
+            def run_baseline(kernel, values, index, x, out, groups, threads):
+                """Apply the existing local inverses on isolated element data."""
+                total = groups * self.local_size
+                kernel(((total + threads - 1) // threads,), (threads,),
+                       (np.uint64(total), np.int32(self.num_local_faces), np.int32(self.block_size),
+                        np.int32(self.local_size), index, values, x, out))
+            self.application, self._tuned_threads, self.tuning_report = select_gather_gemv(
+                cp, matrices, self.element_system_faces, operation="face-asm-local-apply",
+                block=self.block_size, baseline="fused", baseline_source=module_source_fingerprint(__file__),
+                compile_baseline=compile_baseline, run_baseline=run_baseline, skip_absent=False)
+
+        if self.application in _FUSED_APPLICATIONS:
             if self.face_element_slots is None:
                 host_slots = build_face_additive_schwarz_incidence_slots(
                     cp.asnumpy(self.element_system_faces),
@@ -1053,7 +1138,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
 
         self._element_rhs = (
             None
-            if self.application == "fused"
+            if self.application in _FUSED_APPLICATIONS
             else cp.empty((self.num_elements, self.local_size), dtype=self.dtype)
         )
         self._local_output = cp.empty((self.num_elements, self.local_size), dtype=self.dtype)
@@ -1077,15 +1162,25 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             if use_inverse and self.application == "fused"
             else None
         )
+        self._coalesced_local = (
+            GroupedGatherGemv(cp, self.dtype, rows=self.local_size, slots=self.num_local_faces,
+                              block=self.block_size)
+            if use_inverse and self.application == "coalesced"
+            else None
+        )
+        self._interleaved_local, self._interleaved_inverses = _interleaved_application(
+            cp, self.dtype, self.application if use_inverse else "", self.inverse_matrices,
+            rows=self.local_size, slots=self.num_local_faces, block=self.block_size, identity=False,
+        )
         self._race_free_prolong_kernel = (
             cp.RawKernel(
                 _FUSED_ASM_KERNEL_SOURCE,
                 f"race_free_asm_prolong_{suffix}",
             )
-            if self.application == "fused"
+            if self.application in _FUSED_APPLICATIONS
             else None
         )
-        self._threads_per_block = 256
+        self._threads_per_block = self._tuned_threads or face_dense_threads_per_block()
         self._kernel_blocks = (
             self.num_local_dofs + self._threads_per_block - 1
         ) // self._threads_per_block
@@ -1103,7 +1198,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         dtype: np.dtype | type | None = None,
         device_id: int | None = None,
         local_solver: str = "cpu_inverse",
-        application: str = "matmul",
+        application: str = "auto",
         inverse_residual_tolerance: float | None = None,
     ) -> "CuPyFaceAdditiveSchwarzPreconditioner":
         """Construct the object from the supplied operator or system."""
@@ -1132,7 +1227,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     layout.element_system_faces,
                     layout.num_system_faces,
                 )
-                if application == "fused"
+                if application in _FUSED_APPLICATIONS
                 else None
             )
             with cp.cuda.Device(selected_device):
@@ -1161,7 +1256,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 layout.element_system_faces,
                 layout.num_system_faces,
             )
-            if application == "fused"
+            if application in _FUSED_APPLICATIONS
             else None
         )
         with cp.cuda.Device(selected_device):
@@ -1296,7 +1391,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
     @property
     def uses_race_free_prolongation(self) -> bool:
         """Return whether prolongation avoids atomic updates."""
-        return self.application == "fused"
+        return self.application in _FUSED_APPLICATIONS
 
     @property
     def maximum_inverse_residual(self) -> float | None:
@@ -1380,6 +1475,14 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
 
     def _launch_fused_local(self, x_flat: Any, local_flat: Any) -> None:
         """Launch the corresponding preallocated CUDA kernel."""
+        if self._coalesced_local is not None:
+            self._coalesced_local(self.inverse_matrices, self.element_system_faces, x_flat, local_flat,
+                                  num_groups=self.num_elements, threads=self._tuned_threads)
+            return
+        if self._interleaved_local is not None:
+            self._interleaved_local(self._interleaved_inverses, self.element_system_faces, x_flat,
+                                    local_flat, num_groups=self.num_elements, threads=self._tuned_threads)
+            return
         if self._fused_local_kernel is None:
             raise RuntimeError("fused ASM local kernel is unavailable")
         self._fused_local_kernel(
@@ -1417,8 +1520,8 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
 
     def fused_local_into(self, x: Any, out: Any) -> None:
         """Execute the ``fused_local_into`` numerical helper."""
-        if self.application != "fused":
-            raise RuntimeError("fused_local_into requires application='fused'")
+        if self.application not in _FUSED_APPLICATIONS:
+            raise RuntimeError("fused_local_into requires a fused, coalesced or interleaved application")
         x_flat = self._validate_global_vector(x, name="x")
         out_flat = self._validate_element_vector(out, name="out")
         if device_arrays_overlap(x, out):
@@ -1449,7 +1552,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         out_flat = self._validate_global_vector(out, name="out")
         if device_arrays_overlap(element_vector, out):
             raise ValueError("element_vector and out must not alias")
-        if self.application == "fused":
+        if self.application in _FUSED_APPLICATIONS:
             self._launch_race_free_prolong(element_flat, out_flat)
         else:
             out_flat.fill(0)
@@ -1473,7 +1576,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
-        if self.application == "fused":
+        if self.application in _FUSED_APPLICATIONS:
             self._launch_fused_local(x_flat, self._local_output.reshape(-1))
             self._launch_race_free_prolong(
                 self._local_output.reshape(-1),

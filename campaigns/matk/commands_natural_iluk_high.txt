@@ -1,0 +1,64 @@
+Higher AMGX ILU levels: 5, 10, 20
+================================
+From scripts/matk:
+
+CONVERGED configuration (job28473, original relative residual1.65395e-11):
+  sbatch amgx_natural_iluk.sbatch 10 none 1000 1e-14
+Arguments: fill level, scaling, restart, native tolerance, optional solver.
+Actual AMGX config: converged_pardiso_ilu10_fgmres.json
+Provenance: converged_pardiso_ilu10_fgmres.provenance.json
+Saved original-coordinate solution: saved_iterates/pardiso_ilu10_fgmres_28473.solution.npz
+The launch command starts from zero and does not read that saved solution.
+
+These are level-of-fill ILU(k), with no magnitude-based dropping or pivoting.
+They are NOT scipy.sparse.linalg.spilu(fill_factor=10, drop_tol=1e-8).
+The benchmark's --rtol 1e-8 is the original-system residual acceptance target,
+not a factorization drop tolerance. The existing isolated library supports all
+these levels; this follow-up changes configs/tests, not compiled AMGX code.
+
+Before every submission check all repositories' running AND pending GPU jobs:
+  squeue -u "$USER" -o '%.18i %.12P %.28j %.10T %.20b %.20R'
+The shared maximum is FIVE GPUs. Every job below reserves one H200.
+
+First qualify high fill against a dense block reference, including entries at
+levels 5/10/20, FP64/FP32, supplied/permuted order, coefficient resetup, zero and
+nonzero guesses, and exact preservation of the original operator:
+  sbatch natural_iluk_high_qualification.sbatch
+
+After that job passes and all five slots are available:
+  sbatch amgx_natural_iluk.sbatch 5 none
+  sbatch amgx_natural_iluk.sbatch 5 diagonal
+  sbatch amgx_natural_iluk.sbatch 10 none
+  sbatch amgx_natural_iluk.sbatch 10 diagonal
+  sbatch amgx_natural_iluk.sbatch 20 none
+
+After a slot is released:
+  sbatch amgx_natural_iluk.sbatch 20 diagonal
+
+Stopping/restart follow-ups (respect available GPU slots):
+  sbatch amgx_natural_iluk.sbatch 10 none 200 1e-12
+  sbatch amgx_natural_iluk.sbatch 10 none 1000 1e-14
+
+Native PGMRES with reorthogonalization and reliable residual verification:
+  sbatch amgx_natural_iluk.sbatch 10 none 1000 1e-12 gmres
+  sbatch amgx_natural_iluk.sbatch 10 diagonal 1000 1e-12 gmres
+This is the same fixed ILU(10) preconditioner; no external residual corrections.
+
+Monitor:
+  tail -F matk-natural-iluk-JOBID.out
+
+Reports and full native logs:
+  ../../run_outputs/matk/natural-iluk-JOBID/{smoke,full}.json
+  ../../run_outputs/matk/natural-iluk-JOBID/full_trials/
+
+Summarize completed jobs (replace JOBIDS with space-separated numeric IDs):
+  ../../.venv/bin/python report_ordered_blocks.py --prefix natural-iluk \
+    --jobs JOBIDS --output ../../run_outputs/matk/natural-iluk-high-results.json
+
+All full runs use PARDISO order, b8, PFGMRES restart1000/max3000, FP64, zero
+initial guess, no residual corrections. The stored PARDISO analysis is reused.
+Setup computes fill before allocating GPU factors and enforces int32 scalar
+value-count and available-memory bounds. A bound rejection is reported as a
+setup failure; it does not silently reduce the requested fill level. For b8,
+the current scalar-value bound permits at most33,554,430 factor blocks,
+about3.39x the9,899,450 input blocks, even if the H200 has more free memory.

@@ -1,0 +1,34 @@
+{
+  "config_version": 2,
+  "exception_handling": 1,
+  "determinism_flag": 1,
+  "block_format": "ROW_MAJOR",
+  "solver": {
+    "solver": "FGMRES",
+    "max_iters": 3000,
+    "gmres_n_restart": 1000,
+    "tolerance": 1e-14,
+    "convergence": "RELATIVE_INI_CORE",
+    "norm": "L2",
+    "use_scalar_norm": 1,
+    "monitor_residual": 1,
+    "store_res_history": 1,
+    "print_solve_stats": 1,
+    "print_solve_stats_interval": 25,
+    "print_grid_stats": 1,
+    "obtain_timings": 1,
+    "bsr_spmv_backend": "cusparse_generic",
+    "preconditioner": {
+      "solver": "MULTICOLOR_ILU",
+      "ilu_sparsity_level": 10,
+      "max_iters": 1,
+      "relaxation_factor": 1.0,
+      "block_ilu_backend": "cusparse_legacy",
+      "reorder_cols_by_color": 0,
+      "insert_diag_while_reordering": 0,
+      "verbosity_level": 3
+    },
+    "scope": "matk_outer",
+    "verbosity_level": 3
+  }
+}

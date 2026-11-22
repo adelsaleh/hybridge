@@ -1,0 +1,154 @@
+{
+  "pfgmres_pardiso_ilu0_b2_r1000": {
+    "block_size": 2,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "8fdb9d2377b2d065a90a87b30cf5e7ff8a0c94b2e8b09bb293e0f106e0a2154e",
+    "description": "Consecutive unknowns after scalar PARDISO permutation; natural block-order cuSPARSE ILU(0), no graph coloring, zero-start PFGMRES.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    }
+  },
+  "pfgmres_pardiso_ilu0_b4_r1000": {
+    "block_size": 4,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "8fdb9d2377b2d065a90a87b30cf5e7ff8a0c94b2e8b09bb293e0f106e0a2154e",
+    "description": "Consecutive unknowns after scalar PARDISO permutation; natural block-order cuSPARSE ILU(0), no graph coloring, zero-start PFGMRES.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    }
+  },
+  "pfgmres_pardiso_ilu0_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "8fdb9d2377b2d065a90a87b30cf5e7ff8a0c94b2e8b09bb293e0f106e0a2154e",
+    "description": "Consecutive unknowns after scalar PARDISO permutation; natural block-order cuSPARSE ILU(0), no graph coloring, zero-start PFGMRES.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    }
+  },
+  "pfgmres_pardiso_ilu0_b16_r1000": {
+    "block_size": 16,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "8fdb9d2377b2d065a90a87b30cf5e7ff8a0c94b2e8b09bb293e0f106e0a2154e",
+    "description": "Consecutive unknowns after scalar PARDISO permutation; natural block-order cuSPARSE ILU(0), no graph coloring, zero-start PFGMRES.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 0,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    }
+  }
+}

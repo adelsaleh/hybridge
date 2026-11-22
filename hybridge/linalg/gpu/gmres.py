@@ -29,6 +29,7 @@ CuPyGMRESStatus = Literal[
     "non_finite",
 ]
 CuPyOrthogonalization = Literal["mgs", "mgs2", "cgs", "cgs2"]
+CuPyEstimateTarget = Literal["cycle_relative", "true_target"]
 
 
 @runtime_checkable
@@ -298,10 +299,12 @@ class CuPyRestartedGMRESSolver:
         divergence_factor: float = 1.0e6,
         cgs2_fallback_threshold: float | None = None,
         workspace: CuPyGMRESWorkspace | None = None,
+        estimate_target: CuPyEstimateTarget = "cycle_relative",
     ) -> None:
         """Initialize the instance and validate persistent storage."""
         cp = require_cupy_device()
         self.operator = operator
+        self.estimate_target = _validate_estimate_target(estimate_target)
         self.restart = int(restart)
         self.max_iterations = max_iterations
         self.rtol = float(rtol)
@@ -365,6 +368,7 @@ class CuPyRestartedGMRESSolver:
             monitor_orthogonality=monitor_orthogonality,
             workspace=self.workspace,
             solution_out=solution_out,
+            estimate_target=self.estimate_target,
         )
 
 
@@ -803,6 +807,14 @@ def _validate_restart_parameters(
     return restart, int(max_iterations), float(breakdown_tolerance)
 
 
+def _validate_estimate_target(estimate_target: str) -> CuPyEstimateTarget:
+    """Validate the restart-cycle estimate trigger without requiring CUDA."""
+
+    if estimate_target not in ("cycle_relative", "true_target"):
+        raise ValueError("estimate_target must be 'cycle_relative' or 'true_target'")
+    return estimate_target
+
+
 def _validate_robustness_parameters(
     *,
     check_finite: bool,
@@ -901,6 +913,7 @@ def restarted_gmres_cupy(
     monitor_orthogonality: bool = False,
     workspace: CuPyGMRESWorkspace | None = None,
     solution_out: Any | None = None,
+    estimate_target: CuPyEstimateTarget = "cycle_relative",
 ) -> CuPyGMRESResult:
     r"""Solve ``A x = rhs`` with restarted left-preconditioned GPU GMRES.
 
@@ -928,6 +941,16 @@ def restarted_gmres_cupy(
     Pass a :class:`CuPyGMRESWorkspace` to reuse the Arnoldi basis and all work
     buffers across sequential solves.  Supplying ``solution_out`` additionally
     avoids allocating the solution vector; it must not overlap ``rhs``.
+
+    ``estimate_target`` sets when a restart cycle stops on the Givens estimate
+    of the preconditioned residual.  ``"cycle_relative"`` (the default) stops at
+    ``max(atol, rtol * beta)``, with ``beta`` the cycle's initial preconditioned
+    residual: every cycle reduces its own residual by ``rtol``, so a warm start
+    or a later cycle iterates past the true target.  ``"true_target"`` stops at
+    ``target * beta / ||r||``, the true target scaled by the cycle's ratio of
+    preconditioned to true residual; it equals the default for the first cycle
+    from a zero guess.  Either way convergence is accepted only on the true
+    residual.
     """
 
     cp = require_cupy_device()
@@ -971,6 +994,7 @@ def restarted_gmres_cupy(
         orthogonalization=orthogonalization,
         reorthogonalize=reorthogonalize,
     )
+    estimate_target = _validate_estimate_target(estimate_target)
 
     if preconditioner is not None:
         if int(preconditioner.num_dofs) != num_dofs:
@@ -1220,6 +1244,13 @@ def restarted_gmres_cupy(
 
             blas.copy(preconditioned, basis[0])
             blas.scal(1.0 / beta, basis[0])
+            # The estimate belongs to the preconditioned residual.  It is
+            # used only as a trigger; the true residual is checked below.
+            if estimate_target == "true_target":
+                # ``true_norm`` is this cycle's initial true residual, > target.
+                cycle_estimate_target = float(target) * beta / true_norm
+            else:
+                cycle_estimate_target = max(float(atol), float(rtol) * beta)
 
             cycle_dimension = min(restart, max_iterations - iterations)
             hessenberg = workspace.hessenberg[
@@ -1339,11 +1370,8 @@ def restarted_gmres_cupy(
                 iterations += 1
                 used_dimension = column + 1
 
-                # The estimate belongs to the preconditioned residual.  It is
-                # used only as a trigger; the true residual is checked below.
-                estimate_target = max(float(atol), float(rtol) * beta)
                 if (
-                    estimate <= estimate_target
+                    estimate <= cycle_estimate_target
                     or happy_breakdown
                     or used_dimension == cycle_dimension
                     or iterations == max_iterations
@@ -1509,6 +1537,7 @@ def restarted_gmres_cupy(
 
 
 __all__ = [
+    "CuPyEstimateTarget",
     "CuPyGMRESCycleRecord",
     "CuPyGMRESResult",
     "CuPyGMRESWorkspace",
@@ -1522,6 +1551,7 @@ __all__ = [
     "_resolve_orthogonalization",
     "_termination_reason",
     "_updated_stagnation_count",
+    "_validate_estimate_target",
     "_validate_robustness_parameters",
     "restarted_gmres_cupy",
 ]

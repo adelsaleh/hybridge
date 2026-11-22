@@ -1,0 +1,64 @@
+{
+  "blackwell_measurements": 508,
+  "h200_jobs": 596,
+  "stock_rows": 58,
+  "matched": 75,
+  "matched_passed_both": 71,
+  "matched_with_stock": 27,
+  "iteration_equal": 29,
+  "family_best_systems": 25,
+  "stats": {
+    "asm": {
+      "speedup_repeated_stock": 1.205096420172691,
+      "speedup_repeated": 2.251619264217507,
+      "speedup_amortized_stock": 1.2082031146641237,
+      "speedup_amortized": 3.7121023518902434,
+      "speedup_per_iteration": 1.775125599466939,
+      "matched": 25
+    },
+    "bj": {
+      "speedup_repeated_stock": 1.196146557338707,
+      "speedup_repeated": 2.167065634656094,
+      "speedup_amortized_stock": 1.2784576401966958,
+      "speedup_amortized": 2.241969218348396,
+      "speedup_per_iteration": 1.2278450441140014,
+      "matched": 12
+    },
+    "amg": {
+      "speedup_repeated_stock": 1.0748433647264366,
+      "speedup_repeated": 1.0979739620847462,
+      "speedup_amortized_stock": 1.252843164907551,
+      "speedup_amortized": 1.4076179961659152,
+      "speedup_per_iteration": 1.1142826837382531,
+      "matched": 14
+    },
+    "native": {
+      "speedup_repeated_stock": 1.4584477906428963,
+      "speedup_repeated": 2.6708104907515406,
+      "speedup_amortized_stock": 1.489130277999717,
+      "speedup_amortized": 2.7927127648426207,
+      "speedup_per_iteration": 1.787689412282889,
+      "matched": 20
+    }
+  },
+  "node_lu": {
+    "systems": 186,
+    "lu_measured": 119,
+    "lu_residual_floor": 3,
+    "lu_not_measured_by_level": {
+      "L4": 25,
+      "Lmax": 42
+    },
+    "iterative_faster_fresh": 94,
+    "iterative_faster_repeated": 42,
+    "lu_only_iterative_outcomes": {
+      "fp64_floor": 7,
+      "not_passed": 3
+    }
+  },
+  "status_pairs": {
+    "numerical_failure->passed": 1,
+    "passed->numerical_failure": 3,
+    "passed->passed": 71
+  }
+}

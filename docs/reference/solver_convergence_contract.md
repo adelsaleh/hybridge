@@ -69,7 +69,10 @@ a normalized convergence exception is raised after bounded retries.
 
 AMGX retry sequences are capped at eight total attempts. Every completed
 attempt is validated independently; a finite result with the smallest physical
-residual is retained for diagnostics. Reusable PyAMGX objects close after
+residual is retained for diagnostics. Raw-CUDA transport, diffusion-reaction and
+ADR solvers take these attempts through `amgx_retry_attempts`. A
+`residual_correction` attempt solves for a correction to the best iterate and
+is accepted on the original-system residual of the corrected solution. Reusable PyAMGX objects close after
 setup/solve failures, one-shot objects are destroyed in `finally`, and PETSc
 Mat/Vec/KSP objects are destroyed in reverse ownership order.
 

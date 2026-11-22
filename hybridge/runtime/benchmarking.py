@@ -57,12 +57,29 @@ def gpu_compute_processes():
     """List NVIDIA compute processes without initializing a CUDA context.
 
     Probe failures propagate: inability to inspect the device is not idleness.
-    The reservation covers all visible NVIDIA devices, matching campaign locks.
+    In Slurm, query only the allocated physical devices. Other GPUs on a shared
+    node may be busy throughout an otherwise exclusive single-GPU allocation.
     """
-    result = subprocess.run(
-        ["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"],
-        text=True, capture_output=True, check=True,
-    )
+    command = ["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"]
+    if os.environ.get("SLURM_JOB_ID"):
+        devices = os.environ.get("SLURM_STEP_GPUS") or os.environ.get("SLURM_JOB_GPUS")
+        if devices:
+            command += ["--id", devices]
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, check=True)
+    except subprocess.CalledProcessError as error:
+        if error.returncode != 6 or "--id" not in command:
+            raise
+        # Slurm's physical index may be inaccessible in the job's device
+        # namespace. NVML's visible UUIDs remain stable across that remapping.
+        visible = subprocess.run(
+            ["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"],
+            text=True, capture_output=True, check=True,
+        ).stdout.splitlines()
+        if not visible:
+            raise
+        command[-1] = ",".join(value.strip() for value in visible)
+        result = subprocess.run(command, text=True, capture_output=True, check=True)
     return [line.strip() for line in result.stdout.splitlines()
             if line.strip() and int(line.split(",", 1)[0]) != os.getpid()]
 

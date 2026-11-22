@@ -25,6 +25,8 @@ the active roadmap. Detailed documents belong to one category below.
 | [`backends/`](backends/) | Backend architecture, CUDA execution, and launch policy. |
 | [`algorithms/`](algorithms/) | Maintained numerical formulations and derivations. |
 | [`research/`](research/) | Dated solver studies, application research, and generated study outputs. |
+| [`lessons/`](lessons/) | What the measurement campaigns taught, written for any machine: kernel settings per GPU architecture, solvers, and running campaigns. |
+| [`campaigns/`](campaigns/) | The folder where campaign launchers write their records on the machine that runs them. Only its index is tracked. |
 | [`releases/`](releases/) | Candidate evidence and release-specific gaps. |
 
 The current early-alpha path is:

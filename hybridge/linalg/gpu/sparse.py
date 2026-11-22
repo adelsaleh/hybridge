@@ -531,8 +531,19 @@ def _restore_scaled_csr_rows_in_place(
         )
 
 
-_BSR_ROW_SCALE_SOURCE = r"""
-extern "C" __global__ void diagonal_scale_bsr_rows(
+# Left row scaling of a face-BSR matrix. A block row's values (nnzb_row, b, b) are one
+# contiguous slab, so a group of LANES threads per block row reads and writes it coalesced,
+# GROUPS block rows per CUDA block. The lanes first find each scalar row's diagonal entry and
+# largest magnitude, the rule of ``diagonal_scale_cupy_csr_rows_in_place``, summing and comparing in
+# the same order, so every launch shape gives bitwise the result of the earlier
+# one-block-per-scalar-row kernel. The face block size b = p+1 (2..10 for p = 1..9) is a runtime
+# argument, any b <= 32; the launch shape is tuned per b (see ``_bsr_row_scale_choice``).
+_BSR_ROW_SCALE_TEMPLATE = r"""
+#define LANES @LANES@
+#define GROUPS @GROUPS@
+#define MAX_BLOCK 32
+
+extern "C" __global__ void diagonal_scale_bsr_block_rows(
         const int* __restrict__ indptr,
         const int* __restrict__ indices,
         double* __restrict__ data,
@@ -541,100 +552,210 @@ extern "C" __global__ void diagonal_scale_bsr_rows(
         const int num_block_rows,
         const int block_size)
 {
-    const int row = blockIdx.x;
-    const int nrows = num_block_rows * block_size;
-    if (row >= nrows) {
-        return;
-    }
-    const int block_row = row / block_size;
-    const int row_dof = row - block_row * block_size;
-    const int start = indptr[block_row];
-    const int end = indptr[block_row + 1];
-    __shared__ double row_scale;
-    if (threadIdx.x == 0) {
-        double diagonal = 0.0;
-        double row_max = 0.0;
-        for (int block = start; block < end; ++block) {
-            const long long base = ((long long)block * block_size + row_dof) * block_size;
-            for (int col_dof = 0; col_dof < block_size; ++col_dof) {
-                const double entry = data[base + col_dof];
-                row_max = fmax(row_max, fabs(entry));
-                if (indices[block] == block_row && col_dof == row_dof) {
-                    diagonal += entry;
+    __shared__ double inverse_scale[GROUPS][MAX_BLOCK];
+    const int group = threadIdx.x / LANES;
+    const int lane = threadIdx.x % LANES;
+    const int block_row = blockIdx.x * GROUPS + group;
+    // No early return: groups share warps, and every lane must reach __syncwarp.
+    const bool active = block_row < num_block_rows;
+    const int b = block_size;
+    const int start = active ? indptr[block_row] : 0;
+    const int end = active ? indptr[block_row + 1] : 0;
+    if (active) {
+        for (int row_dof = lane; row_dof < b; row_dof += LANES) {
+            double diagonal = 0.0;
+            double row_max = 0.0;
+            for (int block = start; block < end; ++block) {
+                const long long base = ((long long)block * b + row_dof) * b;
+                const bool diagonal_block = indices[block] == block_row;
+                for (int col_dof = 0; col_dof < b; ++col_dof) {
+                    const double entry = data[base + col_dof];
+                    row_max = fmax(row_max, fabs(entry));
+                    if (diagonal_block && col_dof == row_dof) {
+                        diagonal += entry;
+                    }
                 }
             }
+            double value = diagonal;
+            if (!isfinite(value) || fabs(value) <= 1.0e-10 * row_max) {
+                value = row_max;
+            }
+            if (!isfinite(value) || value == 0.0) {
+                value = 1.0;
+            }
+            const long long row = (long long)block_row * b + row_dof;
+            row_diagonal[row] = value;
+            rhs[row] /= value;
+            inverse_scale[group][row_dof] = 1.0 / value;
         }
-        double value = diagonal;
-        if (!isfinite(value) || fabs(value) <= 1.0e-10 * row_max) {
-            value = row_max;
-        }
-        if (!isfinite(value) || value == 0.0) {
-            value = 1.0;
-        }
-        row_scale = value;
-        row_diagonal[row] = value;
-        rhs[row] /= value;
     }
     __syncthreads();
-    const int row_entries = (end - start) * block_size;
-    const double inverse = 1.0 / row_scale;
-    for (int entry = threadIdx.x; entry < row_entries; entry += blockDim.x) {
-        const int block_offset = entry / block_size;
-        const int col_dof = entry - block_offset * block_size;
-        const long long offset = (
-            ((long long)(start + block_offset) * block_size + row_dof) * block_size
-            + col_dof
-        );
-        data[offset] *= inverse;
+    if (active) {
+        const int block_entries = b * b;
+        const long long slab = (long long)start * block_entries;
+        const int entries = (end - start) * block_entries;
+        for (int entry = lane; entry < entries; entry += LANES) {
+            data[slab + entry] *= inverse_scale[group][(entry % block_entries) / b];
+        }
     }
 }
 
-extern "C" __global__ void restore_left_scaled_bsr_rows(
+extern "C" __global__ void restore_left_scaled_bsr_block_rows(
         const int* __restrict__ indptr,
         double* __restrict__ data,
         const double* __restrict__ row_diagonal,
         const int num_block_rows,
         const int block_size)
 {
-    const int row = blockIdx.x;
-    const int nrows = num_block_rows * block_size;
-    if (row >= nrows) {
-        return;
+    __shared__ double row_scale[GROUPS][MAX_BLOCK];
+    const int group = threadIdx.x / LANES;
+    const int lane = threadIdx.x % LANES;
+    const int block_row = blockIdx.x * GROUPS + group;
+    const bool active = block_row < num_block_rows;
+    const int b = block_size;
+    if (active) {
+        for (int row_dof = lane; row_dof < b; row_dof += LANES) {
+            row_scale[group][row_dof] = row_diagonal[(long long)block_row * b + row_dof];
+        }
     }
-    const int block_row = row / block_size;
-    const int row_dof = row - block_row * block_size;
-    const int start = indptr[block_row];
-    const int end = indptr[block_row + 1];
-    const int row_entries = (end - start) * block_size;
-    const double row_scale = row_diagonal[row];
-    for (int entry = threadIdx.x; entry < row_entries; entry += blockDim.x) {
-        const int block_offset = entry / block_size;
-        const int col_dof = entry - block_offset * block_size;
-        const long long offset = (
-            ((long long)(start + block_offset) * block_size + row_dof) * block_size
-            + col_dof
-        );
-        data[offset] *= row_scale;
+    __syncthreads();
+    if (active) {
+        const int start = indptr[block_row];
+        const int end = indptr[block_row + 1];
+        const int block_entries = b * b;
+        const long long slab = (long long)start * block_entries;
+        const int entries = (end - start) * block_entries;
+        for (int entry = lane; entry < entries; entry += LANES) {
+            data[slab + entry] *= row_scale[group][(entry % block_entries) / b];
+        }
     }
 }
 """
 
+_BSR_SCALE_MAX_BLOCK = 32
+# (lanes per block row, block rows per CUDA block); the first is the untuned default.
+_BSR_SCALE_SHAPES = ((32, 4), (32, 2), (32, 8), (16, 4), (16, 8), (16, 16), (8, 8), (8, 16))
+_BSR_SCALE_SAMPLE_ROWS = 65536
+_BSR_SCALE_SAMPLE_BYTES = 128 * 1024**2
 
-_BSR_ROW_SCALE_KERNELS: dict[int, tuple[Any, Any]] = {}
+_BSR_ROW_SCALE_KERNELS: dict[tuple, tuple[Any, Any]] = {}
+_BSR_ROW_SCALE_CHOICES: dict[tuple, tuple[int, int]] = {}
 
 
-def _bsr_row_scale_kernels():
-    """Return cached scalar-row scale/restore kernels for face-BSR matrices."""
+def _bsr_scale_shape_name(shape) -> str:
+    """Name a launch shape for the tuner and the kernel log."""
+    lanes, groups = shape
+    return f"lanes{lanes}x{groups}"
+
+
+def _bsr_row_scale_kernels(shape):
+    """Return the cached scale/restore kernels compiled for one launch shape."""
     cp = require_cupy()
-    device_id = int(cp.cuda.runtime.getDevice())
-    kernels = _BSR_ROW_SCALE_KERNELS.get(device_id)
+    lanes, groups = shape
+    key = (int(cp.cuda.runtime.getDevice()), lanes, groups)
+    kernels = _BSR_ROW_SCALE_KERNELS.get(key)
     if kernels is None:
+        source = _BSR_ROW_SCALE_TEMPLATE.replace("@LANES@", str(lanes)).replace("@GROUPS@", str(groups))
         kernels = (
-            real_raw_kernel(_BSR_ROW_SCALE_SOURCE, "diagonal_scale_bsr_rows"),
-            real_raw_kernel(_BSR_ROW_SCALE_SOURCE, "restore_left_scaled_bsr_rows"),
+            real_raw_kernel(source, "diagonal_scale_bsr_block_rows"),
+            real_raw_kernel(source, "restore_left_scaled_bsr_block_rows"),
         )
-        _BSR_ROW_SCALE_KERNELS[device_id] = kernels
+        _BSR_ROW_SCALE_KERNELS[key] = kernels
     return kernels
+
+
+def _bsr_scale_launch(num_block_rows: int, shape):
+    """Return the grid and block of one launch shape."""
+    lanes, groups = shape
+    return (max(1, -(-int(num_block_rows) // groups)),), (lanes * groups,)
+
+
+def _launch_bsr_row_scale(shape, indptr, indices, data, rhs, diagonal, num_block_rows, block_size):
+    """Scale ``num_block_rows`` block rows in place with one launch shape."""
+    grid, block = _bsr_scale_launch(num_block_rows, shape)
+    scale_kernel, _ = _bsr_row_scale_kernels(shape)
+    scale_kernel(grid, block, (indptr, indices, data, rhs, diagonal,
+                               np.int32(num_block_rows), np.int32(block_size)))
+
+
+def _bsr_row_scale_choice(matrix: _DeviceBsrMatrixView):
+    """Return the measured fastest launch shape for this block size, machine and precision.
+
+    The tuner times every shape on a private copy of the first block rows (at most 65,536 rows or
+    128 MB), checks that they agree, and caches the choice on disk; later processes only compile it.
+    """
+    cp = require_cupy()
+    block_size = int(matrix.block_size)
+    num_block_rows = int(matrix.shape[0]) // block_size
+    key = (int(cp.cuda.runtime.getDevice()), block_size, str(matrix.data.dtype),
+           max(1, num_block_rows).bit_length())
+    choice = _BSR_ROW_SCALE_CHOICES.get(key)
+    if choice is not None:
+        return choice
+    from hybridge.runtime.cuda_tuning import fingerprint, select_variant
+    from hybridge.linalg.gpu.solver_tuning import module_source_fingerprint
+
+    shapes = {_bsr_scale_shape_name(shape): shape for shape in _BSR_SCALE_SHAPES}
+    trial = {}
+
+    def trial_prepare(name, handle):
+        """Copy the sample once, on a cache miss only; sizing it reads two scalars, not indptr."""
+        if not trial:
+            # The first block rows keep global column indices consistent with their row numbers.
+            bytes_per_block = block_size * block_size * int(matrix.data.itemsize)
+            budget_blocks = max(1, _BSR_SCALE_SAMPLE_BYTES // bytes_per_block)
+            head = matrix.indptr[: min(num_block_rows, _BSR_SCALE_SAMPLE_ROWS) + 1]
+            limit = cp.asarray(budget_blocks, dtype=head.dtype)
+            rows = max(1, int(cp.searchsorted(head, limit, side="right").item()) - 1)
+            blocks = int(matrix.indptr[rows].item())
+            trial.update(
+                rows=rows,
+                indptr=matrix.indptr[: rows + 1], indices=matrix.indices[:blocks],
+                original=matrix.data[:blocks].copy(), data=matrix.data[:blocks].copy(),
+                original_rhs=cp.arange(1, rows * block_size + 1, dtype=matrix.data.dtype),
+                rhs=cp.empty(rows * block_size, dtype=matrix.data.dtype),
+                diagonal=cp.empty(rows * block_size, dtype=matrix.data.dtype),
+            )
+
+    def before(name, handle):
+        """Restore the unscaled sample outside the timed launch."""
+        trial["data"][...] = trial["original"]
+        trial["rhs"][...] = trial["original_rhs"]
+
+    def run(name, handle):
+        """Scale the sample with one launch shape."""
+        _launch_bsr_row_scale(handle, trial["indptr"], trial["indices"], trial["data"], trial["rhs"],
+                              trial["diagonal"], trial["rows"], block_size)
+        return trial["data"], trial["rhs"], trial["diagonal"]
+
+    def prepare(name):
+        """Compile one launch shape."""
+        _bsr_row_scale_kernels(shapes[name])
+        return shapes[name]
+
+    name, _, _ = select_variant(
+        cupy=cp,
+        identity=dict(operation="bsr-row-scale", order=block_size - 1, block_size=block_size,
+                      dtype=str(matrix.data.dtype), layout="bsr-row-major",
+                      block_rows_bucket=key[3], sample_rows=_BSR_SCALE_SAMPLE_ROWS,
+                      sample_bytes=_BSR_SCALE_SAMPLE_BYTES,
+                      source=fingerprint([module_source_fingerprint(__file__)])),
+        candidates=list(shapes), prepare=prepare, trial_prepare=trial_prepare, before=before, run=run,
+        rtol=0.0,
+    )
+    trial.clear()
+    choice = shapes[name]
+    _BSR_ROW_SCALE_CHOICES[key] = choice
+    return choice
+
+
+def _check_bsr_scale_block_size(matrix: _DeviceBsrMatrixView) -> None:
+    """Reject block sizes the kernels do not cover."""
+    block_size = int(matrix.block_size)
+    if not 1 <= block_size <= _BSR_SCALE_MAX_BLOCK:
+        raise ValueError(
+            f"BSR row scaling supports block sizes 1..{_BSR_SCALE_MAX_BLOCK}, got {block_size}"
+        )
 
 
 def _diagonal_scale_bsr_rows_in_place(matrix: _DeviceBsrMatrixView, rhs):
@@ -643,20 +764,9 @@ def _diagonal_scale_bsr_rows_in_place(matrix: _DeviceBsrMatrixView, rhs):
     nrows = int(rhs.size)
     diagonal = cp.empty(nrows, dtype=REAL_DTYPE)
     if nrows:
-        scale_kernel, _ = _bsr_row_scale_kernels()
-        scale_kernel(
-            (nrows,),
-            (128,),
-            (
-                matrix.indptr,
-                matrix.indices,
-                matrix.data,
-                rhs,
-                diagonal,
-                np.int32(nrows // matrix.block_size),
-                np.int32(matrix.block_size),
-            ),
-        )
+        _check_bsr_scale_block_size(matrix)
+        _launch_bsr_row_scale(_bsr_row_scale_choice(matrix), matrix.indptr, matrix.indices, matrix.data,
+                              rhs, diagonal, nrows // matrix.block_size, matrix.block_size)
     return diagonal
 
 
@@ -664,19 +774,14 @@ def _restore_left_scaled_bsr_rows_in_place(
     matrix: _DeviceBsrMatrixView,
     row_diagonal,
 ) -> None:
-    """Restore face-BSR values after scalar-row left scaling."""
+    """Restore face-BSR values after scalar-row left scaling, with the scaling's launch shape."""
     nrows = int(matrix.shape[0])
     if not nrows:
         return
-    _, restore_kernel = _bsr_row_scale_kernels()
-    restore_kernel(
-        (nrows,),
-        (128,),
-        (
-            matrix.indptr,
-            matrix.data,
-            row_diagonal,
-            np.int32(nrows // matrix.block_size),
-            np.int32(matrix.block_size),
-        ),
-    )
+    _check_bsr_scale_block_size(matrix)
+    shape = _bsr_row_scale_choice(matrix)
+    num_block_rows = nrows // matrix.block_size
+    grid, block = _bsr_scale_launch(num_block_rows, shape)
+    _, restore_kernel = _bsr_row_scale_kernels(shape)
+    restore_kernel(grid, block, (matrix.indptr, matrix.data, row_diagonal,
+                                 np.int32(num_block_rows), np.int32(matrix.block_size)))

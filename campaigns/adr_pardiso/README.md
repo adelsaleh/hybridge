@@ -8,10 +8,10 @@ timings are the direct-solver reference of the ADR solver comparison and of the 
 
 | | |
 |---|---|
-| Status | complete (2026-09-22, local CPU, 16 threads verified) |
+| Measured | 2026-09-22, local CPU, 16 threads verified |
 | Launcher | `run_adr_pardiso_campaign.py`; worker `adr_pardiso_worker.py`; `adr_pardiso_inventory.py` (the archived systems); `adr_pardiso_tuning.py` (thread autotuning) |
 | Output directory | `run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_all_2026_09_22` (default), `pardiso_tuned_2026_09_22` |
-| Records | `docs/research/solver_studies/adr_pardiso_campaign.md` |
+| Records | `docs/research/solver_studies/adr_scaling_2026_09_17/pardiso_lu/adr_pardiso_campaign.md` |
 | Tests | `tests/test_adr_pardiso_campaign.py`, `tests/test_stress_pardiso_selection.py` |
 
 ## Commands
@@ -26,4 +26,7 @@ PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 .venv/bin/p
 
 ## Additional saved output directories
 
-- [pardiso_tuned_2026_09_22](records/pardiso_tuned_2026_09_22/DATA.md).
+- [pardiso_tuned_2026_09_22](../../docs/campaigns/adr_pardiso/records/pardiso_tuned_2026_09_22/DATA.md).
+- Unified L1–L5 reference (`docs/campaigns/adr_pardiso/records/retirement-20261031/RETIREMENT.md`, local, untracked):
+  all 190 planned systems covered by 274 passed thread measurements. The device export campaign
+  stopped before its plan was complete, so this covers the systems it exported, not its full plan.

@@ -45,8 +45,9 @@ def test_native_coarse_cycle_enforces_fixed_work(monkeypatch):
     before = copy.deepcopy(source)
     cycle = AmgxScalarVcycle(SimpleNamespace(block_size=1), config=source)
     controls = constructor.call_args.kwargs
+    assert controls['borrow_csr'] is True  # the scalar face graph is borrowed, not copied
     effective = _amgx_config_for_solve(**{
-        key: value for key, value in controls.items() if key != 'reusable'
+        key: value for key, value in controls.items() if key not in ('reusable', 'borrow_csr')
     })['solver']
     assert effective['max_iters'] == 1
     assert effective['monitor_residual'] == effective['store_res_history'] == 0

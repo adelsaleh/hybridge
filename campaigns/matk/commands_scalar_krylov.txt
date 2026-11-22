@@ -1,0 +1,27 @@
+# From scripts/matk; at most FOUR GPUs across all repos.
+# Check running and pending jobs, including dependency chains, before submission.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+
+# Scalar native IDRMSYNC(s=4), unpreconditioned. This factory actually supports
+# preconditioning, but this probe deliberately selects NOSOLVER. No PIDRMSYNC
+# factory exists. Source audit: ../AMGX/docs/matk_scalar_krylov_followup.txt
+# Known native counter/history defects require scalar CSR, explicit s4,
+# max_iters divisible by5, and store_res_history0. The benchmark guards these
+# conditions and skips unavailable history retrieval; the full native log and
+# independent original residual remain available. This is not a source repair.
+
+# Zero/warm synthetic qualification27770 passed; it reused27756's GPU slot:
+# sbatch --dependency=afterany:27756 idrmsync_smoke.sbatch
+# For a free slot on a later day, submit without the historical dependency.
+
+# Full trial27772: warm from BiCGSTAB100000, fixed original norm target.
+# This trial did NOT converge: it worsened the initial residual0.0009558 to0.09415.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:12:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates idrmsync4_unpreconditioned_absolute_csr --scaling none \
+#   --max-iters 10000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 600 --save-solution \
+#   --initial-guess "$PWD/saved_iterates/bicgstab_zero100000_job27765.solution.npz"
+# Here inner-rtol is an ABSOLUTE L2 norm threshold =1e-8*||original b||.
+# The recorded native iteration count includes IDR's internal counter updates.
+# No smoke or native convergence flag substitutes for ||b-Ax||/||b||<=1e-8.

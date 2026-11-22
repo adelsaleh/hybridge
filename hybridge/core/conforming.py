@@ -221,10 +221,13 @@ class ContinuousField:
         qx = cupy.empty((num_elements, n_target), dtype=cupy.float64)
         qy = cupy.empty_like(qx)
         threads = num_elements * n_target
-        _conforming_kernels(cupy)[1](((threads + 255) // 256,), (256,), (
+        from hybridge.runtime.cuda_tuning import launch_tuned
+        launch_tuned(_conforming_kernels(cupy)[1], (
             dofs, space._cell_dofs_on(cupy, dofs), space._matrix_on(cupy, d_xi, dofs),
             space._matrix_on(cupy, d_eta, dofs), space._inverse_transpose_on(cupy, dofs), np.int64(num_elements),
-            np.int32(n_nodes), np.int32(n_target), qx, qy))
+            np.int32(n_nodes), np.int32(n_target), qx, qy), outputs=(8, 9),
+            grid=lambda b: ((threads+b-1)//b,), source=_CONFORMING_SOURCE,
+            identity=dict(operation='continuous-gradient', order=target.order, nodes=n_nodes))
         label = name or f"q({self.name})"
         return VectorDGField((space._field_like(target, qx, name=f"{label}_x"),
                               space._field_like(target, qy, name=f"{label}_y")), name=label)
@@ -489,9 +492,12 @@ class ContinuousLagrangeSpace:
         num_elements, n_nodes = self.mesh.num_tri, self.cell_dofs.shape[1]
         sums = cupy.zeros(self.num_dofs, dtype=cupy.float64)
         threads = num_elements * n_nodes
-        _conforming_kernels(cupy)[0](((threads + 255) // 256,), (256,), (
+        from hybridge.runtime.cuda_tuning import launch_tuned
+        launch_tuned(_conforming_kernels(cupy)[0], (
             coefficients, evaluation, self._cell_dofs_on(cupy, coefficients), np.int64(num_elements),
-            np.int32(coefficients.shape[1]), np.int32(n_nodes), sums))
+            np.int32(coefficients.shape[1]), np.int32(n_nodes), sums), outputs=(6,), zero_outputs=True,
+            grid=lambda b: ((threads+b-1)//b,), source=_CONFORMING_SOURCE,
+            identity=dict(operation='oswald-averaging', order=field.space.order, nodes=n_nodes))
         return sums / self._multiplicity_on(cupy, coefficients)
 
     def average(self, element_values):

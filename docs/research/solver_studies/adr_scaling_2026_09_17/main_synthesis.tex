@@ -13,10 +13,15 @@
 \renewcommand{\bottomfraction}{0.88}
 \renewcommand{\textfraction}{0.05}
 \newcommand{\ADRResultsPath}{.}
-\newcommand{\ADRResultsFigurePath}{../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+% Figures: the repository's run_outputs tree, or figures/ beside this file in a copied bundle.
+\IfFileExists{figures/synthesis/focused_h_crossover.pdf}
+  {\newcommand{\ADRResultsFigurePath}{figures}}
+  {\newcommand{\ADRResultsFigurePath}{../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}}
 \newcommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
 \begin{document}
 \input{section_synthesis.tex}
 \clearpage
 \input{\ADRResultsPath/closed_loop_stress/section.tex}
+\clearpage
+\input{\ADRResultsPath/h200_tuned/section.tex}
 \end{document}

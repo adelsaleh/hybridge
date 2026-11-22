@@ -19,14 +19,14 @@ reproducibility but do not define current solver defaults or backend support.
   assembly for p=4--9 in FP64 and FP32, stage-2 batched LU alone, the machine
   and software stack, predictions for FP64-capable GPUs and H100 steps.
 
-- [Raw CUDA ADR tensor assembly and reconstruction](raw_cuda_adr_tensor_2026_09_28.md):
+- [Raw CUDA ADR tensor assembly and reconstruction](adr_assembly/raw_cuda_adr_tensor_2026_09_28.md):
   FP64 parity, native stationary CSR/BSR solves and matched assembly timings.
 
-- [Higher-order raw CUDA ADR qualification](raw_cuda_adr_high_order_2026_10_15.md):
+- [Higher-order raw CUDA ADR qualification](adr_assembly/raw_cuda_adr_high_order_2026_10_15.md):
   p=0--9 FP64 parity, p=7--9 CuPy comparisons across formats and caches,
   native CSR/BSR solves, bounded mass scratch, and clean memcheck/racecheck.
 
-- [Numba ADR tensor specialization](numba_adr_tensor_2026_09_25.md):
+- [Numba ADR tensor specialization](adr_assembly/numba_adr_tensor_2026_09_25.md):
   variable scalar/tensor parity, manufactured convergence and 42 warmed
   comparisons with coupled LU.
 
@@ -41,18 +41,20 @@ reproducibility but do not define current solver defaults or backend support.
   proposed block Petrov–Galerkin hierarchy, AIR references, and small-matrix
   algebra checks; no production implementation or HDG benchmark claim.
 
-- [Unified ADR L1–L5 campaign](adr_unified_l5_campaign.md): portable iterative
+- [Unified ADR L1–L5 campaign](adr_scaling_2026_09_17/unified/adr_unified_l5_campaign.md): portable iterative
   inventory, approximately 400k-triangle L5 extensions, memory guards and resume;
   explicit CUDA-12/legacy-BSR instructions for AMU V100 nodes. Cluster builds
   and numerical validation remain user-run.
 
-- [Closed-loop ADR stress runner](adr_closed_loop_stress_runner.md): prepared
+- [Closed-loop ADR stress runner](adr_scaling_2026_09_17/closed_loop_stress/adr_closed_loop_stress_runner.md): prepared
   runner for the nine-lobed trapping, crossing and orthogonal-transport cases;
   planning, launch commands and validation limits. No stress solver results yet.
 
-- [Combined ADR scaling results](adr_scaling_2026_09_17/README.md): one insertable LaTeX section with smooth and oscillatory problems, three diffusion classes, square and five-lobed annular h/p sweeps, ASM+PP, AMGX BSR FGMRES/BiCGSTAB and native hp-BSR. The oscillatory subsection preserves the initial 22k stress results and adds scaling to 100k triangles.
+- [Combined ADR scaling results](adr_scaling_2026_09_17/README.md): one insertable LaTeX section with smooth and oscillatory problems, three diffusion classes, square and five-lobed annular h/p sweeps, ASM+PP, AMGX BSR FGMRES/BiCGSTAB and native hp-BSR. The oscillatory subsection preserves the initial 22k stress results and adds scaling to 100k triangles. The folder also holds the 17 September baseline (`baseline/`), the closed-loop stress, PyPardiso and unified campaign documents, and the H200 comparison (`h200_tuned/`).
 
-- [`adr_solver_comparison_2026_09_17.md`](adr_solver_comparison_2026_09_17.md): matched stationary ADR at 99,458 triangles/p=6, ASM+PP versus AMGX BSR and native hp-BSR; recorded tuning, physical residuals, application counts/timings, memory, and tolerance-triggered restart diagnosis.
+- [ADR assembly and implementation studies](adr_assembly/README.md): stationary HDG implementation, Numba tensor specialization, raw-CUDA tensor qualification, shared-memory budget and higher-order qualification. All ADR studies live in `adr_scaling_2026_09_17/`, `adr_oscillatory_2026_09_18/` and `adr_assembly/`.
+
+- [`adr_solver_comparison_2026_09_17.md`](adr_scaling_2026_09_17/baseline/adr_solver_comparison_2026_09_17.md): matched stationary ADR at 99,458 triangles/p=6, ASM+PP versus AMGX BSR and native hp-BSR; recorded tuning, physical residuals, application counts/timings, memory, and tolerance-triggered restart diagnosis.
 
 - [`advection_reaction_2026_07.md`](advection_reaction_2026_07.md): upwind-SCC,
   upwind block-GS, Cupyx Krylov/ILU, and AMGX comparisons.

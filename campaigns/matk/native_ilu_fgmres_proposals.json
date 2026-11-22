@@ -1,0 +1,145 @@
+{
+  "fgmres_native_ilu1_minmax_capacity_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 2,
+          "matrix_coloring_scheme": "MIN_MAX",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "block_ilu_backend": "amgx",
+          "print_coloring_info": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "legacy",
+        "gmres_n_restart": 1000,
+        "scope": "matk_outer"
+      },
+      "block_format": "ROW_MAJOR"
+    },
+    "probe_only": true,
+    "required_library_sha256": "7ece26037d7a3008d09bfcfd6d2708359e3db974917b6014912c24ecc40a18c8"
+  },
+  "fgmres_native_ilu1_bfs_capacity_b4_r1000": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "coloring_level": 2,
+          "matrix_coloring_scheme": "SERIAL_GREEDY_BFS",
+          "max_uncolored_percentage": 0.0,
+          "reorder_cols_by_color": 1,
+          "insert_diag_while_reordering": 1,
+          "block_ilu_backend": "amgx",
+          "print_coloring_info": 1,
+          "monitor_residual": 0,
+          "store_res_history": 0,
+          "print_solve_stats": 0
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "legacy",
+        "gmres_n_restart": 1000,
+        "scope": "matk_outer"
+      },
+      "block_format": "ROW_MAJOR"
+    },
+    "probe_only": true,
+    "required_library_sha256": "7ece26037d7a3008d09bfcfd6d2708359e3db974917b6014912c24ecc40a18c8"
+  },
+  "fgmres_inner_fgmres50_ilu1_minmax_capacity_b4": {
+    "block_size": 4,
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "preconditioner": {
+          "solver": "FGMRES",
+          "max_iters": 50,
+          "gmres_n_restart": 50,
+          "tolerance": 0.01,
+          "convergence": "RELATIVE_INI_CORE",
+          "norm": "L2",
+          "use_scalar_norm": 1,
+          "monitor_residual": 1,
+          "store_res_history": 0,
+          "print_solve_stats": 1,
+          "print_solve_stats_interval": 25,
+          "bsr_spmv_backend": "legacy",
+          "preconditioner": {
+            "solver": "MULTICOLOR_ILU",
+            "ilu_sparsity_level": 1,
+            "max_iters": 1,
+            "relaxation_factor": 1.0,
+            "coloring_level": 2,
+            "matrix_coloring_scheme": "MIN_MAX",
+            "max_uncolored_percentage": 0.0,
+            "reorder_cols_by_color": 1,
+            "insert_diag_while_reordering": 1,
+            "block_ilu_backend": "amgx",
+            "print_coloring_info": 1,
+            "monitor_residual": 0,
+            "store_res_history": 0,
+            "print_solve_stats": 0
+          }
+        },
+        "print_solve_stats": 1,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "legacy",
+        "gmres_n_restart": 100,
+        "scope": "matk_outer"
+      },
+      "block_format": "ROW_MAJOR"
+    },
+    "probe_only": true,
+    "required_library_sha256": "7ece26037d7a3008d09bfcfd6d2708359e3db974917b6014912c24ecc40a18c8"
+  }
+}

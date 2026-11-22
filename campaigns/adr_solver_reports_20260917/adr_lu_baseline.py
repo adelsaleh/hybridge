@@ -23,7 +23,11 @@ import csv
 import json
 
 ROOT = _campaign_workspace_path('hybridge')
-CAMPAIGN = ROOT / 'run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22'
+# The confirmed timings are tracked with the PARDISO campaign records; the untracked run-output
+# copy is the original location and still wins where it exists.
+_RUN_OUTPUT = ROOT / 'run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22'
+CAMPAIGN = _RUN_OUTPUT if (_RUN_OUTPUT / 'confirmed_timings.csv').exists() else (
+    ROOT / 'docs/campaigns/adr_pardiso/records/pardiso_tuned_2026_09_22')
 COLOR = '#30343b'
 LABEL = r'P-LU$_n$ ($n$ threads at points)'
 CASE_NAMES = {'Transport dominated': 'advection_dominated',
@@ -91,14 +95,21 @@ def handle():
     return Line2D([], [], color=COLOR, marker='v', linestyle=':', label=LABEL)
 
 
-def curve(ax, rows, suite, metric, xkey, campaign=None):
-    """Add a neutral LU timing curve, with selected thread count at every point."""
+def curve(ax, rows, suite, metric, xkey, campaign=None, lookup_fn=None):
+    """Add a neutral LU timing curve, with selected thread count at every point.
+
+    ``lookup_fn(row, suite, metric, campaign)`` replaces the confirmed-timing lookup for another
+    LU campaign (the H200 node's); it returns ``None`` for a system without a measurement, which
+    is then left out of the curve.
+    """
     if metric == 'iterations':
         return []
     metric = 'hot' if metric == 'mean' else metric
     chosen = {}
     for row in rows:
-        direct = lookup(row, suite, metric, campaign)
+        direct = (lookup_fn or lookup)(row, suite, metric, campaign)
+        if direct is None:
+            continue
         x = xkey(row) if callable(xkey) else row[xkey]
         chosen[direct['system_id']] = (x, direct)
     points = sorted(chosen.values(), key=lambda item: item[0])

@@ -1,0 +1,591 @@
+{
+  "pfgmres_pardiso_natural_ilu1_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(1); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 1
+  },
+  "pfgmres_pardiso_natural_ilu2_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(2); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 2,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 2
+  },
+  "pfgmres_pardiso_natural_ilu3_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(3); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 3,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 3
+  },
+  "pfgmres_pardiso_natural_ilu5_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(5); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 5,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 5
+  },
+  "pfgmres_pardiso_natural_ilu10_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(10); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 10,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 10
+  },
+  "pfgmres_pardiso_natural_ilu20_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(20); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 20,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 20
+  },
+  "pfgmres_pardiso_natural_ilu1_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(1); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 1,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 1
+  },
+  "pfgmres_pardiso_natural_ilu2_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(2); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 2,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 2
+  },
+  "pfgmres_pardiso_natural_ilu3_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(3); host level-of-fill symbolic pattern, cuSPARSE GPU numerical factors and triangular solves. Original operator unchanged. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 3,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 3
+  },
+  "pfgmres_pardiso_natural_ilu5_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(5); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 5,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 5
+  },
+  "pfgmres_pardiso_natural_ilu10_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(10); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 10,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 10
+  },
+  "pfgmres_pardiso_natural_ilu20_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO consecutive b8 natural-order ILU(20); level-of-fill, no value drop tolerance. Not equivalent to SciPy fill_factor. CPU symbolic pattern and GPU numerical factors/triangular solves. PFGMRES restart200 for more frequent native residual recomputation.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 20,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 20
+  },
+  "pgmres_pardiso_natural_ilu10_b8_r200": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO b8 supplied-order ILU(10), fixed preconditioner, PGMRES restart200, double Gram-Schmidt and reliable explicit residual verification. Zero start.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "GMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 200,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 10,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        },
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1
+      }
+    },
+    "natural_ilu_fill": 10
+  },
+  "pgmres_pardiso_natural_ilu10_b8_r1000": {
+    "block_size": 8,
+    "consecutive_pardiso_blocks": true,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "PARDISO b8 supplied-order ILU(10), fixed preconditioner, PGMRES restart1000, double Gram-Schmidt and reliable explicit residual verification. Zero start.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "GMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 10,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        },
+        "gmres_reorthogonalization": "ALWAYS",
+        "gmres_reliable_residual": 1
+      }
+    },
+    "natural_ilu_fill": 10
+  },
+  "pfgmres_input_natural_ilu10_b8_r1000": {
+    "block_size": 8,
+    "probe_only": true,
+    "required_library_sha256": "973c02b0f08604812d7c69d70be78590baf05270bc2d6a95221161bc8c8e696a",
+    "description": "Input-order consecutive b8 ILU(10), no external permutation; paired with the PARDISO variant using the identical AMGX solver configuration.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 1,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "solver": "FGMRES",
+        "max_iters": 3000,
+        "gmres_n_restart": 1000,
+        "tolerance": 1e-10,
+        "convergence": "RELATIVE_INI_CORE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 25,
+        "print_grid_stats": 1,
+        "obtain_timings": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "preconditioner": {
+          "solver": "MULTICOLOR_ILU",
+          "ilu_sparsity_level": 10,
+          "max_iters": 1,
+          "relaxation_factor": 1.0,
+          "block_ilu_backend": "cusparse_legacy",
+          "reorder_cols_by_color": 0,
+          "insert_diag_while_reordering": 0
+        }
+      }
+    },
+    "natural_ilu_fill": 10,
+    "consecutive_input_blocks": true
+  }
+}

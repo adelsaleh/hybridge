@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -73,11 +74,20 @@ def main():
     parser.add_argument('--nx', type=int, default=16)
     parser.add_argument('--orders', type=int, nargs='+', default=[1, 3, 4, 6])
     parser.add_argument('--repeats', type=int, default=5)
+    parser.add_argument('--output', type=Path)
     args = parser.parse_args()
-    if args.nx < 1 or args.repeats < 1 or any(p < 0 or p > 6 for p in args.orders):
-        parser.error('nx and repeats must be positive, orders must lie in 0..6')
+    if args.nx < 1 or args.repeats < 1 or any(p < 0 or p > 9 for p in args.orders):
+        parser.error('nx and repeats must be positive, orders must lie in 0..9')
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
     for order in args.orders:
-        print(json.dumps(benchmark(order, args.nx, args.repeats)), flush=True)
+        row = benchmark(order, args.nx, args.repeats)
+        row['qualification'] = 'high-order-probe' if order > 6 else 'existing-tested-range'
+        line = json.dumps(row)
+        print(line, flush=True)
+        if args.output:
+            with args.output.open('a') as stream:
+                stream.write(line + '\n')
 
 
 if __name__ == '__main__':

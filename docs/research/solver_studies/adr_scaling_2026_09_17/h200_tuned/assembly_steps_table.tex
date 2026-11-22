@@ -1,0 +1,32 @@
+\begin{tabular}{llrrrrr}
+\toprule
+kernel and mesh & steps & $p$ & start & middle & tuned & gain\\
+\midrule
+AR, 360,379 & split3; tensor + MAGMA; tensor + fused & 6 & 44.6 & 23.1 & 21.0 & 2.1\\
+ &  & 7 & 81.7 & 53.2 & 28.5 & 2.9\\
+ &  & 8 & 147 & 82.3 & 58.1 & 2.5\\
+ &  & 9 & 291 & 116 & 76.3 & 3.8\\
+\addlinespace[2pt]
+AR, 1,995,756 & raw fused; tensor + fused & 9 & 1\,958 & -- & 379 & 5.2\\
+\addlinespace[2pt]
+DR, 100,352 & Blackwell priors; thorough; FP64-rich priors & 1 & 1.01 & 0.29 & 0.29 & 3.5\\
+ &  & 2 & 2.25 & 0.56 & 0.56 & 4.1\\
+ &  & 4 & 5.58 & 2.86 & 2.86 & 2.0\\
+ &  & 6 & 18.2 & 12.7 & 12.6 & 1.4\\
+ &  & 7 & 33.7 & 23.5 & 23.4 & 1.4\\
+ &  & 8 & 55.0 & 44.5 & 44.5 & 1.2\\
+ &  & 9 & 80.2 & 71.8 & 71.4 & 1.1\\
+\addlinespace[2pt]
+ADR variable tensor, 131,072 & 128 threads; wide launch; explicit inverse & 7 & 473 & 474 & 239 & 2.0\\
+ &  & 8 & 946 & 720 & 521 & 1.8\\
+ &  & 9 & 2\,796 & 1\,405 & 892 & 3.1\\
+\addlinespace[2pt]
+CuPy ADR, 32,768 & host route; device route & 1 & 549 & -- & 15.7 & 35.1\\
+ &  & 4 & 1\,472 & -- & 61.4 & 24.0\\
+ &  & 7 & 5\,809 & -- & 254 & 22.9\\
+ &  & 9 & 13\,134 & -- & 632 & 20.8\\
+\addlinespace[2pt]
+CuPy ADR, 199,712 & host route; device route & 4 & 8\,552 & -- & 327 & 26.1\\
+ &  & 7 & 30\,049 & -- & 1\,527 & 19.7\\
+\bottomrule
+\end{tabular}

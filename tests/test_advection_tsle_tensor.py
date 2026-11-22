@@ -93,7 +93,7 @@ def _assert_matches_split3(inputs: dict, *, rtol: float, **options) -> None:
 
 @pytest.mark.parametrize("order,trace_basis", ((1, "legacy-lagrange"), (4, "legendre-modal"), (7, "legacy-lagrange")))
 @pytest.mark.parametrize("contraction", ("cublas", "cutensor"))
-@pytest.mark.parametrize("local_solver", ("coop", "cublas"))
+@pytest.mark.parametrize("local_solver", ("coop", "cublas", "fused"))
 def test_fp64_tensor_tsle_matches_split3(order, trace_basis, contraction, local_solver) -> None:
     if contraction == "cutensor" and not _cutensor_available():
         pytest.skip("cuTENSOR is unavailable")
@@ -113,6 +113,36 @@ def test_fp64_tensor_tsle_zero_flux_conflict_averaged_matches_split3(trace_basis
 def test_magma_tensor_tsle_matches_split3(precision, rtol) -> None:
     inputs = _split3_inputs(6, "legendre-modal", zero_boundary_flux=True, stabilization="conflict-averaged-upwind")
     _assert_matches_split3(inputs, rtol=rtol, precision=precision, contraction="cublas", local_solver="magma")
+
+
+@pytest.mark.parametrize("order", (6, 8, 9))
+def test_fused_tensor_tsle_matches_split3_and_magma(order) -> None:
+    """The fused local solve at the orders it targets, against split3 and (when present) MAGMA."""
+    inputs = _split3_inputs(order, "legacy-lagrange", zero_boundary_flux=True,
+                            stabilization="conflict-averaged-upwind")
+    _assert_matches_split3(inputs, rtol=1.0e-12, precision="float64", contraction="cublas", local_solver="fused")
+    if _magma_available():
+        import cupy as cp
+        from hybridge.transport.tsle_tensor import assemble_projected_advection_trace_system_eliminated_tsle_tensor
+
+        fused = assemble_projected_advection_trace_system_eliminated_tsle_tensor(
+            **inputs, precision="float64", contraction="cublas", local_solver="fused")
+        magma = assemble_projected_advection_trace_system_eliminated_tsle_tensor(
+            **inputs, precision="float64", contraction="cublas", local_solver="magma")
+        assert fused.timings["raw.tsle_tensor.solve.info_nonzero"] == 0.0
+        for name in ("data", "rhs", "local_response"):
+            expected = cp.asarray(getattr(magma, name))
+            scale = float(cp.abs(expected).max())
+            assert float(cp.abs(cp.asarray(getattr(fused, name)) - expected).max()) <= 1.0e-12 * scale, name
+
+
+def test_fused_local_solver_is_fp64_only() -> None:
+    from hybridge.transport.tsle_tensor import assemble_projected_advection_trace_system_eliminated_tsle_tensor
+
+    inputs = _split3_inputs(2, "legacy-lagrange", zero_boundary_flux=False)
+    with pytest.raises(ValueError, match="float64"):
+        assemble_projected_advection_trace_system_eliminated_tsle_tensor(
+            **inputs, precision="float32", contraction="cublas", local_solver="fused")
 
 
 def test_fp32_tensor_tsle_tracks_fp64_split3() -> None:

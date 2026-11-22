@@ -1577,7 +1577,7 @@ factorization; this matters for large trace systems.
 
 ## Guiding-Center BDF2 Showcase
 
-The small showcase (`../guiding-center-cg-hdg/guiding_center_cg_hdg/guiding_center/README.md`) couples the public Poisson
+The small [showcase](scripts/guiding_center/README.md) couples the public Poisson
 and transport solvers on the README's star-shaped domain with an island. It
 supports balanced vortex gas and positive turbulence using BDF2, with one Euler
 startup step. The latter applies the library's density-positivity projector.

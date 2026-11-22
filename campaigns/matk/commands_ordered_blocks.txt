@@ -1,0 +1,50 @@
+PARDISO-order consecutive block ILU(0), 2026-10-31
+================================================
+From scripts/matk:
+
+  sbatch ordered_blocks_preflight.sbatch
+
+Read the exact occupancy/memory report before launching full trials. Preflight
+28440 measured 100% stored-pattern occupancy for b2/b4/b8, 80.12% for b16.
+GPU planning estimates are 43-48 GiB per case, excluding opaque workspace.
+
+Before EVERY submission, inspect ALL running and pending GPU allocations:
+
+  squeue -u "$USER" -o '%.18i %.12P %.28j %.10T %.20b %.20R'
+
+Shared ceiling: FIVE GPUs across all repositories, including pending jobs.
+Each command below uses one H200; submit only when the combined allocation fits.
+
+  sbatch amgx_ordered_blocks.sbatch 2 none
+  sbatch amgx_ordered_blocks.sbatch 4 none
+  sbatch amgx_ordered_blocks.sbatch 8 none
+  sbatch amgx_ordered_blocks.sbatch 16 none
+
+Optional paired scaling follow-up (same resource check, sequential dependency
+can prevent overlap): sbatch --dependency=afterany:JOBID amgx_ordered_blocks.sbatch 16 diagonal
+
+Every job first checks its exact configuration on a small nonsymmetric matrix
+with a separately exported PARDISO permutation, then tests full matK from zero.
+Full budget: 3000 iterations, restart1000, no residual corrections. Preconditioned
+FGMRES is labeled PFGMRES; the actual AMGX solver token is FGMRES with an explicit
+MULTICOLOR_ILU preconditioner using block_ilu_backend=cusparse_legacy, ILU(0),
+and no graph coloring. Consecutive regrouping preserves the full scalar operator.
+The original CSR/RHS residual is authoritative; AMGX's internal history alone
+does not establish convergence. Physical target: relative L2 <=1e-8.
+
+  tail -F matk-block-ilu-JOBID.out
+
+Detailed JSON/configs/native logs and optional saved original-coordinate iterates:
+../../run_outputs/matk/ordered-block-ilu-JOBID/
+The reports separate saved PARDISO analysis, permutation application, scaling,
+block conversion, upload, AMGX setup, solve and original residual validation.
+AMGX findings: ../../../AMGX/docs/matk_pardiso_block_ilu_results.txt
+
+Summarize this run's eight trials (unscaled and diagonal-scaled):
+  ../../.venv/bin/python report_ordered_blocks.py \
+    --jobs 28441 28442 28445 28446 28447 28448 28449 28450 \
+    --output ../../run_outputs/matk/ordered-block-results.json
+
+Initial b8/b16 jobs28443/28444 exposed unsorted BSR block columns in SciPy's
+conversion. Sorting indices before upload fixed the synthetic failure; use the
+corrected jobs28445/28446. This sorting preserves PARDISO's elimination order.

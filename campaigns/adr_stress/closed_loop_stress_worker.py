@@ -33,7 +33,8 @@ def dispatch(spec, common):
     kind = spec["worker_kind"]
     if kind in ("native", "native_profile"):
         # No branch hybridge import may precede this adapter.
-        from scripts.adr_native_hp_worker import measure
+        sys.path.insert(0, str(Path(spec["master_root"])))
+        from campaigns.adr_unified.native_hp_worker import measure
         result = measure(spec, master_root=Path(spec["master_root"]))
         if kind == "native_profile" and result.get("status") == "passed" and not result.get("profile_validation", {}).get("passed"):
             result["status"] = "numerical_failure"

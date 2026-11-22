@@ -1,0 +1,85 @@
+# Run from scripts/matk.
+# Before submitting: count running AND pending GPU allocations across all repos.
+# At most FOUR GPUs total, including background jobs. This job uses ONE H200
+# and runs its smoke checks, BiCGSTAB, then GMRES sequentially.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+sbatch amgx_checkpoints.sbatch --verbosity 3
+
+# Replace JOBID with the submission's number. The native terminal log is live:
+# tail -F matk-save-iterates-JOBID.out
+# cat saved_iterates/reference-JOBID/index.json
+# The files appear as each reference finishes:
+# saved_iterates/reference-JOBID/bicgstab_unpreconditioned.solution.npz
+# saved_iterates/reference-JOBID/gmres_natural_ilu0.solution.npz
+# Historical results: BiCGSTAB 0.03225994; GMRES + natural ILU0 0.02766880.
+# These are approximate iterates, not converged solutions. Reproduced residuals
+# are recorded in index.json and must be checked, not assumed to match exactly.
+
+# Later warm-start comparison, using the same full matrix and RHS:
+# seed="$PWD/saved_iterates/reference-JOBID/bicgstab_unpreconditioned.solution.npz"
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:20:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates fgmres_natural_ilu0_b20 --scaling column-max --max-iters 1000 \
+#   --residual-corrections 0 --timeout 900 --initial-guess "$seed" --save-solution
+# For a controlled comparison, repeat with identical settings and omit only
+# --initial-guess. Every worker recomputes the original ||b-Ax||/||b||.
+# A smaller residual alone does not prove smaller solution error for this
+# ill-conditioned matrix. Warm starts test whether the solver can make further
+# progress from this particular iterate; they do not isolate conditioning.
+
+# Loading a saved vector directly in NumPy (no pickle required):
+# import json, numpy as np
+# with np.load("saved_iterates/reference-JOBID/bicgstab_unpreconditioned.solution.npz", allow_pickle=False) as data:
+#     x0 = data["x"]
+#     metadata = json.loads(data["metadata"].item())
+# x0 is FP64 in original global coordinates. The benchmark checks matrix/RHS
+# and vector SHA256s, maps x0 into the selected scaling, and retains the same
+# original-system acceptance tolerance. Copies of the initial checkpoint are
+# not overwritten by --save-solution; outputs live beside the new worker JSON.
+
+# Controlled long BiCGSTAB comparison (jobs27763/27764):
+# ABSOLUTE is a residual NORM tolerance, not a relative tolerance. For this
+# unchanged matK RHS, 1e-8 * ||b|| = 0.010463057375140308. This gives both
+# initial guesses the same original-system target. Use a different norm target
+# if the matrix file/RHS changes. Native final status alone is not acceptance.
+# Count reservations first; these are TWO one-GPU jobs if submitted together.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:10:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates bicgstab_unpreconditioned_absolute --scaling none \
+#   --max-iters 10000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 300 --save-solution
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:10:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates bicgstab_unpreconditioned_absolute --scaling none \
+#   --max-iters 10000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 300 --save-solution \
+#   --initial-guess "$PWD/saved_iterates/reference-27756/bicgstab_unpreconditioned.solution.npz"
+
+# Results: 27763 zero-start ->0.005269641532194339; 27764 warm-start
+# ->0.0024411668887734054. Both failed the1e-8 acceptance target. Archived as
+# saved_iterates/bicgstab_zero10000_job27763.solution.npz and
+# saved_iterates/bicgstab_warm10000_job27764.solution.npz.
+
+# Follow-up27765, one continuous100000-step native BiCGSTAB solve fromzero:
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:16:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates bicgstab_unpreconditioned_absolute --scaling none \
+#   --max-iters 100000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 900 --save-solution
+
+# Follow-up27766, native GMRES6000 + natural ILU0 from the new best iterate:
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=01:05:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates gmres_natural_ilu0_csr_r6000_absolute --scaling column-max \
+#   --max-iters 6000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 3600 --save-solution \
+#   --initial-guess "$PWD/saved_iterates/bicgstab_warm10000_job27764.solution.npz"
+
+# BiCGSTAB continuation27774 (cancelled after severe divergence; bestseed intact):
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1 \
+# sbatch --time=00:16:00 amgx_strong.sbatch --verbosity 3 \
+#   --candidates bicgstab_unpreconditioned_absolute --scaling none \
+#   --max-iters 100000 --inner-rtol 0.010463057375140308 \
+#   --residual-corrections 0 --timeout 900 --save-solution \
+#   --initial-guess "$PWD/saved_iterates/bicgstab_zero100000_job27765.solution.npz"
+# Main search now follows commands_pardiso_ordering.txt at the user's request.

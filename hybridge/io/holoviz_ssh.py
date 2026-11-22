@@ -101,15 +101,50 @@ class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
-def _check_display(env):
-    """Require ``xdpyinfo`` and a reachable ``DISPLAY`` in ``env``."""
+def _x_setup_accepted(port, cookie, timeout=10):
+    """Return whether the X server on loopback ``port`` accepts ``cookie`` in the connection setup."""
+    name = b"MIT-MAGIC-COOKIE-1"
+    request = (struct.pack("<cxHHHHxx", b"l", 11, 0, len(name), len(cookie))
+               + name + bytes(-len(name) % 4) + cookie + bytes(-len(cookie) % 4))
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as connection:
+        connection.settimeout(timeout)
+        connection.sendall(request)
+        return _receive(connection, 1)[0] == 1
+
+
+def _display_port(display):
+    """Return the TCP port of a loopback X display such as ``localhost:10.0``, or None."""
+    match = re.fullmatch(r"(?:localhost|127\.0\.0\.1):(\d+)(?:\.\d+)?", display)
+    return None if match is None else 6000 + int(match[1])
+
+
+def _magic_cookies(env, display):
+    """Return the hexadecimal MIT-MAGIC-COOKIE-1 values ``xauth`` holds for ``display``."""
     try:
-        check = subprocess.run(["xdpyinfo"], env=env, capture_output=True, timeout=10)
+        listing = subprocess.run(["xauth", "list", display], env=env,
+                                 capture_output=True, text=True, check=True)
     except FileNotFoundError as exc:
-        raise RuntimeError("Install x11-utils (xdpyinfo) on the server") from exc
-    if check.returncode:
+        raise RuntimeError("Install xauth on the server") from exc
+    return [line.split()[2] for line in listing.stdout.splitlines()
+            if len(line.split()) == 3 and line.split()[1] == "MIT-MAGIC-COOKIE-1"]
+
+
+def _check_display(env):
+    """Require a reachable ``DISPLAY`` in ``env``, by ``xdpyinfo`` or, where absent, by the X setup itself."""
+    display = env.get("DISPLAY", "")
+    try:
+        reachable = subprocess.run(["xdpyinfo"], env=env, capture_output=True, timeout=10).returncode == 0
+    except FileNotFoundError:
+        # Compute nodes often lack x11-utils; the setup request tests the same connection and cookie.
+        port, cookies = _display_port(display), _magic_cookies(env, display)
+        try:
+            reachable = (port is not None and bool(cookies)
+                         and _x_setup_accepted(port, bytes.fromhex(cookies[0])))
+        except (EOFError, OSError):
+            reachable = False
+    if not reachable:
         raise RuntimeError(
-            f"Cannot open DISPLAY={env.get('DISPLAY')!r}. Run from a live ssh -Y "
+            f"Cannot open DISPLAY={display!r}. Run from a live ssh -Y "
             "terminal with its original DISPLAY and XAUTHORITY; remove old proxy overrides."
         )
 
@@ -119,18 +154,12 @@ def display_environment():
     """Create a private, authenticated proxy for the current loopback SSH display."""
     env = os.environ.copy()
     display = env.get("DISPLAY", "")
-    match = re.fullmatch(r"(?:localhost|127\.0\.0\.1):(\d+)(?:\.\d+)?", display)
-    if not match:
+    port = _display_port(display)
+    if port is None:
         raise RuntimeError("Expected the original SSH DISPLAY (for example localhost:10.0)")
-    upstream = ("127.0.0.1", 6000 + int(match[1]))
+    upstream = ("127.0.0.1", port)
     _check_display(env)
-    try:
-        auth = subprocess.run(["xauth", "list", display], env=env,
-                              capture_output=True, text=True, check=True)
-    except FileNotFoundError as exc:
-        raise RuntimeError("Install xauth on the server") from exc
-    cookies = [line.split() for line in auth.stdout.splitlines()
-               if len(line.split()) == 3 and line.split()[1] == "MIT-MAGIC-COOKIE-1"]
+    cookies = _magic_cookies(env, display)
     if not cookies:
         raise RuntimeError("No MIT-MAGIC-COOKIE-1 authorization for the current SSH DISPLAY")
     with tempfile.TemporaryDirectory(prefix="hybridge-holoviz-ssh-") as folder:
@@ -141,7 +170,7 @@ def display_environment():
             proxy_display = f"localhost:{server.server_address[1] - 6000}"
             # Feed the cookie through stdin, never argv or logs.
             subprocess.run(["xauth", "-f", str(authority)],
-                           input=f"add {proxy_display} MIT-MAGIC-COOKIE-1 {cookies[0][2]}\n",
+                           input=f"add {proxy_display} MIT-MAGIC-COOKIE-1 {cookies[0]}\n",
                            text=True, capture_output=True, check=True)
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()

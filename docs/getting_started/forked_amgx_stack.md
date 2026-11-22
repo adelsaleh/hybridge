@@ -6,7 +6,7 @@ The `v0.1.0a1` tag is the standalone early-alpha release boundary. Every HDG
 commit after that tag is developed and qualified as part of this three-repository
 stack:
 
-| Component | Required branch | Exact revision qualified here |
+| Component | Required branch | Historical release qualification |
 |---|---|---|
 | HDG | post-`v0.1.0a1` `master` | this checkout |
 | AMGX | [`adelsaleh/AMGX@hdg-cuda13-integration`](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration) | `583084b` |
@@ -43,15 +43,45 @@ git -C AMGX checkout --detach 583084b
 git -C pyamgx checkout --detach 81efd1e
 ```
 
+## H200 Campaign Snapshot (2026-10-31)
+
+Hybridge `master` includes the H200 campaign work. Its combined CUDA 13.1/H200
+qualification uses:
+
+| Fork | Branch | Qualified commit |
+|---|---|---|
+| AMGX | `hdg-cuda13-integration` | `2a6625b840f03e2264e0ab3bb79d4733d8f197bd` |
+| PyAMGX | `quality-of-life` | `a95e878b1cced80705237dccd5a9c22448d3787b` |
+
+Each is the single published commit that carries the qualified source: its
+`src` and `include` trees are those that were built and qualified. The older
+pins above reproduce the historical release
+qualification, without the new borrowed-BSR and supplied-order ILU(k) additions.
+For the H200 work, build both forks at these newer commits. See the
+primary runtime and validation record (`docs/campaigns/fork_integration/primary_promotion.md`, local, untracked).
+The original combined qualification used the isolated build
+`builds/AMGX/cuda13.1-integration`. The AMGX commit above includes the
+qualified native ILU synchronization and truncation corrections. The
+native ILU record (`docs/campaigns/matk/ilu_synchronization_qualification.md`, local, untracked) and
+truncation record (`docs/campaigns/fork_integration/records/truncation-29209/README.md`, local, untracked)
+retain their separate candidate identities. The grouped
+build layout (`docs/campaigns/fork_integration/build_layout.md`, local, untracked) records runtime
+promotion and retirement of the obsolete isolated builds.
+
 ## Build AMGX
+
+The new supplied-order ILU(k) extension is **experimental** and requires an
+explicit configuration. Its autotuning is deferred; qualification of the native
+ILU synchronization fixes does not promote ILU(k) into an automatic solver
+choice. See the [tuning policy](../development/architecture_tuning.md).
 
 Choose a CUDA 13 toolkit compatible with the driver and an architecture for
 this GPU. From the common source directory, configure explicit locations:
 
 ```bash
 export HYBRIDGE_CUDA13_ROOT="${CUDA_HOME:?Set CUDA_HOME to the selected CUDA 13 toolkit}"
-export HYBRIDGE_AMGX_BUILD_ROOT="$PWD/AMGX-build-cuda13"
-export HYBRIDGE_AMGX_INSTALL_ROOT="$PWD/AMGX-install-cuda13"
+export HYBRIDGE_AMGX_BUILD_ROOT="$PWD/builds/AMGX/cuda13"
+export HYBRIDGE_AMGX_INSTALL_ROOT="$PWD/builds/AMGX/install-cuda13"
 export CUDA_ARCHITECTURES=120  # example: replace with the target GPU architecture
 
 cmake -S AMGX -B "$HYBRIDGE_AMGX_BUILD_ROOT" \
@@ -64,7 +94,7 @@ cmake -S AMGX -B "$HYBRIDGE_AMGX_BUILD_ROOT" \
   -DAMGX_INCLUDE_EXTERNAL=ON \
   -DAMGX_NO_RPATH=OFF \
   -DCMAKE_INSTALL_PREFIX="$HYBRIDGE_AMGX_INSTALL_ROOT"
-cmake --build "$HYBRIDGE_AMGX_BUILD_ROOT" --target amgxsh --parallel
+cmake --build "$HYBRIDGE_AMGX_BUILD_ROOT" --target amgx amgxsh amgx_capi --parallel
 cmake --install "$HYBRIDGE_AMGX_BUILD_ROOT"
 ```
 

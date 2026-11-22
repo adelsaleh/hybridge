@@ -237,7 +237,7 @@ For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR convers
   (restart 75) preconditioned by one V-cycle of classical block-graph-dense AMG
   with one-sweep `MULTICOLOR_DILU` pre/post smoothing and a dense-LU coarse
   solve; natural face BSR is required. It is the transport-dominated winner of
-  the [matched ADR solver study](../../docs/research/solver_studies/adr_solver_comparison_2026_09_17.md)
+  the [matched ADR solver study](../../docs/research/solver_studies/adr_scaling_2026_09_17/baseline/adr_solver_comparison_2026_09_17.md)
   (`K=1e-3 I`, `beta=(1,0.5)`, p=6, 99,458 triangles: 35 iterations versus 263
   for direct block DILU). The stored absolute tolerance was removed and
   convergence is `RELATIVE_INI_CORE`, so runners supply the tolerance. The ADR

@@ -81,5 +81,5 @@ samples, checking parity for every recorded case. Timings exclude JIT warmup, co
 preparation and global solves; recorded CPU/wall ratios supplement the requested
 Numba thread count.
 
-The [2026-09-25 qualification report](../research/solver_studies/numba_adr_tensor_2026_09_25.md)
+The [2026-09-25 qualification report](../research/solver_studies/adr_assembly/numba_adr_tensor_2026_09_25.md)
 contains the benchmark command, scope and all 42 raw records.

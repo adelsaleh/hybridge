@@ -12,6 +12,7 @@ from hybridge.linalg.gpu.gmres import (
     _back_substitute_upper,
     _compute_givens,
     _resolve_orthogonalization,
+    _validate_estimate_target,
     CuPyGMRESWorkspace,
     CuPyRestartedGMRESSolver,
     CuPyVectorBLAS,
@@ -608,3 +609,76 @@ def test_cupy_workspace_rejects_insufficient_capacity_and_aliasing() -> None:
             max_iterations=20,
             workspace=workspace,
         )
+
+
+def test_estimate_target_validation() -> None:
+    from hybridge.linalg.gpu.production_gmres import CuPyProductionGMRESOptions
+
+    assert _validate_estimate_target("cycle_relative") == "cycle_relative"
+    assert _validate_estimate_target("true_target") == "true_target"
+    assert CuPyProductionGMRESOptions().estimate_target == "cycle_relative"
+    with pytest.raises(ValueError, match="estimate_target"):
+        _validate_estimate_target("absolute")
+    with pytest.raises(ValueError, match="estimate_target"):
+        CuPyProductionGMRESOptions(estimate_target="absolute").validate(num_dofs=10, dtype="float64")
+
+
+def _preconditioned_face_solve(rtol: float, **kwargs):
+    cp = _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=4, ny=4)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    preconditioner = CuPyFaceBlockJacobiPreconditioner.from_system(system, device_id=operator.device_id)
+    rhs = operator.to_device(system.rhs).reshape(-1)
+
+    def solve(estimate_target, *, x0=None, restart=200, right_hand_side=rhs):
+        return restarted_gmres_cupy(
+            operator,
+            right_hand_side,
+            x0=x0,
+            restart=restart,
+            max_iterations=1000,
+            rtol=rtol,
+            preconditioner=preconditioner,
+            orthogonalization="cgs2",
+            estimate_target=estimate_target,
+        )
+
+    return cp, operator, rhs, solve
+
+
+def test_true_target_matches_default_for_one_cycle_from_zero() -> None:
+    cp, operator, rhs, solve = _preconditioned_face_solve(1.0e-10)
+    default = solve("cycle_relative")
+    scaled = solve("true_target")
+    operator.synchronize()
+
+    assert default.converged and scaled.converged
+    assert default.restart_cycles == scaled.restart_cycles == 1
+    assert default.iterations == scaled.iterations
+    np.testing.assert_array_equal(cp.asnumpy(default.solution), cp.asnumpy(scaled.solution))
+
+
+def test_true_target_stops_warm_start_at_the_true_target() -> None:
+    cp, operator, rhs, solve = _preconditioned_face_solve(1.0e-10)
+    previous = solve("cycle_relative").solution.copy()
+    perturbed = rhs * (1.0 + 1.0e-3 * cp.cos(cp.arange(rhs.size, dtype=rhs.dtype)))
+    default = solve("cycle_relative", x0=previous, right_hand_side=perturbed)
+    scaled = solve("true_target", x0=previous, right_hand_side=perturbed)
+    operator.synchronize()
+
+    assert default.converged and scaled.converged
+    assert scaled.relative_residual <= 1.0e-10
+    # The default reduces the warm start's own residual by another rtol.
+    assert scaled.iterations < default.iterations
+
+
+def test_true_target_restarted_cold_solve_converges_in_no_more_iterations() -> None:
+    _, operator, _, solve = _preconditioned_face_solve(1.0e-10)
+    default = solve("cycle_relative", restart=6)
+    scaled = solve("true_target", restart=6)
+    operator.synchronize()
+
+    assert default.converged and scaled.converged
+    assert scaled.relative_residual <= 1.0e-10
+    assert scaled.iterations <= default.iterations

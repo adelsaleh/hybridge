@@ -49,3 +49,26 @@ cupy_heavy_benchmark.json
 
 # Animations are published as MP4 with PNG posters, never GIF
 docs/**/*.gif
+
+# What campaigns write on the machine that runs them: job records, logs, result
+# tables and notes. Only the index docs/campaigns/README.md is tracked; the
+# lessons are in docs/lessons/.
+/docs/campaigns/*/
+# State of the stage runners and of launcher tests on this machine
+/campaigns/gpu_lane/[A-Z]/
+/campaigns/gpu_lane/jobs.txt
+/campaigns/gpu_lane/test_lane/runs
+/campaigns/gpu_lane/test_lane/state/
+/campaigns/gpu_lane/test_requeue/out-*.txt
+/campaigns/adr_unified/host_pardiso_test/
+/campaigns/common/probes/signal_test/state.json
+*.bak
+*.bak-*
+/campaigns/gpu_lane/*_early.sbatch
+# Aliases of matk records, which are local (see docs/campaigns/README.md)
+/campaigns/matk/saved_iterates/
+/campaigns/matk/converged_pardiso_ilu10_fgmres.provenance.json
+/campaigns/matk/matrix_report.txt
+/campaigns/matk/native_amg_factory_coverage.txt
+/campaigns/matk/native_krylov_audit.txt
+/campaigns/matk/native_search_notes.txt

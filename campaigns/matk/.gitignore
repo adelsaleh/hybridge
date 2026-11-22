@@ -1,0 +1,4 @@
+matK.h5
+__pycache__/
+# Large local checkpoints are catalogued in saved_iterates/manifest.json.
+saved_iterates/**/*.npz

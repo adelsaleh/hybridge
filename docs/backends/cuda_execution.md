@@ -75,9 +75,11 @@ The explicit `raw_local_assembly="split3"` selector chooses TSLE-BSR, which
 separates build, cooperative LU/solve, and Schur/BSR scatter so each stage can
 autotune its launch shape. It preserves the same HDG algebra, requires BSR and
 cooperative pivoted LU, and retains persistent intermediate workspaces.
-`raw_local_assembly="auto"` (implied for zero-flux raw-CUDA transport) selects TSLE-BSR from p=8 on and fused
-below, falling back to fused when face-BSR output, cooperative LU, or an
-operator-cache-free solve is unavailable. On an RTX PRO 5000 Blackwell
+`raw_local_assembly="auto"` (implied for zero-flux raw-CUDA transport) times the
+equivalent pipelines on a sample of the actual elements and keeps the fastest
+(`select_pipeline` in `hybridge/transport/pipeline_tuning.py`); it uses fused
+when face-BSR output, cooperative LU, or an operator-cache-free solve is
+unavailable. On an RTX PRO 5000 Blackwell
 (117k-triangle star mesh, zero-flux transport, bit-identical matrices) TSLE was
 24% faster than fused at p=8, 44% at p=9, and within 4% for p=4--7. Its
 workspaces cost about `E*(NEL**2 + 6*NQF)*8` bytes more than fused, roughly 17
@@ -170,8 +172,8 @@ The fused and split3 columns run in the `HYBRIDGE_PRECISION=float32` package
 mode, and the contraction engine is named in parentheses. The native ranking
 reverses between precisions. In FP32, fused beats split3 at every order and
 runs 5.5--8.3x faster than in FP64; in FP64 on this card, split3 is 24% and 44%
-faster than fused at p=8 and p=9. The `auto` rule (split3 from p=8) is
-therefore specific to FP64-limited GPUs; the proxy never ranks split3 first.
+faster than fused at p=8 and p=9. Split3 winning from p=8 is
+therefore specific to FP64-limited GPUs, which is why `auto` times both; the proxy never ranks split3 first.
 Once the build is tensorized, the local LU dominates (55--65% of the time). The library LUs are weakest at
 `NEL` = 36 (p=7): about 16--18 ms against 9.5 ms for the cooperative kernel.
 The proxy should understate the library contractions on GPUs whose cuBLAS and

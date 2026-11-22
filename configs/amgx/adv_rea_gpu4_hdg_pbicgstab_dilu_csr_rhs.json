@@ -1,0 +1,24 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "PBICGSTAB",
+    "bsr_spmv_backend": "cusparse_generic",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_RHS",
+    "tolerance": 1e-10,
+    "max_iters": 1500,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2",
+    "preconditioner": {
+      "solver": "MULTICOLOR_DILU",
+      "max_iters": 1,
+      "coloring_level": 1,
+      "matrix_coloring_scheme": "PARALLEL_GREEDY",
+      "max_uncolored_percentage": 0.0,
+      "relaxation_factor": 0.7
+    }
+  }
+}

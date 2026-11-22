@@ -114,7 +114,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     cspace = as_cupy_space(owner.space)
     trace_ref = build_trace_reference(cspace, trace_basis)
     local_factor_policy = _normalize_local_factor_cache_policy(options.cache_local_factors)
-    cache_local_factors = local_factor_policy == "schur-lu"
+    cache_local_factors = local_factor_policy in {"schur-lu", "schur-lu+responses"}
     use_hybrid_cholesky = local_factor_policy == "schur-cholesky"
     local_factor_key = (
         id(owner.space),
@@ -142,8 +142,10 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     def assemble_raw_full():
         """Assemble the complete reduced raw CUDA trace system."""
         from hybridge.core.field_ops import coefficient_field
+        from hybridge.core.quadrature_coefficients import QuadratureScalar
 
-        source_input = coefficient_field(owner.space, owner.source, name="source_h")
+        source_input = (owner.source if isinstance(owner.source, QuadratureScalar)
+                        else coefficient_field(owner.space, owner.source, name="source_h"))
         reaction_input = coefficient_field(owner.space, owner.reaction, name="reaction_h")
         assembled = assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
             source_input,
@@ -182,8 +184,10 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
             )
 
         from hybridge.core.field_ops import coefficient_field
+        from hybridge.core.quadrature_coefficients import QuadratureScalar
 
-        source_input = coefficient_field(owner.space, owner.source, name="source_h")
+        source_input = (owner.source if isinstance(owner.source, QuadratureScalar)
+                        else coefficient_field(owner.space, owner.source, name="source_h"))
         reaction_input = coefficient_field(owner.space, owner.reaction, name="reaction_h")
         return assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
             source_input,

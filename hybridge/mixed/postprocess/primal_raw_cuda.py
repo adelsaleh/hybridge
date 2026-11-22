@@ -21,13 +21,23 @@ extern "C" __global__ void assemble(
  double* matrix, double* rhs) {
  const int k=blockIdx.x;
  const double* im=invmap+4*k;
- for(int entry=blockIdx.y*blockDim.x+threadIdx.x;entry<N*N && entry<(blockIdx.y+1)*blockDim.x;entry+=blockDim.x) {
+ const int work=blockIdx.y*blockDim.x+threadIdx.x;
+ const int count=COMPACT ? N*N-8*D*D : N*N;
+ if(work<count) {
+  int entry=work;
+  if(COMPACT) {
+   if(work<D*D) entry=(work/D)*N+work%D;
+   else if(work<D*D+3*D*(N-3*D)) {
+    const int t=work-D*D;
+    entry=(t/(N-3*D))*N+3*D+t%(N-3*D);
+   } else entry=3*D*N+work-D*D-3*D*(N-3*D);
+  }
   const int row=entry/N,col=entry%N;
   double v=0.;
   if(row<3*D && col<3*D) {
    // One (i,j) contraction fills all nine mixed blocks. In particular,
    // the four inverse-tensor masses share phi_i*phi_j and its weight.
-   if(row>=D || col>=D) continue;
+   if(row>=D || col>=D) goto rhs_part;
    const int i=row,j=col;
    double m00=0.,m01=0.,m10=0.,m11=0.,dx=0.,dy=0.,adv=0.;
    for(int q=0;q<Q;++q) {
@@ -45,11 +55,11 @@ extern "C" __global__ void assemble(
     adv+=weight*tau[(k*3+f)*F+q];
     nx+=weight*normal[(k*3+f)*2];ny+=weight*normal[(k*3+f)*2+1];
    }
-   double* out=matrix+k*N*N;
+   double* out=matrix+(long long)k*N*N;
    out[i*N+j]=-dx;out[i*N+D+j]=m00;out[i*N+2*D+j]=m01;
    out[(D+i)*N+j]=-dy;out[(D+i)*N+D+j]=m10;out[(D+i)*N+2*D+j]=m11;
    out[(2*D+i)*N+j]=adv;out[(2*D+i)*N+D+j]=nx;out[(2*D+i)*N+2*D+j]=ny;
-   continue;
+   goto rhs_part;
   } else if(row<3*D && col>=3*D && col<N-1) {
    const int block=row/D,i=row%D,f=(col-3*D)/E,a=(col-3*D)%E;
    for(int q=0;q<F;++q) {
@@ -75,8 +85,9 @@ extern "C" __global__ void assemble(
    const int i=row==N-1?col:row-2*D;
    for(int q=0;q<Q;++q) v+=jac[k]*w[q]*phi[q*D+i];
   }
-  matrix[k*N*N+entry]=v;
+  matrix[(long long)k*N*N+entry]=v;
  }
+ rhs_part:
  for(int row=threadIdx.x;blockIdx.y==0 && row<N;row+=blockDim.x) {
   double v=0.;
   if(row>=2*D && row<3*D) {
@@ -107,15 +118,15 @@ extern "C" __global__ void assemble(
 
 
 @lru_cache(maxsize=None)
-def _kernel(d, e, nq, nfq, base_dof):
+def _kernel(d, e, nq, nfq, base_dof, compact=False):
     """Cache a shape-specialized FP64 recovery assembly (matching both references)."""
     cp = require_cupy()
-    definitions = dict(D=d, E=e, Q=nq, F=nfq, B=base_dof, N=3*d+3*e+1)
+    definitions = dict(D=d, E=e, Q=nq, F=nfq, B=base_dof, N=3*d+3*e+1, COMPACT=int(compact))
     source = '\n'.join(f'#define {key} {value}' for key, value in definitions.items())+'\n'+_SOURCE
     return cp.RawKernel(source, 'assemble')
 
 
-def primal_system_raw_cuda(local_unknowns, total_flux, space, cache, samples, inverse):
+def primal_system_raw_cuda(local_unknowns, total_flux, space, cache, samples, inverse, *, threads=None, compact=False):
     """Assemble the constrained system in matrix-entry tiles without intermediate contractions."""
     cp = require_cupy()
     post = cache.post_space
@@ -136,6 +147,16 @@ def primal_system_raw_cuda(local_unknowns, total_flux, space, cache, samples, in
     arrays = tuple(cp.asarray(value, dtype=cp.float64, order="C") for value in (
         *samples, inverse, flux, local_unknowns, cache.mean_base))
     matrix, rhs = cp.empty((n, rows, rows)), cp.empty((n, rows))
-    _kernel(d, e, q.Krf_w.size, q.weights_JGL.size, space.el_dof)(
-        (n, (rows*rows+127)//128), (128,), (*tables[device], *arrays, matrix, rhs))
+    arguments = (*tables[device], *arrays, matrix, rhs)
+    kernel = _kernel(d, e, q.Krf_w.size, q.weights_JGL.size, space.el_dof, compact)
+    count = rows*rows - (8*d*d if compact else 0)
+    grid = lambda b: (n, (count+b-1)//b)
+    if threads is not None:
+        from hybridge.runtime.cuda_tuning import (
+            CandidateUnavailable, KernelConfiguration, device_signature, legal_configuration)
+        if not legal_configuration(KernelConfiguration(threads), 0, device_signature(cp), kernel.attributes):
+            raise CandidateUnavailable('compiled launch resources')
+        kernel(grid(threads), (threads,), arguments)
+        return matrix, rhs
+    kernel(grid(128), (128,), arguments)
     return matrix, rhs

@@ -1,0 +1,32 @@
+# Run from scripts/matk.
+# Count running AND pending GPU reservations across all repositories first.
+# At most FOUR GPUs total; each command below uses one H200.
+squeue -u "$USER" -o '%.18i %.32j %.10T %.24b %.18N'
+
+# Native AMGX distance-two coloring, FGMRES + ILU(1), no external permutation.
+# Uses the isolated native capacity/row-reordering/BFS repair library.
+# Source audit: ../AMGX/docs/matk_reordering_findings.txt
+# The two native choices change elimination order and realized fill; they do
+# not group strongest couplings into four large blocks or reduce bandwidth.
+
+# Synthetic qualification: job 27761 passed both original residual checks.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-bfs \
+# sbatch --time=00:10:00 amgx_strong.sbatch --smoke-test --smoke-blocks 512 \
+#   --scaling column-max --max-iters 1000 --residual-corrections 0 \
+#   --timeout 180 --verbosity 3 \
+#   --candidates fgmres_native_ilu1_parallel_greedy_x1000_b4_r1000 \
+#                fgmres_native_ilu1_greedy_minmax2_x1000_b4_r1000
+
+# Full matrix: two candidates sequentially on ONE GPU, 15 min cap per candidate.
+# HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13.1-ilu1024-bfs \
+# sbatch --time=00:35:00 amgx_strong.sbatch --scaling column-max \
+#   --max-iters 1000 --residual-corrections 0 --timeout 900 --verbosity 3 \
+#   --save-solution \
+#   --candidates fgmres_native_ilu1_parallel_greedy_x1000_b4_r1000 \
+#                fgmres_native_ilu1_greedy_minmax2_x1000_b4_r1000
+
+# Both frozen proposals apply an additional uniform factor 1000 to Dc, and
+# recover physical x=Dc*y. Comparison reference is MIN_MAX, job27736 (0.9628).
+# Smoke success is not evidence of full-matK convergence or complete ILU-kernel
+# qualification; independent original ||b-Ax||/||b|| <= 1e-8 remains the gate.
+# tail -F matk-amgx-strong-JOBID.out

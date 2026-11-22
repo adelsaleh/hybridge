@@ -249,7 +249,9 @@ def assemble_projected_adr_trace_operator_raw_cuda(
     local factors reconstruction reuses.
     ``block_size=1`` uses serial tensor solves in every matrix format; scalar
     CSR with dense preparation retains the original serial diagnostic kernel.
-    Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/9.
+    Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/9; on
+    sm_90 variable diffusion tensors widen it at p>=8 (see
+    :func:`hybridge.mixed.raw_cuda.tensor.wide_variable_launch`).
     """
     from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
     from hybridge.mixed.raw_cuda.tensor import assemble_tensor_operator
@@ -260,6 +262,7 @@ def assemble_projected_adr_trace_operator_raw_cuda(
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {"coo", "csr", "bsr"}:
         raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
+    auto_block = block_size in (None, "auto")
     block_size = resolve_raw_cuda_block_size(block_size, equation="advection-diffusion-reaction", order=space.order)
     if (block_size == 1 and matrix_format == "csr" and prepared.element_boundary is not None
             and np.isscalar(diffusion) and space.order <= 6):
@@ -269,7 +272,7 @@ def assemble_projected_adr_trace_operator_raw_cuda(
                                     trace_space=trace_space, matrix_format=matrix_format,
                                     block_size=block_size, cache_local_factors=cache_local_factors,
                                     prepared_diffusion=prepared_diffusion, csr_pattern=csr_pattern,
-                                    mass_factors=mass_factors)
+                                    mass_factors=mass_factors, auto_block=auto_block)
 
 
 def reconstruct_projected_adr_local_unknowns_raw_cuda(operator, trace, *, block_size="auto"):

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hybridge.runtime.logging import timed_call
 from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.io.live import expanding_color_limits
 
@@ -46,7 +47,7 @@ class RasterGeometry:
     points: np.ndarray | None = None
 
     @classmethod
-    def from_mesh(cls, mesh, width: int, height: int):
+    def from_mesh(cls, mesh, width: int, height: int, *, verbose=0):
         """Locate pixel centers in the mesh while preserving its aspect ratio."""
         if width < 2 or height < 2:
             raise ValueError("plot width and height must be at least 2")
@@ -57,16 +58,20 @@ class RasterGeometry:
         xx, yy = np.meshgrid(x, y)
         return cls.from_points(mesh, np.column_stack((xx.ravel(), yy.ravel())),
                                width=width, height=height,
-                               bounds=(lo[0], hi[0], lo[1], hi[1]))
+                               bounds=(lo[0], hi[0], lo[1], hi[1]), verbose=verbose)
 
     @classmethod
-    def from_points(cls, mesh, points, *, width, height, bounds=None):
+    def from_points(cls, mesh, points, *, width, height, bounds=None, verbose=0):
         """Cache ownership of a mapped grid, e.g. a polar diagnostic grid.
 
         Connectivity, basis evaluation and host/device sampling are shared
         with Cartesian rendering. No interpolation across DG faces is used.
         """
-        from matplotlib.tri import Triangulation
+        def point_locator():
+            """Return Matplotlib's triangle finder for the mesh, which maps points to the index of the triangle that holds them (-1 outside)."""
+            from matplotlib.tri import Triangulation
+
+            return Triangulation(nodes[:, 0], nodes[:, 1], mesh.triangles).get_trifinder()
 
         points = np.asarray(points, dtype=REAL_DTYPE)
         if width < 1 or height < 1 or points.shape != (width*height, 2):
@@ -74,8 +79,11 @@ class RasterGeometry:
         if not np.isfinite(points).all():
             raise ValueError("sampling points must be finite")
         nodes = np.asarray(mesh.node_coords)
-        finder = Triangulation(nodes[:, 0], nodes[:, 1], mesh.triangles).get_trifinder()
-        owners = np.asarray(finder(points[:, 0], points[:, 1]), dtype=np.int32)
+        finder, _ = timed_call(f"[raster] building the point locator ({mesh.num_tri:,} triangles, host)", verbose,
+                               point_locator)
+        owners, _ = timed_call(
+            f"[raster] locating {points.shape[0]:,} pixels in the mesh (host)", verbose,
+            lambda: np.asarray(finder(points[:, 0], points[:, 1]), dtype=np.int32))
         valid = owners >= 0
         ids = owners[valid]
         reference = np.einsum(

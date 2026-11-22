@@ -98,6 +98,31 @@ def probe(spec):
                 note='Import/configuration preflight only; compiled kernel coverage awaits execution')
 
 
+def match_triangle_target(generate, target, max_triangles, size, attempts=16, rtol=.03):
+    """Mesh size whose ``generate(size).num_tri`` is within ``rtol`` of ``target`` (and at most ``max_triangles``).
+
+    The count scales like size**-2 on average, which gives the step, but it is steep and step-like
+    in places: the five-lobed annulus has 893,947 triangles at size 0.002652 and 964,391 at
+    0.002633, so that step jumps over a 3% band and then cycles. The sizes already known to give
+    too few and too many triangles bracket the answer; a step that leaves the bracket is replaced
+    by a bisection in log size, so trajectories that never leave it are unchanged.
+    """
+    coarse, fine = math.inf, 0.  # sizes known to give too few / too many triangles
+    for attempt in range(attempts):
+        generated = generate(size)
+        count = generated.num_tri
+        print(f'mesh attempt={attempt} size={size:.6g} triangles={count}', flush=True)
+        if abs(count/target-1) <= rtol and count <= max_triangles:
+            return generated, size
+        if count < target:
+            coarse = min(coarse, size)
+        else:
+            fine = max(fine, size)
+        step = size*math.sqrt(count/target)
+        size = step if fine < step < coarse or not (fine > 0 and math.isfinite(coarse)) else math.sqrt(fine*coarse)
+    raise ValueError('Could not match L5 annulus triangle target')
+
+
 def mesh(spec, common):
     sys.path.insert(0, str(ROOT))
     import numpy as np
@@ -116,17 +141,11 @@ def mesh(spec, common):
             raise ValueError('L5 stress neck resolution screen failed')
     elif definition.get('generator') == 'five_lobed':
         target = definition['target_triangles']
-        size = math.sqrt(9.3/target)
-        for attempt in range(16):
-            generated = gmsh_smooth_star_mesh(size, radius=1., amplitude=.35, mode=5, hole_radius=.58,
-                                              boundary_points=definition['boundary_points'], cache=False,
-                                              num_threads=1, log_cache=False)
-            print(f'mesh attempt={attempt} triangles={generated.num_tri}', flush=True)
-            if abs(generated.num_tri/target-1) <= .03 and generated.num_tri <= definition['max_triangles']:
-                break
-            size *= math.sqrt(generated.num_tri/target)
-        else:
-            raise ValueError('Could not match L5 annulus triangle target')
+        generated, size = match_triangle_target(
+            lambda size: gmsh_smooth_star_mesh(size, radius=1., amplitude=.35, mode=5, hole_radius=.58,
+                                               boundary_points=definition['boundary_points'], cache=False,
+                                               num_threads=1, log_cache=False),
+            target, definition['max_triangles'], math.sqrt(9.3/target))
         path = directory/'mesh.npz'
         np.savez(path, node_coords=generated.node_coords, triangles=generated.triangles)
         info = dict(target_triangles=target, triangles=int(generated.num_tri), mesh_size=size)
@@ -146,6 +165,10 @@ def run_numerical(spec, common):
     # Import the branch case registry first; pMG adapter subsequently selects
     # master numerics. Do not import master's hybridge before that selection.
     sys.path.insert(0, spec['branch_root'])
+    # Run as a script, so the checkout root is not on the path without PYTHONPATH (frozen
+    # copies); append it after the branch so `campaigns` imports and vendored `scripts` win.
+    if str(ROOT) not in sys.path:
+        sys.path.append(str(ROOT))
     if 'stress_parameters' in spec:
         from scripts.adv_diff_rea_cases import register_case
         cases = load_file('_adr_stress_cases', ROOT/'scripts/advection_diffusion_reaction/cases/closed_loop_stress_cases.py')
@@ -153,15 +176,43 @@ def run_numerical(spec, common):
         register_case(spec['case'], lambda: cases.make_case(params, spec['velocity_normalization']))
     stress_worker = load_file('_adr_stress_worker', ROOT/'campaigns/adr_stress/closed_loop_stress_worker.py')
     operator_hash = stress_worker.operator_hash
+    # Device campaigns (adr_h200_tuned): device checks and measures, NVML sampling, per-phase times.
+    device_checks = os.environ.get('HYBRIDGE_ADR_DEVICE_CHECKS') == '1'
+    worker_phases = {}
+
+    def timed(name, function):
+        started = perf_counter()
+        try:
+            return function()
+        finally:
+            worker_phases[name] = worker_phases.get(name, 0.)+perf_counter()-started
+            if device_checks:
+                print(f'[worker] {name}: {worker_phases[name]:.3f} s', flush=True)
+
     if spec.get('mesh_path'):
-        if hashlib.sha256(Path(spec['mesh_path']).read_bytes()).hexdigest() != spec['mesh_sha256']:
+        if timed('mesh_identity', lambda: hashlib.sha256(Path(spec['mesh_path']).read_bytes()).hexdigest()) != spec['mesh_sha256']:
             raise ValueError('Mesh changed after preparation')
-    if spec.get('expected_operator_sha256') and operator_hash(spec['cache']) != spec['expected_operator_sha256']:
-        raise ValueError('Operator/RHS changed after assembly')
+    phase = spec['stage']
+    expected = spec.get('expected_operator_sha256')
+    if phase == 'system':
+        expected = None  # the system is assembled here; its hash is taken at the one-way export
+    if expected:
+        files = spec.get('expected_cache_files')
+        if os.environ.get('HYBRIDGE_ADR_CACHE_IDENTITY') == 'metadata' and files:
+            # The runner's own resume check (size and mtime of every cached array) instead of
+            # re-hashing several GB on the host in every job; the hash was taken at assembly.
+            current = timed('operator_identity', lambda: {p.name: dict(bytes=p.stat().st_size, mtime_ns=p.stat().st_mtime_ns)
+                                                          for p in sorted(Path(spec['cache']).glob('*.npy'))})
+            if current != files:
+                raise ValueError('Operator/RHS cache changed after assembly (array sizes or mtimes)')
+            spec = dict(spec, verified_operator_sha256=expected, operator_identity='cache_metadata')
+        else:
+            if timed('operator_identity', lambda: operator_hash(spec['cache'])) != expected:
+                raise ValueError('Operator/RHS changed after assembly')
+            spec = dict(spec, verified_operator_sha256=expected, operator_identity='sha256')
     inventory = load_file('_adr_cuda_inventory', ROOT/'hybridge/runtime/devices.py')
     estimate = spec['memory_estimate']
-    phase = spec['stage']
-    host_need = estimate['assembly_host_bytes' if phase == 'assemble' else 'solver_host_bytes']
+    host_need = estimate['assembly_host_bytes' if phase in ('assemble', 'system') else 'solver_host_bytes']
     available = inventory.host_available_bytes()
     limits = [spec['memory_fraction']*available] if available is not None else []
     if spec.get('host_limit_gib'):
@@ -176,7 +227,15 @@ def run_numerical(spec, common):
     if phase == 'assemble' and assembly == 'auto':
         assembly = 'cupy' if estimate['assembly_device_bytes'] <= budget else 'numba'
         spec = dict(spec, assembly_backend=assembly)
-    need = (estimate['assembly_device_bytes'] if assembly == 'cupy' else 0) if phase == 'assemble' else estimate['solver_device_bytes']
+    if phase == 'system':
+        # Assembly, then every candidate with the trace system, element blocks (until after
+        # ASM) and verification data resident on the device.
+        from campaigns.adr_h200_tuned.device_system import retained_bytes
+        retained = retained_bytes(spec['triangles'], spec['p'])
+        solver = max(c['memory_estimate']['solver_device_bytes'] for c in spec['candidates'])
+        need = max(estimate['assembly_device_bytes'], retained['during_asm']+solver)
+    else:
+        need = (estimate['assembly_device_bytes'] if assembly == 'cupy' else 0) if phase == 'assemble' else estimate['solver_device_bytes']
     if need > budget:
         raise BudgetExceeded(f'Device estimate {need/2**30:.2f} GiB exceeds budget {budget/2**30:.2f} GiB')
     minimum_free = [free]
@@ -190,13 +249,50 @@ def run_numerical(spec, common):
                 break
     watcher = threading.Thread(target=monitor, daemon=True)
     watcher.start()
+    sampler = None
+    if os.environ.get('HYBRIDGE_ADR_GPU_SAMPLING') == '1' and phase != 'system':  # the system worker samples per candidate
+        from campaigns.adr_h200_tuned.gpu_sampler import GpuSampler
+        sampler = GpuSampler(cp.cuda.Device(0).pci_bus_id).start()
+    if os.environ.get('HYBRIDGE_ADR_SINGLE_GUARD') == '1':
+        # The checks above use the measured calibration; the vendored guard repeats them with
+        # the planning model only (6x host assembly bytes, cache bytes as resident at solve time)
+        # and would exclude systems that fit. Keep its estimates, drop its veto.
+        import scripts.adr_performance_worker as performance
+        performance.guard = lambda spec, phase: performance.estimates(
+            spec['n'], spec['p'], performance.solver_workspace_degree(spec))
+    if device_checks and phase == 'assemble':
+        # Store the DG geometry the device checks need, from the space the assembly built,
+        # so no solver job rebuilds the space on the host.
+        import scripts.adr_performance_worker as performance
+        from campaigns.adr_h200_tuned.device_verify import save_geometry
+        save_cache = performance.save_cache
+
+        def save_cache_with_geometry(cache, assembly, space):
+            timed('save_cache', lambda: save_cache(cache, assembly, space))
+            timed('save_geometry', lambda: save_geometry(cache, space))
+        performance.save_cache = save_cache_with_geometry
     try:
-        if phase == 'assemble':
+        if phase == 'system':
+            from campaigns.adr_h200_tuned.system_worker import run
+            result = run(spec, common, ROOT, log=lambda message: print(message, flush=True))
+        elif phase == 'assemble':
             from scripts.adr_performance_worker import assemble
-            result = assemble(spec)
-            result['operator_sha256'] = operator_hash(spec['cache'])
+            result = timed('assemble', lambda: assemble(spec))
+            result['operator_sha256'] = timed('operator_hash', lambda: operator_hash(spec['cache']))
+        elif spec['family'] == 'raw_assembly':
+            from campaigns.adr_h200_tuned.raw_assembly_timing import measure
+            result = timed('measure', lambda: measure(spec, master_root=ROOT))
+        elif device_checks and spec['family'] == 'native_hp':
+            from campaigns.adr_h200_tuned.device_native_hp import measure
+            result = timed('measure', lambda: measure(spec, master_root=ROOT))
+        elif device_checks:
+            from campaigns.adr_h200_tuned.device_measure import measure
+            result = timed('measure', lambda: measure(spec))
+        elif spec.get('tuned_face_dense'):
+            from campaigns.adr_h200_tuned.tuned_face_dense import measure
+            result = measure(spec)
         elif spec['family'] == 'native_hp':
-            from scripts.adr_native_hp_worker import measure
+            from campaigns.adr_unified.native_hp_worker import measure
             result = measure(spec, master_root=ROOT)
         else:
             from scripts.adr_solver_comparison_worker import measure
@@ -207,6 +303,15 @@ def run_numerical(spec, common):
         memory = dict(assembly_backend=assembly, live_memory_before=dict(free_bytes=free, total_bytes=total),
                       sampled_device_peak_bytes=total-minimum_free[0],
                       memory_note='1-second whole-device samples, including context/other processes; not allocator-exact peaks')
+        if sampler is not None:
+            sampler.stop()
+            memory['gpu_utilization'] = usage = sampler.summary()
+            if usage.get('samples'):
+                print(f"[gpu] {usage['samples']} samples: SM busy mean {usage['sm_busy_mean']:.0f}%, median "
+                      f"{usage['sm_busy_median']:.0f}%, p10 {usage['sm_busy_p10']}%, below 10% for "
+                      f"{100*usage['idle_share_below_10']:.0f}% of the job", flush=True)
+        if worker_phases:
+            memory['worker_phases'] = worker_phases
         common.atomic_json(Path(spec['result']).with_suffix('.memory.json'), memory)
     result.update(memory)
     return result

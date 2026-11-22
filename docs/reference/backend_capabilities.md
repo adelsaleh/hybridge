@@ -62,8 +62,8 @@ is checked by `tests/test_backend_capabilities.py`.
 | advection-diffusion-reaction | solve | raw-cuda | amgx | device | device | device (optional host materialization) | eliminate | legacy-lagrange, legendre-modal | Elliptic tensor diffusion with cooperative p=0--9 assembly/reconstruction, direct COO/CSR/face BSR and device AMGX; p=8 native BSR needs an explicit compatible preconditioner (current AMGX DILU lacks 9x9 blocks). Variable scalar/tensor primal and both total-flux recoveries use Numba or CuPy, qualified separately through p=6. CuPy primal assembly is fused CUDA; materialize_host_solution controls result downloads. |
 | diffusion-reaction | assemble | numpy | none | host | none | none | eliminate | legacy-lagrange, legendre-modal, bernstein | - |
 | diffusion-reaction | assemble | numba | none | host | none | none | eliminate | legacy-lagrange, legendre-modal | - |
-| diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
-| diffusion-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR. |
+| diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. Accepts a QuadratureScalar source. |
+| diffusion-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR. Accepts a QuadratureScalar source. |
 | diffusion-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
 | diffusion-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
 | diffusion-reaction | solve | numpy | petsc | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
@@ -118,9 +118,12 @@ runtime.
   Cupyx then uploads it again. This is supported mixed residency, not a direct
   device pipeline.
 - Raw-CUDA advection with `boundary_mode="zero-flux"` requires eliminated-local
-  assembly: `raw_local_assembly="fused"` or the opt-in TSLE-BSR alias
-  `"split3"`. TSLE-BSR additionally requires cooperative LU and face BSR;
-  p=1--7 is qualified and p=8--9 is experimental.
+  assembly: `"fused"`, `"split3"`, compatible `"tensor"`, or `"auto"`.
+  Eligible automatic face-BSR calls calibrate equivalent pipelines with fixed
+  numerical settings. Split3/tensor require cooperative LU semantics and face
+  BSR; tensor currently requires same-space DG coefficients. The
+  [architecture policy](../development/architecture_tuning.md) distinguishes
+  current qualification from historical high-order experimental results.
 - Raw-CUDA diffusion full solves are exposed through
   `DiffusionReactionHDGSolver` with direct device CSR/BSR solver handoff.
   Flux-only `RT_projection` and `l2_closest` recovery can keep local fields and

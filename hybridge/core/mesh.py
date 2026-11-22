@@ -842,9 +842,10 @@ def _generate_gmsh_mesh(
                     )
                 else:
                     tier = "fallback " if index > 0 else ""
+                    shown = cache_path.with_name(f"{cache_path.stem[:20]}...{cache_path.suffix}")
                     _mesh_cache_log(
-                        f"mesh cache {tier}hit for {model_name!r}: {cache_path} "
-                        f"(nodes={mesh.node_coords.shape[0]}, triangles={mesh.num_tri})",
+                        f"mesh cache {tier}hit for {model_name!r}: {shown} "
+                        f"(nodes={mesh.node_coords.shape[0]:,}, triangles={mesh.num_tri:,})",
                         log_cache,
                     )
                     return mesh

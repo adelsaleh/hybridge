@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 
+from hybridge.core.quadrature_coefficients import QuadratureScalar
 from hybridge.core.space import DGField
 from hybridge.core.device import as_cupy_coefficients, as_cupy_space
 from hybridge.runtime.optional import require_cupy, require_cupyx_sparse
@@ -616,10 +617,14 @@ def _validate_raw_cuda_source(source, cspace):
         if source.space is not cspace.host:
             raise ValueError("source must live in the same DGSpace object for assembly_backend='raw-cuda'")
         return source
+    if isinstance(source, QuadratureScalar):
+        source.check(cspace.host)
+        return source
     if np.isscalar(source) or callable(source):
         return source
     raise TypeError(
-        "assembly_backend='raw-cuda' requires source to be a DGField, scalar, or CuPy-compatible callable"
+        "assembly_backend='raw-cuda' requires source to be a DGField, QuadratureScalar, scalar, "
+        "or CuPy-compatible callable"
     )
 
 
@@ -722,6 +727,10 @@ def source_moments_cupy(source: Callable, cspace):
     mesh = cspace.mesh
     q = cspace.quad_data
     rhs = cupy.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=REAL_DTYPE)
+    if isinstance(source, QuadratureScalar):
+        source.check(cspace.host)
+        rhs[:, : cspace.el_dof] = source.to_device().moments()
+        return cupy.ascontiguousarray(rhs)
     if np.isscalar(source):
         ref_moments = cupy.asarray(cspace.host._constant_reference_moments(float(source)))
         rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
@@ -1302,12 +1311,21 @@ def boundary_trace_values_cupy(boundary_condition: Callable, cspace, trace_ref):
     mesh = cspace.mesh
     if mesh.bnd_edges_inds.size == 0:
         return cupy.empty((0, cspace.edg_dof), dtype=REAL_DTYPE)
-    edge_coords = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
     t = trace_ref.interpolation_nodes if trace_ref.nodal else trace_ref.quads
-    points = 0.5 * (
-        (1.0 - t)[None, :, None] * edge_coords[:, 0:1, :]
-        + (1.0 + t)[None, :, None] * edge_coords[:, 1:2, :]
-    )
+    from .raw_cuda.poisson import HOST_FLAGS
+    # Experimental, default off (HYBRIDGE_POISSON_HOST_FLAGS=boundary): keep the boundary points
+    # in the space's Poisson reference cache, once assembly has created it. Small measured gain,
+    # 0.38 to 0.30 ms per Poisson RHS; not promoted (docs/lessons/poisson_local_solves.md).
+    memo = getattr(cspace, '_poisson_reference_cache', None) if 'boundary' in HOST_FLAGS else None
+    points = None if memo is None else memo.get(('boundary-points', trace_ref.kind))
+    if points is None:
+        edge_coords = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+        points = 0.5 * (
+            (1.0 - t)[None, :, None] * edge_coords[:, 0:1, :]
+            + (1.0 + t)[None, :, None] * edge_coords[:, 1:2, :]
+        )
+        if memo is not None:
+            memo[('boundary-points', trace_ref.kind)] = points
     values = cupy.asarray(boundary_condition(points[..., 0], points[..., 1]), dtype=REAL_DTYPE)
     num_points = int(t.size)
     expected_shape = (int(mesh.bnd_edges_inds.size), num_points)

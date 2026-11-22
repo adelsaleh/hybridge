@@ -888,3 +888,27 @@ def test_raw_amgx_divergence_advances_retry_and_records_exit(monkeypatch, capsys
     assert rejected["iterations"] == 15
     assert rejected["failure_reason"] == "backend-divergence"
     assert "status=diverged iterations=15" in capsys.readouterr().out
+
+
+def test_rhs_relative_convergence_runs_amgx_absolute_on_the_normalized_rhs() -> None:
+    from types import SimpleNamespace
+
+    from hybridge.linalg.amgx.device_solver import (
+        _amgx_config_for_solve,
+        _amgx_relative_residual_check_rtol,
+        _rhs_relative_scale,
+    )
+
+    config = {"solver": {"solver": "BICGSTAB", "convergence": "RELATIVE_RHS", "tolerance": 5.0e-13}}
+    assert _amgx_config_for_solve(config=config)["solver"]["convergence"] == "ABSOLUTE"
+    assert config["solver"]["convergence"] == "RELATIVE_RHS"
+    assert _amgx_relative_residual_check_rtol(config, 1.0) == 5.0e-13
+
+    cp = SimpleNamespace(linalg=SimpleNamespace(norm=lambda v: SimpleNamespace(get=lambda: np.linalg.norm(v))))
+    rhs = np.linspace(-3.0, 5.0, 28)
+    # AMGX checks each of the 7 block components against the tolerance, so a residual of b/s at the
+    # limit in every component has aggregate norm sqrt(7) * tol, that is tol * ||b|| once multiplied by s.
+    scale = _rhs_relative_scale(cp, rhs, block_dim=7, scalar_norm=False)
+    assert np.isclose(np.sqrt(7.0) * scale, np.linalg.norm(rhs))
+    assert np.isclose(_rhs_relative_scale(cp, rhs, block_dim=7, scalar_norm=True), np.linalg.norm(rhs))
+    assert _rhs_relative_scale(cp, np.zeros(7), block_dim=7, scalar_norm=False) == 1.0

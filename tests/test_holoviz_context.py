@@ -12,6 +12,7 @@ def _viewer(*, flush_error=None, movie_error=None):
     """Use the real close path with controlled renderer and encoder resources."""
     events = []
     viewer = HolovizScalarPanels.__new__(HolovizScalarPanels)
+    viewer._frame_window = None
     viewer._closed = viewer._closing = False
     viewer._pending = viewer._inflight = None
 
@@ -129,6 +130,7 @@ def test_update_fields_applies_independent_or_shared_panel_ranges(limits, expect
     """Potential and density need separate scales without CUDA in this check."""
     calls = []
     viewer = HolovizScalarPanels.__new__(HolovizScalarPanels)
+    viewer._frame_window = None
     viewer.panel_count = 2
     viewer.device_id = 0
     viewer.cp = SimpleNamespace(cuda=SimpleNamespace(Device=lambda _: nullcontext()))
@@ -147,6 +149,31 @@ def test_update_fields_applies_independent_or_shared_panel_ranges(limits, expect
 def test_update_fields_rejects_wrong_number_of_panel_ranges_before_rendering():
     """A malformed scale specification never starts device sampling."""
     viewer = HolovizScalarPanels.__new__(HolovizScalarPanels)
+    viewer._frame_window = None
     viewer.panel_count = 2
     with pytest.raises(ValueError, match="one color-limit pair"):
         viewer.update_fields(("rho", "phi"), limits=((0., 1.),))
+
+
+def test_headless_display_is_hidden_until_close(monkeypatch):
+    from hybridge.io import holoviz
+
+    monkeypatch.setenv("DISPLAY", "localhost:10.0")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-1")
+    hidden = holoviz._hide_display()
+    assert hidden == {"DISPLAY": "localhost:10.0", "WAYLAND_DISPLAY": "wayland-1"}
+    assert "DISPLAY" not in holoviz.os.environ and "WAYLAND_DISPLAY" not in holoviz.os.environ
+    viewer, events = _viewer()
+    viewer._hidden_display = hidden
+    viewer.close()
+    assert holoviz.os.environ["DISPLAY"] == "localhost:10.0"
+    assert holoviz.os.environ["WAYLAND_DISPLAY"] == "wayland-1"
+    assert events[-1] == "movie"
+
+
+def test_restore_keeps_a_display_set_meanwhile(monkeypatch):
+    from hybridge.io import holoviz
+
+    monkeypatch.setenv("DISPLAY", ":3")
+    holoviz._restore_display({"DISPLAY": "localhost:10.0"})
+    assert holoviz.os.environ["DISPLAY"] == ":3"

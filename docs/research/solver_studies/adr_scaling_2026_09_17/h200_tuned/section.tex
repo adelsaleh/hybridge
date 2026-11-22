@@ -1,0 +1,315 @@
+% H200 tuned ADR campaign versus the RTX PRO 5000 Blackwell results of this study.
+% Tables and figures: scripts/reports/make_adr_h200_comparison.py (no solver execution);
+% inputs: campaigns/adr_h200_tuned/records (export of 2026-10-29) and this study's CSV files.
+\section{H200 with tuned kernels versus the RTX PRO 5000 Blackwell}
+\label{sec:adr-h200-tuned}
+
+The H200 tuned campaign (\texttt{campaigns/adr\_h200\_tuned}, 28--29 October 2026) solved the
+systems of this study again on one NVIDIA H200 NVL (141~GiB, FP64 peak estimate 30.2~TFLOP/s from
+the campaign preflight), then continued the mesh ladder to about 20~million trace unknowns. The
+Blackwell results above were measured on an RTX PRO 5000 Blackwell workstation GPU with about
+48~GiB. Three runs enter the comparison:
+\begin{itemize}
+\item \textbf{Blackwell}: this study (smooth, oscillatory, focused and native-completion suites);
+\item \textbf{H200, stock kernels}: the unified campaign 21958 on the same H200, with the
+  configurations and kernels of this study;
+\item \textbf{H200, tuned kernels}: interleaved face-dense operator, FP32 interleaved ASM
+  application, FP64 interleaved block Jacobi, $p$MG--AMG with graph-captured kernels, the
+  true-target GMRES restart trigger, and the whole system resident on the device from assembly
+  to the last solve.
+\end{itemize}
+
+\paragraph{Matching.} A Blackwell measurement and an H200 job are compared only when geometry,
+case, triangle count and degree agree and the H200 candidate's recorded alias names the
+Blackwell candidate; the H200 plan records the archived operator hash of each of the study's
+systems as its identity. The H200 reassembles those systems with its own kernels, so its
+matrices are the same discrete systems but hash differently (all 27 checked); the stock and tuned
+H200 assemblies, compared directly, agree to $6\cdot10^{-12}$ relative.
+Of 75 matched configurations, 71 passed on both machines. Three that passed on Blackwell are
+recorded as numerical failures on the H200 (BJ+PP on two variable-velocity and one trigonometric
+system at $p=6$, see below), and one passed only on the H200. Times are the medians of the
+measured samples; ``repeated'' is the second solve on the same setup and ``amortized'' the setup
+plus both solves, per solve, as in the study's CSV files.
+
+\subsection{Same configuration, same operator}
+
+Table~\ref{tab:adr-h200-summary} gives the Blackwell-to-H200 time ratio per family. With the
+study's own kernels the H200 is only 1.1--1.5 times faster: these solvers are bound by memory
+traffic and kernel launches at the study's sizes, and the H200's advantage in bandwidth and FP64
+rate is not used by kernels tuned for the workstation GPU. With the tuned kernels the ratio
+grows with the system size (Figure~\ref{fig:adr-h200-speedup}): from 1.0--3.4 below $10^5$
+trace DOFs to 4.0--7.5 for ASM+PP, 2.9--7.9 for BJ+PP and 2.2--4.1 for $p$MG--AMG at
+$0.34$--$1.04\cdot10^6$ DOFs. AMGX stays at 1.1--1.3.
+
+\begin{table}[ht]
+\centering\small
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/summary_table.tex}}
+\caption{Blackwell time divided by H200 time on matched configurations: median and range.
+Stock: unified campaign 21958 on the H200 (27 matched configurations); tuned: this campaign.
+Per-iteration: repeated time per iteration, which removes the effect of a different iteration
+count.}
+\label{tab:adr-h200-summary}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_tuned/speedup_matched.pdf}
+\caption{Blackwell time over H200 time for each matched configuration, against trace DOFs.}
+\label{fig:adr-h200-speedup}
+\end{figure}
+
+Two effects make up the tuned speed-up, and the table separates them:
+\begin{itemize}
+\item \textbf{Cost per iteration.} At about $10^6$ DOFs one iteration is 4.6--5.1 times cheaper
+  for ASM+PP, 4.0 for BJ+PP, 2.7--2.8 for $p$MG--AMG and 1.3 for AMGX. Below $10^5$ DOFs the
+  factor is 1.0--1.9: kernel launch latency dominates there on both GPUs.
+\item \textbf{Iteration count.} The true-target trigger stops GMRES when the true residual meets
+  the target instead of over-solving to the estimated one. On 39 of the 71 configurations the
+  H200 needs fewer iterations, on 29 the same and on 3 slightly more. ASM+PP and $p$MG--AMG
+  often need half as many on the trigonometric case (for example 126 versus 64 at
+  $3.4\cdot10^5$ DOFs). The three BJ+PP rows recorded as numerical failures on the H200 met the
+  residual target but missed the study's $L^2$ rule.
+\end{itemize}
+
+AMGX gains least. Its setup is 1.6--7.5 times faster on the H200 (median 3.6): the matrix is
+built on the device and handed over device to device. Its V-cycles are the same library code on
+both GPUs and improve by 1.1--1.3 per iteration. Setup falls most for the block preconditioners,
+from 12--1{,}390~ms on Blackwell to 4--56~ms at the matched sizes, because the local
+factorizations and the operator layout are now built on the device.
+
+\subsection{Did the winner change?}
+
+Table~\ref{tab:adr-h200-family} compares the fastest passing member of each family on each
+machine, for the 25 systems both measured, against the confirmed PyPardiso LU baseline of the
+study (measured on the Blackwell workstation's host CPU; the LU campaign on a genoa CPU node of
+the H200's cluster is reported in Section~\ref{sec:adr-h200-node-lu}).
+\begin{itemize}
+\item \textbf{AMGX no longer wins.} On Blackwell AMGX had the fastest repeated solve on the
+  largest smooth systems (transport, anisotropic and trigonometric at 99{,}458 triangles,
+  $p=6$). On the H200 $p$MG--AMG wins the anisotropic, trigonometric and variable-velocity
+  systems from 32{,}768 triangles up, and the block preconditioners win transport; AMGX wins
+  none of the 25.
+\item \textbf{The crossover against LU moves to smaller meshes.} For repeated solves at $p=6$
+  the best iterative solver beats the reused LU factors on transport and variable velocity from
+  8{,}192 triangles on both machines. On the trigonometric case the H200 crosses at 8{,}192
+  triangles and Blackwell at 32{,}768; on the anisotropic case at 32{,}768 and 99{,}458. At
+  99{,}458 triangles the best iterative time over the LU time is 0.07--0.21 on the H200 against
+  0.19--0.82 on Blackwell for the first three cases, and 0.55 against 0.90 for the anisotropic
+  one.
+\item \textbf{Cellular annulus: LU still wins repeated solves, the H200 wins fresh ones.} On
+  \texttt{cellular7\_weak} the reused LU factors stay 2--16 times faster than any iterative
+  solve on either machine. For a fresh solve (setup included) the H200's ASM+PP beats LU from
+  8{,}039 triangles up (0.41--0.52 of the LU time), where Blackwell needed 1.4--3.2 times the
+  LU time.
+\item \textbf{Below about 8{,}000 triangles LU keeps the repeated solve}: a reused LU solve
+  takes about 5~ms and every iterative method on either GPU is slower. A fresh solve is another
+  matter: there the H200's best iterative solver needs 0.23--0.49 of the LU time on the smooth
+  cases already at 2{,}048 triangles.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/family_table.tex}
+\caption{Fastest passing family per system for the repeated solve (ms), and the study's
+P-LU reused solve. ``BW'': Blackwell.}
+\label{tab:adr-h200-family}
+\end{table}
+
+\subsection{H200 versus PyPardiso LU on a genoa CPU node}
+\label{sec:adr-h200-node-lu}
+
+The PARDISO v2 campaign factored the exported systems of the unified device campaign with
+PyPardiso (oneMKL) on a CPU node of the H200's cluster (genoa partition, two AMD EPYC 9655, 192
+cores, 754~GiB; jobs 24478 and 24482), not on the H200 node's own host CPUs (two 64-core
+sockets), at the same residual target ($10^{-10}$). For each system it kept the fastest of the
+measured thread counts (8--192), separately for the fresh solve (CSR conversion, analysis, factorization and first
+solve) and for a solve that reuses the factors. A follow-up run of the same worker (jobs 26536,
+26551 and 26578, records \texttt{h200\_tuned\_lu}) factorized the 68 H200 systems the first plan
+lacked, up to L7. All 114 H200 systems therefore have an LU measurement.
+Tables~\ref{tab:adr-h200-node-lu} and \ref{tab:adr-h200-node-lu-large} put these next to the
+H200's fastest passing iterative solver, fresh (setup and first solve) and repeated. 104 systems
+have a passed iterative solve. Ten at L6--L7 have none (seven stopped at the FP64 residual
+floor, FP64$^*$; three not passed), and they are not counted as LU wins. Table~\ref{tab:adr-h200-node-lu-crossover}
+gives the crossover per case and degree.
+\begin{itemize}
+\item \textbf{Fresh solves: the GPU wins on 89 of the 104.} On the smooth cases the best iterative
+  fresh time is 0.02--0.18 of the LU time at L5--L7 (variable velocity 0.02--0.06). LU keeps the
+  fresh solve in two situations:
+  \begin{itemize}
+  \item the smallest meshes: L1 at $p=2$ (anisotropic, cellular, trigonometric, variable
+    velocity), cellular at L2, $p=2$, and at L1, $p=6$;
+  \item the hard cases at scale: the cellular annulus at L5--L7 (1.5--2.2 times faster than
+    the GPU) and closed-loop stress at L6, $p=2$, and L7 (1.2--3.1 times).
+  \end{itemize}
+\item \textbf{Repeated solves: the GPU wins on 42 of the 104, all but two of them smooth.}
+  Reusing the factors costs 3~ms at about 36{,}000 trace DOFs, 0.23--0.25~s at a million and
+  5.0--10.6~s at 20 million. The iterative solver wins:
+  \begin{itemize}
+  \item transport on 15 of 20 systems, variable velocity on 14 of 20, trigonometric on 11 of 18;
+  \item at $p=6$ from 85{,}120 (transport) and 342{,}272 DOFs (trigonometric, variable velocity),
+    at $p=9$ from 30{,}080 and 121{,}600, and at $p=2$ only from 446{,}223 (variable velocity)
+    or 8~million DOFs (transport, trigonometric);
+  \item the anisotropic case only at L5, $p=6$ and 9 (ratio 0.54 and 0.96).
+  \end{itemize}
+  At the largest size the ratio is 0.06--0.10 for variable velocity ($p$MG--AMG), 0.29--0.36 for
+  trigonometric and 0.33--0.71 for transport (AMGX). On the cellular annulus and on closed-loop
+  stress the reused factors stay faster at every size up to L7: 3.5--35 and 1.3--26 times.
+\item \textbf{Consistent with the Blackwell comparison, with a stronger LU.} On the 23 systems
+  that both LU campaigns measured, the genoa node's PyPardiso is 1.1--1.9 times faster than the
+  Blackwell workstation's host for a fresh solve and 1.5--3.2 times faster for a reused one
+  (most at the larger sizes). The direction of every statement in the previous subsection holds,
+  but the repeated-solve crossovers move to larger meshes: trigonometric and variable velocity at
+  $p=6$ now cross at 32{,}768 triangles instead of 8{,}192, the anisotropic case no longer
+  crosses up to 99{,}458 triangles (ratio 1.70), and at 99{,}458 triangles the ratio is
+  0.22--0.27 (trigonometric, variable velocity) rather than 0.07--0.21; transport still crosses
+  at 8{,}192. For fresh solves the cellular ratio at $p=6$ is 0.60--0.64 instead of 0.41--0.52,
+  and at 2{,}048 triangles and $p=2$ LU now keeps the fresh solve on the trigonometric and
+  variable-velocity cases.
+\item \textbf{LU up to 20 million DOFs.} Fresh LU takes 2.7--20~s at L5, 14--27~s at L6 and
+  36--53~s at L7, with a peak resident memory of at most 52, 70 and 141~GiB (a genoa node has
+  754~GiB); 96 and 192 threads are within a few per cent. PyPardiso's 32-bit MKL interface
+  limits the matrix's own indices (fewer than $2^{31}$ entries; the L7 matrices have at most
+  about $7\cdot10^8$), not the factor. Factors above $2^{31}$ entries factorize and solve; only
+  MKL's reported factor count overflows. Three L7 LU solves (anisotropic $p=6$, trigonometric
+  $p=2$ and 6) end at a true relative residual of $1.10$--$1.36\cdot10^{-10}$, just above the
+  target. That is the same FP64 floor the iterative solvers meet there. Their timings are kept
+  and marked $\dagger$.
+\end{itemize}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_table.tex}}
+\caption{Fastest passing iterative solver on the H200 against PyPardiso LU on a genoa CPU
+node, L1--L4 (ms; $t$: threads of the fastest LU measurement). The ratios are iterative over
+LU; below one the iterative solver is faster.}
+\label{tab:adr-h200-node-lu}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_large_table.tex}}
+\caption{As Table~\ref{tab:adr-h200-node-lu}, L4b--L7. $\dagger$: LU solve at the residual
+floor ($1.10$--$1.36\cdot10^{-10}$). FP64$^*$: no iterative family passed, but a run stopped
+at the FP64 residual floor with the best solution's accuracy (Table~\ref{tab:adr-h200-outcomes}).}
+\label{tab:adr-h200-node-lu-large}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\resizebox{\linewidth}{!}{\input{\ADRResultsPath/h200_tuned/node_lu_crossover_table.tex}}
+\caption{Crossover against the genoa LU per case and degree: the smallest measured trace
+DOFs from which the best iterative solver is faster at that and every larger measured size
+(``--'': not reached), and the ratio at the largest measured size.}
+\label{tab:adr-h200-node-lu-crossover}
+\end{table}
+
+\subsection{Beyond the Blackwell's reach}
+
+The H200 ladder continues to L5 (0.4--1.4~million triangles; 1.8--6.0~million trace DOFs),
+L6 (8~million) and L7 (20~million). Figure~\ref{fig:adr-h200-ladder} follows one class, the
+trigonometric case, through the ladder; Table~\ref{tab:adr-h200-extension} gives the medians
+per level, degree and family over the passed jobs of all classes. At these sizes AMGX is the
+fastest family wherever it passes: its iteration count stays at 15--27 from L2 to L7, while
+$p$MG--AMG needs 390--520 iterations from L5 on and the block preconditioners keep growing, up
+to about 800 for ASM+PP and 1{,}600 for BJ+PP at L7. L7 at $p=9$ and all of L8--L9 exceed one H200's memory (device estimates of
+138--275~GiB against a 125~GiB budget; 780~GiB of host memory at L8, $p=9$) and were not run.
+Over two solves per matrix (the amortized measure), the genoa LU is faster than the best H200
+solver only on the smallest $p=2$ mesh (8.6 against 17.9~ms). On every other trigonometric
+system where both were measured it is 1.2 to 12.7 times slower: at L4, $p=6$, $p$MG--AMG needs
+91~ms against the LU's 1{,}152~ms.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{\ADRResultsFigurePath/h200_tuned/h200_ladder_amortized.pdf}
+\caption{Amortized solve time (setup and two solves, per solve) along the ladder for the
+trigonometric case: H200 iterative families and PyPardiso LU on a genoa node (dashed; fresh and
+reused each at its fastest thread count). Missing iterative points are jobs that did not pass;
+hollow markers on a dotted line are those that stopped at the FP64 residual floor with the best
+accuracy, at the time they took to reach it (NC$^*$, paragraph on the FP64 floor below). The LU
+point at L7 is at the residual floor too. The last points at $p=2$ (34 million DOFs) and $p=9$ (14
+million) are the Lmax systems, which have no LU yet; L7 does not fit one H200 at $p=9$.}
+\label{fig:adr-h200-ladder}
+\end{figure}
+
+\paragraph{Outcomes at scale: the FP64 residual floor ($^*$).}
+\label{par:adr-h200-fp64}
+A job passes when the solver reports convergence to its internal target ($10^{-11}$) and the
+independently recomputed true relative residual is at most $10^{-10}$. A computed residual
+$b-Ax$ carries rounding of about $\varepsilon\,\||A||x|\|$, so the relative residual cannot be
+evaluated below $\varepsilon\,\||A||x|\|_2/\|b\|_2$, $\varepsilon=2.2\cdot10^{-16}$. This floor was
+measured on 39 small exported systems
+(\nolinkurl{scripts/advection_diffusion_reaction/diagnostics/fp64_residual_floor.py},
+\nolinkurl{h200_tuned/fp64_floor.csv}) and fitted per class as $c\,N^\alpha$ in the trace DOFs $N$:
+\begin{itemize}
+\item \textbf{Trigonometric and anisotropic:} $\alpha\approx1$, $1.2$--$1.6\cdot10^{-11}$ at one
+  million DOFs, $2$--$3\cdot10^{-10}$ at 20 million and about $8\cdot10^{-10}$ at the 34 million
+  of Lmax, $p=2$. It passes the internal target at L4--L5 and the acceptance itself at L7, where
+  even LU ends at $1.1$--$1.4\cdot10^{-10}$. Their exact
+  solution $\sin\pi x\sin\pi y$ vanishes on $\partial\Omega$, so $b$ carries only the source,
+  of size $O(h^2)$ per DOF, while $K\approx1$ keeps $|A|$ of order one: the ratio grows like
+  $h^{-2}\propto N$.
+\item \textbf{The other classes:} $10^{-14}$ to $4\cdot10^{-13}$ at 20 million DOFs. Variable
+  velocity has the same $K=1$ but $u_\star\ge1$ on the boundary ($\|b\|\approx10^2$); transport
+  has $K=10^{-3}$.
+\end{itemize}
+An asterisk (NC$^*$, FP64$^*$) marks a job that did not pass, whose true residual is within ten
+times its system's floor, and whose $L^2$ error is within 25\,\% of the best on that system or no
+worse than that of a solve that passed there. At $p\ge6$ that error is itself round-off
+($10^{-12}$ to $10^{-11}$) and varies by tens of percent between runs. 83 jobs qualify, all
+trigonometric or anisotropic: 44 at L4--L7 (4 of them from the L4 degree fill) and 39 at Lmax
+(Table~\ref{tab:adr-h200-outcomes}):
+\begin{itemize}
+\item 34 $p$MG--AMG runs iterate on, mostly to the 2{,}000-iteration cap, chasing the internal
+  target;
+\item 27 ASM+PP runs stop when GMRES detects stagnation or at the cap, many with a true residual
+  already below $10^{-10}$;
+\item 21 AMGX runs at L6, L7 and Lmax report success to AMGX itself (16--89 iterations), but the
+  recomputed residual is $1.2$--$6.6\cdot10^{-10}$;
+\item 1 BJ+PP run.
+\end{itemize}
+\textbf{Time to the floor.} The worker stops a job at its first failed solve, so a starred job
+has no timed sample, only its first (warm-up) solve. Its residual history (the true residual at
+every restart-cycle end) shows where it first came within a factor of two of its lowest residual;
+the graphs plot the setup plus that fraction of the solve time (iterations to that cycle over all
+iterations), as a hollow marker, and the same solve fraction as its reused time. The iteration
+count is exact for 65 of the 83 jobs and an upper bound for 18, whose restart cycles cannot all be
+separated; AMGX stops by itself, so its whole solve counts. Above one million DOFs, warm-up times
+match the measured ones: fresh to a median factor of 1.02 (90\,\% within 1.26) and the first solve
+the repeated one within 1.07 (113 passed ladder jobs). $p$MG--AMG reaches the floor within
+46--276 iterations and then iterates on, mostly to the cap: its time to the floor is 6--50\,\% of
+the job.
+The grids and tables keep NC$^*$ without a time.
+
+The 93 other failures (45 on the ladder, 11 in the L4 degree fill, 37 at Lmax) are genuine: BJ+PP at L6--L7 and Lmax
+(mostly $10^{-10}$ to $4\cdot10^{-3}$ after 2{,}000 iterations), AMGX diverging on the cellular
+annulus at Lmax, $p=2$, cellular and stress runs that end far above their own floor, and the polynomial families on
+variable velocity (BJ+PP from L3, ASM+PP from L4--L5). Those converge to true residuals of
+$6$--$10\cdot10^{-12}$, but their $L^2$ error misses the case's $2\cdot10^{-8}$ bound ($10^{-7}$ to
+$10^{-6}$ at L5--L7), while AMGX and $p$MG--AMG reach $10^{-9}$ and $10^{-10}$ on the same systems. The boundary data make $\|b\|$ large
+($\approx10^2$), so a small relative residual leaves smooth error that a one-level method without a
+coarse space does not remove. A normwise backward-error acceptance,
+$\|b-Ax\|/(\||A||x|\|+\|b\|)$, would remove the size dependence of the floor.
+
+\begin{table}[ht]
+\centering\small
+\input{\ADRResultsPath/h200_tuned/outcome_table.tex}
+\caption{H200 job outcomes per level and family. ``FP64 floor$^*$'': not passed, but stopped at
+the FP64 residual floor with the best solution's accuracy (paragraph above).}
+\label{tab:adr-h200-outcomes}
+\end{table}
+
+\begin{table}[ht]
+\centering\scriptsize
+\input{\ADRResultsPath/h200_tuned/extension_table.tex}
+\caption{H200, levels beyond the Blackwell study: medians over the passed jobs of all classes
+(ms). Different families pass on different classes, so the medians are not a like-for-like
+ranking; Table~\ref{tab:adr-h200-outcomes} gives the coverage.}
+\label{tab:adr-h200-extension}
+\end{table}
+
+\subsection{Assembly}
+
+The device-route assembly that produced the solvers' matrices takes 1.5~s at L6 and 3.6~s at
+L7 for $p=6$; the raw-CUDA tensor kernel (a different discretization, kept as a timing
+reference) takes 0.31 and 0.77~s. Both stay well below the solve times from L5 on. The raw kernel
+also ran at L8 for $p=2$ and $p=6$ (0.39 and 1.5~s), where no solver fits.

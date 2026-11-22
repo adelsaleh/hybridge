@@ -40,7 +40,7 @@ collect the baseline, disk, oscillatory, stress and tensor problems with a commo
 `python -m scripts.advection_diffusion_reaction.run_cases --list-presets` from the
 repository root to inspect the available configurations.
 The initial implementation and validation record is in the
-[`2026-08 ADR report`](../../research/solver_studies/stationary_adr_hdg_2026_08.md).
+[`2026-08 ADR report`](../../research/solver_studies/adr_assembly/stationary_adr_hdg_2026_08.md).
 
 CuPy implements both constrained full-space and RT total-flux recovery and the
 coupled primal Neumann recovery. Raw-CUDA results can retain all reconstructed

@@ -14,8 +14,10 @@ them; the numerical solver never lends mutable coefficients to the viewer.
 
 from __future__ import annotations
 
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from datetime import timedelta
+import os
 from pathlib import Path
 import threading
 import time
@@ -49,6 +51,7 @@ def _make_application(owner):
     """Create the source, GPU renderer, and completion/capture graph lazily."""
     try:
         from holoscan.core import Application, MetadataPolicy, Operator
+        from holoscan.logger import LogLevel, set_log_level
         from holoscan.conditions import PeriodicCondition
         from holoscan.operators import HolovizOp
         from holoscan.resources import CudaStreamPool
@@ -58,6 +61,10 @@ def _make_application(owner):
             "Holoviz plotting requires holoscan-cu13 and its CUDA runtime on "
             "LD_LIBRARY_PATH. See docs/backends/holoviz.md."
         ) from exc
+
+    # Its default level prints every Vulkan extension and each panel's spec into the run's log.
+    if "HOLOSCAN_LOG_LEVEL" not in os.environ:
+        set_log_level(LogLevel.ERROR)
 
     class Source(Operator):
         def setup(self, spec):
@@ -130,6 +137,9 @@ def _make_application(owner):
                     owner.saved_paths.append(path)
                 if owner._movie is not None and not frame.done.is_set():
                     owner._movie.append(owner.cp.asnumpy(owner.cp.asarray(message["frame"])))
+                if (owner._frame_window is not None and owner._frame_window.alive
+                        and not frame.done.is_set()):
+                    owner._frame_window.offer(owner.cp.asnumpy(owner.cp.asarray(message["frame"])))
             owner._complete_frame(frame)
 
     class ViewerApplication(Application):
@@ -174,7 +184,7 @@ def _make_application(owner):
             visualizer.metadata_policy = MetadataPolicy.UPDATE
             sink = Sink(self, name="plot_sink", cuda_stream_pool=pool)
             self.add_flow(source, visualizer, {("out", "receivers"), ("input_specs", "input_specs")})
-            if not owner._capture_enabled:
+            if not owner._capture_enabled and owner._frame_window is None:
                 # Python represents a GXF VideoBuffer as an opaque/None value.
                 # Its attached CUDA stream is sufficient for completion. No
                 # tensor conversion or host framebuffer is needed for display.
@@ -194,6 +204,26 @@ def _make_application(owner):
     return ViewerApplication()
 
 
+_DISPLAY_VARIABLES = ("DISPLAY", "WAYLAND_DISPLAY")
+
+
+def _hide_display():
+    """Remove the display variables from this process and return them for ``_restore_display``.
+
+    Hiding the display before the render graph starts shortens building it, but where a forwarded X11 display
+    stalls the headless renderer, hiding it here is not enough: start the solver process without DISPLAY and pass
+    the display to the window alone through ``HYBRIDGE_FRAME_WINDOW_DISPLAY`` (see ``frame_window.window_environment``).
+    The frame window process is started before this and keeps its own copy of the environment.
+    """
+    return {name: os.environ.pop(name) for name in _DISPLAY_VARIABLES if name in os.environ}
+
+
+def _restore_display(saved):
+    """Put back the variables ``_hide_display`` removed, unless something has set them since."""
+    for name, value in saved.items():
+        os.environ.setdefault(name, value)
+
+
 class HolovizScalarPanels:
     """Fixed-view scalar panels with GPU sampling and asynchronous display.
 
@@ -208,20 +238,34 @@ class HolovizScalarPanels:
     viewer as a context manager to finish recordings even if a solve fails.
     """
 
+    _hidden_display = {}  # display variables hidden from a headless renderer; read only
+
     def __init__(
         self, spaces, labels, *, width=1024, height=1024, title="HYBRIDGE",
         show_mesh=True, cmap="viridis", off_screen=False, screenshot_dir=None,
         screenshot_prefix="holoviz", max_fps=10.0, time_step=None,
         total_steps=None, movie_path=None, movie_fps=20., columns=None,
+        frame_window=False, verbose=0,
     ):
         """Prepare fixed sampling maps and start the asynchronous viewer.
 
         ``width``/``height`` are per panel; ``columns`` (default: all panels in
-        one row) arranges the panels row by row in a grid.
+        one row) arranges the panels row by row in a grid. ``frame_window``
+        renders headless and shows the frames in a plain X11 window, for GPUs
+        without presentation support (see :mod:`hybridge.io.frame_window`).
+        ``verbose`` prints one timed row per preparation step. Headless rendering
+        hides DISPLAY and WAYLAND_DISPLAY from this process until ``close``.
         """
+        from hybridge.runtime.logging import timed_call
         from hybridge.runtime.optional import require_cupy
-        from matplotlib import colormaps
 
+        def import_colormaps():
+            """Import Matplotlib and return its colormap registry, ``matplotlib.colormaps``."""
+            from matplotlib import colormaps
+
+            return colormaps
+
+        colormaps, _ = timed_call("[holoviz] importing Matplotlib", verbose, import_colormaps)
         spaces, labels = tuple(spaces), tuple(labels)
         if not spaces or len(spaces) != len(labels):
             raise ValueError("Holoviz panels need one label per DG space")
@@ -232,11 +276,18 @@ class HolovizScalarPanels:
         self.cp = require_cupy()
         self.device_id = self.cp.cuda.runtime.getDevice()
         self.width, self.height = int(width), int(height)
-        self.title, self.off_screen = title, bool(off_screen)
+        self.title, self.off_screen = title, bool(off_screen) or bool(frame_window)
         self.time_step, self.total_steps = time_step, total_steps
         self.panel_count = len(spaces)
         self.columns = self.panel_count if columns is None else max(1, min(int(columns), self.panel_count))
         self.rows = -(-self.panel_count // self.columns)
+        self._frame_window = None
+        if frame_window:
+            from hybridge.io.frame_window import FrameWindow
+            self._frame_window, _ = timed_call(
+                "[holoviz] starting the frame window process", verbose,
+                lambda: FrameWindow(self.width * self.columns, self.height * self.rows, title=title,
+                                    verbose=bool(verbose)))
         self.labels = labels
         self.max_fps = float(max_fps)
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
@@ -261,13 +312,22 @@ class HolovizScalarPanels:
         for index, space in enumerate(spaces):
             key = id(space)
             if key not in samplers:
-                geometry = RasterGeometry.from_mesh(space.mesh, self.width, self.height)
-                samplers[key] = DeviceRasterSampler(space, geometry, device_id=self.device_id)
+                geometry = RasterGeometry.from_mesh(space.mesh, self.width, self.height, verbose=verbose)
+                samplers[key], _ = timed_call(
+                    f"[holoviz] building and uploading the sampling matrix (p={space.order})", verbose,
+                    lambda: DeviceRasterSampler(space, geometry, device_id=self.device_id))
             sampler = samplers[key]
             self._samplers.append(sampler)
-            self._add_panel(index, sampler.geometry, space.mesh, show_mesh)
-        self._app = _make_application(self)
-        self._future = self._app.run_async()
+            timed_call(f"[holoviz] preparing panel '{labels[index]}'", verbose,
+                       lambda: self._add_panel(index, sampler.geometry, space.mesh, show_mesh))
+        self._hidden_display = _hide_display() if self.off_screen else {}
+        try:
+            self._app, _ = timed_call("[holoviz] importing Holoscan and building the render graph", verbose,
+                                      lambda: _make_application(self))
+            self._future, _ = timed_call("[holoviz] starting the renderer thread", verbose, self._app.run_async)
+        except BaseException:
+            _restore_display(self._hidden_display)
+            raise
 
     def __enter__(self):
         """Return the viewer, closing it when the context exits."""
@@ -488,8 +548,10 @@ class HolovizScalarPanels:
         """Drain queued frames and release the Holoscan graph and worker."""
         if self._closed:
             return
+        drained = False
         try:
             self.flush()
+            drained = True
         finally:
             self._closing = True
             try:
@@ -497,7 +559,12 @@ class HolovizScalarPanels:
                 # its scheduling condition after the queue has drained.
                 if not self._future.done() and (self._pending is not None or self._inflight is not None):
                     self._app.stop_execution()
-                self._future.result(timeout=30.)
+                # A renderer that could not drain is likely stuck, so give it only a short grace.
+                try:
+                    self._future.result(timeout=30. if drained else 5.)
+                except FutureTimeoutError:
+                    if drained:
+                        raise TimeoutError("the Holoviz renderer did not stop within 30 s") from None
             finally:
                 try:
                     self._app.shutdown_async_executor(wait=self._future.done())
@@ -506,6 +573,9 @@ class HolovizScalarPanels:
                         if self._movie is not None:
                             self._movie.close()
                     finally:
+                        if self._frame_window is not None:
+                            self._frame_window.close()
+                        _restore_display(self._hidden_display)
                         self._closed = True
 
 
@@ -517,7 +587,7 @@ class GuidingCenterHolovizPanels(HolovizScalarPanels):
         title="Guiding center", show_mesh=True, off_screen=False,
         screenshot_dir=None, screenshot_prefix="guiding_center",
         include_potential=False, density_is_vorticity=False, max_fps=10.0,
-        time_step=None, total_steps=None, movie_path=None, movie_fps=20.,
+        time_step=None, total_steps=None, movie_path=None, movie_fps=20., frame_window=False, verbose=0,
     ):
         """Prepare fixed sampling maps and start the asynchronous viewer."""
         self.include_potential = bool(include_potential)
@@ -531,7 +601,7 @@ class GuidingCenterHolovizPanels(HolovizScalarPanels):
             cmap="RdBu_r" if density_is_vorticity else "viridis", off_screen=off_screen,
             screenshot_dir=screenshot_dir, screenshot_prefix=screenshot_prefix,
             max_fps=max_fps, time_step=time_step, total_steps=total_steps,
-            movie_path=movie_path, movie_fps=movie_fps,
+            movie_path=movie_path, movie_fps=movie_fps, frame_window=frame_window, verbose=verbose,
         )
 
     def update(self, density_field, potential_field, *, step: int, time_value: float):

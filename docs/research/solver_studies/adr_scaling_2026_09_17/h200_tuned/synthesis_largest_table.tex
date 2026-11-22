@@ -1,0 +1,60 @@
+\begin{tabular}{lrlrlllll}
+\toprule
+case & $p$ & level & DOFs & metric & ASM+PP & BJ+PP & AMGX & $p$MG--AMG \\
+\midrule
+Trigonometric & 2 & L6 & 8\,014\,560 & fresh & NC$^*$ & NC & 1\,507 (15) & NC$^*$\\
+ & & &  & reused & NC$^*$ & NC & 669.0 (15) & NC$^*$\\
+\addlinespace[2pt]
+Trigonometric & 6 & L6 & 8\,011\,752 & fresh & NC$^*$ & NC & 1\,938 (19) & NC$^*$\\
+ & & &  & reused & NC$^*$ & NC & 1\,211 (19) & NC$^*$\\
+\addlinespace[2pt]
+Trigonometric & 9 & L6 & 8\,008\,330 & fresh & NC & NC & 3\,018 (23) & NC$^*$\\
+ & & &  & reused & NC & NC & 2\,074 (23) & NC$^*$\\
+\addlinespace[2pt]
+Smooth transport & 2 & L7 & 20\,025\,624 & fresh & 38\,285 (809) & 36\,879 (1989) & 5\,542 (40) & 14\,712 (862)\\
+ & & &  & reused & 37\,905 (809) & 36\,607 (1989) & 3\,532 (40) & 13\,975 (862)\\
+\addlinespace[2pt]
+Smooth transport & 6 & L7 & 20\,031\,431 & fresh & 44\,275 (562) & 46\,423 (1493) & 5\,169 (27) & 21\,345 (1010)\\
+ & & &  & reused & 43\,761 (562) & 46\,150 (1493) & 3\,429 (27) & 20\,976 (1010)\\
+\addlinespace[2pt]
+Smooth transport & 9 & L6 & 8\,008\,330 & fresh & 3\,375 (75) & 11\,580 (707) & 3\,059 (24) & 8\,879 (917)\\
+ & & &  & reused & 3\,132 (75) & 11\,456 (707) & 2\,115 (24) & 8\,693 (917)\\
+\addlinespace[2pt]
+Variable velocity & 2 & L7 & 20\,025\,624 & fresh & NC & NC & 3\,212 (14) & 1\,216 (36)\\
+ & & &  & reused & NC & NC & 1\,201 (14) & 483.6 (36)\\
+\addlinespace[2pt]
+Variable velocity & 6 & L7 & 20\,031\,431 & fresh & NC & NC & 4\,176 (19) & 1\,051 (37)\\
+ & & &  & reused & NC & NC & 2\,429 (19) & 686.6 (37)\\
+\addlinespace[2pt]
+Variable velocity & 9 & L6 & 8\,008\,330 & fresh & NC & NC & 2\,620 (19) & 523.5 (40)\\
+ & & &  & reused & NC & NC & 1\,672 (19) & 338.3 (40)\\
+\addlinespace[2pt]
+Smooth anisotropic & 2 & L5 & 1\,795\,599 & fresh & NC$^*$ & -- & 797.5 (75) & NC$^*$\\
+ & & &  & reused & NC$^*$ & -- & 659.3 (75) & NC$^*$\\
+\addlinespace[2pt]
+Smooth anisotropic & 6 & L5 & 4\,189\,731 & fresh & NC$^*$ & -- & 1\,519 (69) & NC$^*$\\
+ & & &  & reused & NC$^*$ & -- & 1\,199 (69) & NC$^*$\\
+\addlinespace[2pt]
+Smooth anisotropic & 9 & L5 & 5\,985\,330 & fresh & NC & -- & 4\,800 (78) & NC$^*$\\
+ & & &  & reused & NC & -- & 4\,216 (78) & NC$^*$\\
+\addlinespace[2pt]
+Oscillatory low diffusion & 2 & L5 & 1\,755\,804 & fresh & 5\,457 (1119) & -- & NC & --\\
+ & & &  & reused & 5\,417 (1119) & -- & NC & --\\
+\addlinespace[2pt]
+Oscillatory low diffusion & 6 & L7 & 19\,582\,444 & fresh & NC & -- & 85\,906 (559) & --\\
+ & & &  & reused & NC & -- & 84\,638 (559) & --\\
+\addlinespace[2pt]
+Oscillatory low diffusion & 9 & L6 & 8\,030\,110 & fresh & NC & -- & 58\,820 (577) & --\\
+ & & &  & reused & NC & -- & 58\,109 (577) & --\\
+\addlinespace[2pt]
+Closed-loop stress & 2 & L7 & 19\,937\,025 & fresh & 156\,994 (786) & 148\,316 (1191) & -- & --\\
+ & & &  & reused & 155\,672 (786) & 147\,095 (1191) & -- & --\\
+\addlinespace[2pt]
+Closed-loop stress & 6 & L7 & 19\,845\,770 & fresh & 91\,352 (293) & 320\,572 (1514) & -- & --\\
+ & & &  & reused & 89\,838 (293) & 319\,298 (1514) & -- & --\\
+\addlinespace[2pt]
+Closed-loop stress & 9 & L5 & 5\,795\,670 & fresh & 16\,428 (138) & 98\,175 (1201) & -- & --\\
+ & & &  & reused & 15\,907 (138) & 97\,702 (1201) & -- & --\\
+\addlinespace[2pt]
+\bottomrule
+\end{tabular}

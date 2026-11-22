@@ -540,6 +540,8 @@ def test_diffusion_options_expose_local_factor_cache_policy() -> None:
     cholesky = options.with_overrides(cache_local_factors="schur-cholesky")
     assert cholesky.cache_local_factors == "schur-cholesky"
     assert cholesky.as_solve_kwargs()["cache_local_factors"] == "schur-cholesky"
+    responses = options.with_overrides(cache_local_factors="schur-lu+responses")
+    assert responses.as_solve_kwargs()["cache_local_factors"] == "schur-lu+responses"
 
 
 def test_diffusion_options_expose_flux_postprocessing_policy() -> None:

@@ -1,0 +1,19 @@
+\begin{tabular}{llrlrrrrrr}
+\toprule
+class & geometry & $p$ & level & DOFs & fresh & P-LU fresh & repeated & P-LU reused & families\\
+\midrule
+advection\_dominated & annulus & 6 & original & 62\,475 & 36.9 & 146.4 & 9.6 & 11.5 & AMGX/ASM+PP\\
+cellular4 & square & 4 & original & 15\,040 & 37.4 & 28.1 & 13.1 & 1.5 & ASM+PP/ASM+PP\\
+cellular7 & square & 4 & original & 15\,040 & 36.1 & 28.8 & 11.7 & 1.5 & ASM+PP/ASM+PP\\
+cellular7\_anisotropic & annulus & 6 & original & 62\,475 & 139.4 & 148.6 & 71.2 & 10.6 & ASM+PP/ASM+PP\\
+cellular7\_anisotropic & square & 6 & L2 & 85\,120 & 160.1 & 203.8 & 69.8 & 14.1 & ASM+PP/ASM+PP\\
+cellular7\_directional & annulus & 6 & L2 & 82\,495 & 151.3 & 197.2 & 55.2 & 14.9 & ASM+PP/ASM+PP\\
+cellular7\_directional & square & 6 & L2 & 85\,120 & 360.3 & 184.0 & 263.1 & 13.9 & ASM+PP/ASM+PP\\
+cellular7\_high & annulus & 6 & L2 & 82\,495 & 97.2 & 184.9 & 18.2 & 12.9 & $p$MG--AMG/$p$MG--AMG\\
+cellular7\_high & square & 6 & L2 & 85\,120 & 118.8 & 184.1 & 32.7 & 14.0 & $p$MG--AMG/ASM+PP\\
+cellular7\_low & square & 4 & original & 15\,040 & 41.7 & 30.5 & 17.1 & 1.5 & ASM+PP/ASM+PP\\
+cellular7\_weak & square & 6 & L2 & 85\,120 & 261.4 & 213.9 & 172.8 & 14.5 & ASM+PP/ASM+PP\\
+oscillatory\_rhs & annulus & 6 & original & 62\,475 & 37.2 & 142.7 & 9.6 & 11.1 & AMGX/ASM+PP\\
+oscillatory\_rhs & square & 4 & original & 15\,040 & 28.2 & 27.3 & 7.7 & 1.6 & AMGX/ASM+PP\\
+\bottomrule
+\end{tabular}

@@ -1,0 +1,47 @@
+Natural-order ILU(k), preserving PARDISO order
+=============================================
+From scripts/matk:
+
+Build the isolated library (does not replace the baseline):
+  bash ../../../AMGX-build-cuda13.1-natural-iluk/build.sh
+
+CPU symbolic reference check:
+  g++ -std=c++17 -O2 -Wall -Wextra -Werror -I../../../AMGX/include \
+    check_natural_ilu_pattern.cpp -o /tmp/check_natural_ilu_pattern
+  /tmp/check_natural_ilu_pattern
+
+Check ALL running and pending GPU allocations before any submission:
+  squeue -u "$USER" -o '%.18i %.12P %.28j %.10T %.20b %.20R'
+Maximum FIVE GPUs across all repositories. Dependencies can reuse a slot.
+
+Independent numerical/operator/resetup qualification and GPU memcheck:
+  sbatch natural_iluk_qualification.sbatch
+
+After qualification passes, each full trial uses one H200:
+  sbatch amgx_natural_iluk.sbatch 1 none
+  sbatch amgx_natural_iluk.sbatch 1 diagonal
+  sbatch amgx_natural_iluk.sbatch 2 none
+  sbatch amgx_natural_iluk.sbatch 2 diagonal
+  sbatch amgx_natural_iluk.sbatch 3 none
+
+After a slot is released (or with afterany dependency on one of those jobs):
+  sbatch amgx_natural_iluk.sbatch 3 diagonal
+
+  tail -F matk-natural-iluk-JOBID.out
+
+Reports and complete native logs:
+  ../../run_outputs/matk/natural-iluk-JOBID/{smoke,full}.json
+  ../../run_outputs/matk/natural-iluk-JOBID/full_trials/
+
+Aligned timing/result report (replace job IDs for a new run):
+  ../../.venv/bin/python report_ordered_blocks.py --prefix natural-iluk \
+    --jobs 28452 28453 28454 28455 28456 28457 \
+    --output ../../run_outputs/matk/natural-iluk-results.json
+
+Native solver token FGMRES + MULTICOLOR_ILU, block_ilu_backend=cusparse_legacy,
+ilu_sparsity_level=1/2/3, no coloring, no warm starts or residual corrections.
+The original matrix is kept separate from the expanded factor pattern.
+Host symbolic counts/time are printed as 'Natural ILU(k): ...'. Solver setup
+includes symbolic construction, factor allocation/scatter and GPU factorization.
+The saved PARDISO phase11 analysis is reused, not rerun for each configuration.
+Actual AMGX solver config and library checksum in each worker are authoritative.

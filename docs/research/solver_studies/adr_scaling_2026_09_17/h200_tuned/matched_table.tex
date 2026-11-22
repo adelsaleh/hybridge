@@ -1,0 +1,77 @@
+\begin{tabular}{llrrlrrrrrrr}
+\toprule
+case & geom. & $p$ & DOFs & candidate & it.\ BW/H200 & setup BW & setup H200 & rep.\ BW & rep.\ H200 & rep.\ $\times$ & amort.\ $\times$\\
+\midrule
+transport & squ & 2 & 36\,480 & \texttt{amgx\_bsr\_pbicgstab\_amg\_multicolor\_dilu} & 19/19 & 185.5 & 49.3 & 98.6 & 90.2 & 1.09 & 1.67\\
+transport & squ & 6 & 21\,056 & \texttt{amgx\_bsr\_pbicgstab\_amg\_multicolor\_dilu} & 14/14 & 83.5 & 38.5 & 60.5 & 56.1 & 1.08 & 1.36\\
+transport & squ & 6 & 85\,120 & \texttt{amgx\_bsr\_pbicgstab\_amg\_multicolor\_dilu} & 17/17 & 595.0 & 79.9 & 156.0 & 145.0 & 1.08 & 2.45\\
+transport & squ & 6 & 342\,272 & \texttt{amgx\_bsr\_pbicgstab\_amg\_multicolor\_dilu} & 20/20 & 253.4 & 76.8 & 322.1 & 265.2 & 1.21 & 1.48\\
+transport & squ & 6 & 1\,041\,187 & \texttt{amgx\_bsr\_pbicgstab\_amg\_multicolor\_dilu} & 20/20 & 458.6 & 135.7 & 576.7 & 448.1 & 1.29 & 1.56\\
+aniso. & squ & 2 & 36\,480 & \texttt{amgx\_pbicgstab\_amg} & 71/71 & 149.7 & 45.3 & 257.5 & 228.7 & 1.13 & 1.32\\
+aniso. & squ & 6 & 21\,056 & \texttt{amgx\_pbicgstab\_amg} & 71/71 & 55.0 & 33.6 & 134.8 & 139.0 & 0.97 & 1.04\\
+aniso. & squ & 6 & 85\,120 & \texttt{amgx\_pbicgstab\_amg} & 63/62 & 484.1 & 74.4 & 425.7 & 389.6 & 1.09 & 1.56\\
+aniso. & squ & 6 & 342\,272 & \texttt{amgx\_pbicgstab\_amg} & 63/63 & 400.0 & 79.1 & 441.4 & 400.2 & 1.10 & 1.46\\
+aniso. & squ & 6 & 1\,041\,187 & \texttt{amgx\_pbicgstab\_amg} & 67/67 & 479.7 & 119.5 & 621.9 & 489.5 & 1.27 & 1.57\\
+cell.\ weak & ann & 2 & 35\,355 & \texttt{amg\_pbicgstab} & 160/157 & 62.9 & 40.3 & 616.0 & 591.0 & 1.04 & 1.06\\
+cell.\ weak & ann & 6 & 20\,482 & \texttt{amg\_pbicgstab} & 454/519 & 102.2 & 45.0 & 2\,235 & 2\,211 & 1.01 & 1.02\\
+cell.\ weak & ann & 6 & 344\,631 & \texttt{amg\_pbicgstab} & 889/905 & 399.2 & 83.3 & 14\,581 & 12\,127 & 1.20 & 1.21\\
+cell.\ weak & ann & 6 & 1\,043\,392 & \texttt{amg\_pbicgstab} & 675/669 & 540.3 & 130.7 & 22\,037 & 16\,800 & 1.31 & 1.32\\
+transport & squ & 2 & 36\,480 & \texttt{asm\_gmres} & 12/12 & 74.2 & 8.5 & 12.3 & 10.2 & 1.22 & 3.43\\
+transport & squ & 6 & 21\,056 & \texttt{asm\_gmres} & 8/8 & 34.0 & 8.5 & 9.0 & 7.2 & 1.25 & 2.30\\
+transport & squ & 6 & 85\,120 & \texttt{asm\_gmres} & 13/13 & 110.4 & 9.6 & 20.5 & 10.9 & 1.88 & 4.84\\
+transport & squ & 6 & 342\,272 & \texttt{asm\_gmres} & 40/21 & 453.0 & 15.7 & 292.6 & 40.1 & 7.29 & 10.82\\
+transport & squ & 6 & 1\,041\,187 & \texttt{asm\_gmres} & 32/32 & 1\,130 & 33.9 & 729.3 & 142.3 & 5.13 & 8.12\\
+aniso. & squ & 2 & 36\,480 & \texttt{asm\_gmres} & 27/27 & 82.1 & 19.0 & 48.6 & 40.0 & 1.22 & 1.83\\
+aniso. & squ & 6 & 21\,056 & \texttt{asm\_gmres} & 14/14 & 48.0 & 18.7 & 25.8 & 21.5 & 1.20 & 1.59\\
+aniso. & squ & 6 & 85\,120 & \texttt{asm\_gmres} & 54/30 & 124.8 & 20.7 & 144.1 & 45.5 & 3.17 & 3.71\\
+aniso. & squ & 6 & 342\,272 & \texttt{asm\_gmres} & 60/60 & 488.5 & 29.6 & 833.6 & 207.9 & 4.01 & 4.84\\
+aniso. & squ & 6 & 1\,041\,187 & \texttt{asm\_gmres} & 150/121 & 1\,204 & 56.3 & 6\,605 & 1\,063 & 6.22 & 6.62\\
+cell.\ weak & ann & 2 & 35\,355 & \texttt{asm\_d24} & 150/105 & 59.1 & 8.4 & 144.4 & 83.4 & 1.73 & 1.98\\
+cell.\ weak & ann & 6 & 20\,482 & \texttt{asm\_d24} & 150/93 & 35.2 & 8.4 & 142.3 & 73.6 & 1.93 & 2.08\\
+cell.\ weak & ann & 6 & 82\,495 & \texttt{asm\_d24} & 150/135 & 93.1 & 9.6 & 226.4 & 109.3 & 2.07 & 2.39\\
+cell.\ weak & ann & 6 & 344\,631 & \texttt{asm\_d24} & 300/263 & 381.0 & 16.0 & 2\,251 & 501.6 & 4.49 & 4.80\\
+cell.\ weak & ann & 6 & 1\,043\,392 & \texttt{asm\_d24} & 525/458 & 1\,393 & 34.3 & 12\,369 & 2\,108 & 5.87 & 6.15\\
+trig. & squ & 2 & 36\,480 & \texttt{asm\_gmres} & 26/26 & 68.6 & 9.0 & 27.5 & 22.1 & 1.25 & 2.39\\
+trig. & squ & 6 & 21\,056 & \texttt{asm\_gmres} & 33/17 & 35.9 & 8.8 & 35.4 & 15.7 & 2.25 & 2.60\\
+trig. & squ & 6 & 85\,120 & \texttt{asm\_gmres} & 65/33 & 115.0 & 9.9 & 95.6 & 28.3 & 3.38 & 4.60\\
+trig. & squ & 6 & 342\,272 & \texttt{asm\_gmres} & 126/64 & 453.3 & 16.3 & 921.6 & 123.6 & 7.45 & 8.71\\
+trig. & squ & 6 & 1\,041\,187 & \texttt{asm\_gmres} & 150/130 & 1\,135 & 34.2 & 3\,469 & 610.5 & 5.68 & 6.43\\
+var.\ vel. & squ & 2 & 36\,480 & \texttt{asm\_pp\_raw\_fused\_d18} & 36/36 & 61.4 & 7.3 & 33.6 & 24.5 & 1.37 & 2.28\\
+var.\ vel. & squ & 6 & 21\,056 & \texttt{asm\_pp\_raw\_fused\_d18} & 22/22 & 29.9 & 7.2 & 22.1 & 15.3 & 1.44 & 1.99\\
+var.\ vel. & squ & 6 & 85\,120 & \texttt{asm\_pp\_raw\_fused\_d18} & 44/44 & 101.0 & 8.1 & 53.7 & 30.2 & 1.78 & 3.05\\
+var.\ vel. & squ & 6 & 342\,272 & \texttt{asm\_pp\_raw\_fused\_d18} & 150/78 & 414.3 & 14.3 & 837.4 & 119.1 & 7.03 & 8.27\\
+var.\ vel. & squ & 6 & 1\,041\,187 & \texttt{asm\_pp\_raw\_fused\_d18} & 150/150 & 1\,014 & 32.2 & 2\,568 & 555.9 & 4.62 & 5.38\\
+transport & squ & 2 & 36\,480 & \texttt{bj\_pp\_raw\_fused\_d12} & 71/37 & 16.9 & 4.1 & 34.1 & 14.9 & 2.29 & 2.48\\
+transport & squ & 6 & 21\,056 & \texttt{bj\_pp\_raw\_fused\_d12} & 20/20 & 12.2 & 3.9 & 9.8 & 8.1 & 1.21 & 1.55\\
+transport & squ & 6 & 85\,120 & \texttt{bj\_pp\_raw\_fused\_d12} & 57/30 & 40.4 & 4.6 & 28.6 & 12.3 & 2.33 & 3.33\\
+transport & squ & 6 & 342\,272 & \texttt{bj\_pp\_raw\_fused\_d12} & 49/49 & 165.3 & 7.8 & 108.3 & 36.7 & 2.96 & 4.69\\
+transport & squ & 6 & 1\,041\,187 & \texttt{bj\_pp\_raw\_fused\_d12} & 164/83 & 257.0 & 17.2 & 1\,214 & 154.1 & 7.88 & 8.25\\
+trig. & squ & 2 & 36\,480 & \texttt{bj\_pp\_raw\_fused\_d12} & 150/105 & 16.7 & 4.6 & 75.9 & 43.2 & 1.76 & 1.84\\
+trig. & squ & 6 & 21\,056 & \texttt{bj\_pp\_raw\_fused\_d12} & 110/55 & 13.2 & 4.4 & 53.5 & 22.9 & 2.33 & 2.37\\
+trig. & squ & 6 & 85\,120 & \texttt{bj\_pp\_raw\_fused\_d12} & 150/121 & 40.4 & 5.0 & 81.0 & 50.5 & 1.60 & 1.89\\
+trig. & squ & 6 & 342\,272 & \texttt{bj\_pp\_raw\_fused\_d12} & 300/293 & 168.6 & 8.6 & 680.4 & 233.0 & 2.92 & 3.22\\
+var.\ vel. & squ & 2 & 36\,480 & \texttt{bj\_pp\_raw\_fused\_d18} & 100/57 & 17.5 & 5.4 & 63.3 & 30.9 & 2.05 & 2.11\\
+var.\ vel. & squ & 6 & 21\,056 & \texttt{bj\_pp\_raw\_fused\_d18} & 38/38 & 15.2 & 5.2 & 24.3 & 20.5 & 1.18 & 1.34\\
+var.\ vel. & squ & 6 & 85\,120 & \texttt{bj\_pp\_raw\_fused\_d18} & 100/74 & 42.6 & 5.7 & 68.1 & 40.1 & 1.70 & 2.06\\
+transport & squ & 2 & 36\,480 & $p$MG--AMG standard & 300/300 & 79.4 & 27.1 & 264.5 & 151.0 & 1.75 & 1.85\\
+transport & squ & 6 & 21\,056 & $p$MG--AMG standard & 150/148 & 55.6 & 26.6 & 123.6 & 71.7 & 1.72 & 1.79\\
+transport & squ & 6 & 85\,120 & $p$MG--AMG standard & 300/278 & 128.5 & 28.7 & 324.3 & 155.4 & 2.09 & 2.28\\
+transport & squ & 6 & 342\,272 & $p$MG--AMG standard & 450/416 & 439.8 & 32.9 & 882.4 & 331.9 & 2.66 & 3.12\\
+transport & squ & 6 & 1\,041\,187 & $p$MG--AMG standard & 675/634 & 1\,261 & 47.7 & 3\,135 & 1\,036 & 3.03 & 3.56\\
+aniso. & squ & 2 & 36\,480 & $p$MG--AMG standard & 150/120 & 81.7 & 29.1 & 133.8 & 58.7 & 2.28 & 2.39\\
+aniso. & squ & 6 & 21\,056 & $p$MG--AMG standard & 150/117 & 51.4 & 28.0 & 116.7 & 52.2 & 2.23 & 2.20\\
+aniso. & squ & 6 & 85\,120 & $p$MG--AMG standard & 225/184 & 125.7 & 31.0 & 207.1 & 108.9 & 1.90 & 2.17\\
+aniso. & squ & 6 & 342\,272 & $p$MG--AMG standard & 225/196 & 450.0 & 33.2 & 483.2 & 157.2 & 3.07 & 4.06\\
+aniso. & squ & 6 & 1\,041\,187 & $p$MG--AMG standard & 225/233 & 1\,376 & 50.4 & 1\,032 & 384.5 & 2.68 & 4.20\\
+trig. & squ & 2 & 36\,480 & $p$MG--AMG bsr & 53/31 & 74.8 & 28.0 & 41.5 & 15.2 & 2.72 & 2.71\\
+trig. & squ & 6 & 21\,056 & $p$MG--AMG bsr & 58/32 & 50.1 & 28.5 & 42.5 & 14.9 & 2.85 & 2.31\\
+trig. & squ & 6 & 85\,120 & $p$MG--AMG bsr & 65/37 & 119.2 & 26.6 & 55.6 & 19.6 & 2.84 & 3.46\\
+trig. & squ & 6 & 342\,272 & $p$MG--AMG bsr & 70/42 & 419.0 & 32.2 & 116.7 & 31.8 & 3.67 & 6.77\\
+trig. & squ & 6 & 1\,041\,187 & $p$MG--AMG bsr & 71/46 & 1\,230 & 47.5 & 276.1 & 66.6 & 4.14 & 9.83\\
+var.\ vel. & squ & 2 & 36\,480 & $p$MG--AMG bsr & 54/27 & 73.7 & 28.0 & 43.3 & 13.5 & 3.20 & 2.88\\
+var.\ vel. & squ & 6 & 21\,056 & $p$MG--AMG bsr & 29/29 & 52.5 & 27.6 & 22.4 & 13.3 & 1.68 & 1.76\\
+var.\ vel. & squ & 6 & 85\,120 & $p$MG--AMG bsr & 31/31 & 112.1 & 28.9 & 26.3 & 16.4 & 1.60 & 2.64\\
+var.\ vel. & squ & 6 & 342\,272 & $p$MG--AMG bsr & 34/34 & 423.3 & 32.1 & 57.3 & 25.5 & 2.24 & 6.43\\
+var.\ vel. & squ & 6 & 1\,041\,187 & $p$MG--AMG bsr & 35/35 & 1\,229 & 48.6 & 136.5 & 50.2 & 2.72 & 10.05\\
+\bottomrule
+\end{tabular}

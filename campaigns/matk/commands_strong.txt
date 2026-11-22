@@ -1,0 +1,110 @@
+# From hybridge/scripts/matk (also works from the repository root with full script paths):
+
+# Resource limit: at most FOUR GPUs total, including other user jobs and smoke
+# tests. Each job below requests one GPU. Check running AND pending GPU jobs
+# before submitting; do not submit a batch of these commands together.
+# The earlier five-GPU allocation drained to four when job 27501 finished.
+# The four-GPU cap is now in force; see ../AGENTS.md.
+# squeue -u "$USER" -o '%.18i %.32j %.10T %.20b %.18N'
+
+# Strong native candidates validated on a small system; full-matrix convergence
+# must still be checked against the original residual tolerance of 1e-8.
+# sbatch amgx_strong.sbatch --timeout 1800 --verbosity 3 --candidates fgmres_native_extended_i20k_w_b10 fgmres_native_dense8_20k_w_b10 fgmres_hugecoarse20k_frobenius_b10
+# Full-matrix outcome of that 20k sweep (job 27498): no convergence; classical
+# dense-coarse LU hit illegal CUDA accesses and aggregation produced NaNs.
+# Native iterative coarse solves and residual-minimizing Krylov smoothers:
+# sbatch amgx_strong.sbatch --scaling column-diagonal --timeout 1800 --verbosity 3 --candidates fgmres_native_extended_i_coarse1000_krylov_b10 fgmres_native_rightnorm_coarse1000_krylov_b10 fgmres_frobenius_coarse1000_krylov_b10
+# Larger native GMRES space, about 94 GiB reported GPU usage on matK:
+# sbatch amgx_strong.sbatch --scaling column-max --max-iters 6000 --residual-corrections 0 --timeout 3600 --verbosity 3 --candidates gmres_natural_ilu0_csr_r6000
+# Job 27501 finished: original relative residual 0.0276688 after 1771.48 s,
+# 6000 iterations. This did not reach the required 1e-8.
+
+# Focused compatibility checks for the remaining native hierarchy candidates:
+# sbatch --time=00:25:00 amgx_strong.sbatch --smoke-test --smoke-blocks 4096 --timeout 240 --verbosity 3 --candidates fgmres_identity_all_edges_l1_w_b20 fgmres_aggregation_pairwise_l1_f_csr fgmres_identity_l1_deep_lu_b20 fgmres_aggregation_pairwise_l1_lu_csr
+# Promote only candidates whose synthetic ORIGINAL residual check passed:
+# sbatch amgx_strong.sbatch --scaling column-max --timeout 1800 --verbosity 3 --candidates fgmres_identity_l1_deep_lu_b20 fgmres_aggregation_pairwise_l1_lu_csr
+# The deep-LU variants retain L1/Krylov smoothing and coarsen further before a
+# native dense coarse solve. Configured coarse-row triggers are not guaranteed
+# size caps in this AMGX build; inspect actual AMG Grid rows (see AMGX/TODO.md).
+# Smoke 27592: both deep-LU candidates and scalar pairwise iterative coarse
+# passed. The all-edge MULTIPASS proposal was rejected: block-graph BSR requires
+# D2 interpolation. It is now probe-only; the following replacement uses D2.
+# sbatch --time=00:20:00 amgx_strong.sbatch --smoke-test --smoke-blocks 4096 --timeout 240 --verbosity 3 --candidates fgmres_identity_all_edges_l1_deep_lu_b20 fgmres_identity_l1_v_refined_lu_b20 fgmres_pairwise_l1_v_refined_lu_csr
+# sbatch amgx_strong.sbatch --scaling column-max --timeout 1800 --verbosity 3 --candidates fgmres_identity_l1_v_refined_lu_b20 fgmres_pairwise_l1_v_refined_lu_csr
+# Refined coarse LU means native GMRES/FGMRES preconditioned by native DenseLU.
+# The V-cycle variants avoid repeatedly applying an unstable coarse correction.
+
+# Historical larger coarse-LU comparison; both smoke checks passed in27655.
+# Full direct-coarse trial27657 formed45,540 scalar unknowns, stayed stagnant,
+# and was cancelled at the user's request. The refined variant was untried.
+# sbatch --time=00:15:00 amgx_strong.sbatch --smoke-test --smoke-blocks 4096 --timeout 180 --verbosity 3 --candidates fgmres_identity_l1_v_large45k_lu_b20 fgmres_identity_l1_v_large45k_refined_lu_b20
+# sbatch --time=00:25:00 amgx_strong.sbatch --scaling column-max --max-iters 100 --residual-corrections 0 --timeout 600 --verbosity 3 --candidates fgmres_identity_l1_v_large45k_lu_b20 fgmres_identity_l1_v_large45k_refined_lu_b20
+# The isolated ILU capacity extension and qualified build commands are in
+# commands_ilu_capacity.txt. The installed library remains unchanged.
+
+# First validate native AMGX configurations on a tiny nonsymmetric system on the H200.
+# This checks native configuration support, BSR uploads, scaling and original residuals.
+sbatch --time=00:20:00 amgx_strong.sbatch --smoke-test --verbosity 3
+
+# Full matrix, 3000 iterations, restart 300 (one candidate uses 800), Ruiz scaling,
+# up to two physical-residual correction solves. One repeated solve by default.
+# Stops after the first configuration passes the ORIGINAL unscaled residual target.
+sbatch amgx_strong.sbatch --verbosity 3
+
+# Native AMGX preconditioners stronger than a single ILU(1) application:
+# sbatch amgx_strong.sbatch --candidates fgmres_pairwise_f_krylov_csr fgmres_inner100_dilu_csr --verbosity 3
+# Large native GMRES spaces with always-on reorthogonalization:
+# sbatch amgx_strong.sbatch --candidates gmres_natural_ilu0_csr_r1000 gmres_natural_ilu0_csr_r3000 --verbosity 3
+# Compare scaling methods on the same selected candidate(s):
+# sbatch amgx_strong.sbatch --scaling diagonal --candidates gmres_natural_ilu0_csr_r1000 --verbosity 3
+# --scaling accepts ruiz (default), row-max, diagonal, column-max,
+# column-diagonal, none. Right-only column scaling preserves the original
+# residual norm; all methods still require the original-system residual check.
+
+# Run a selected subset / continue benchmarking after success:
+# sbatch amgx_strong.sbatch --candidates pbicgstab_natural_ilu0_b20 pbicgstab_ilu1_b4 --verbosity 3
+# sbatch amgx_strong.sbatch --continue-after-success --repeats 3 --verbosity 3
+# sbatch --time=16:00:00 amgx_strong.sbatch --timeout 3600 --max-iters 6000 --restart 500 --verbosity 3
+
+# List exact configurations without allocating a GPU:
+../../.venv/bin/python benchmark_amgx_strong.py --list-configs --output /tmp/matk-unused.json
+
+# Live output (replace JOBID):
+# tail -F matk-amgx-strong-JOBID.out
+# squeue -j JOBID
+
+# Important interpretation:
+# - PBICGSTAB is the preconditioned BiCGStab implementation in AMGX. BICGSTAB
+#   ignores the configured preconditioner in this build.
+# - GMRES uses DGKS reorthogonalization and reliable explicit residual checks.
+#   It stays on scalar CSR: native block-GMRES failed the small-system regression.
+# - The default search uses native AMGX Krylov solvers and preconditioners only.
+#   Deferred custom-pattern, custom-ordering, block-normalization and external
+#   outer-solver paths cannot run without the explicit --experimental flag.
+# - Native multicolor ILU factorization supports 4x4 blocks only; ILU(1) uses
+#   distance-two coloring and explicit color/diagonal reordering flags.
+#   The full matK matrix has already hit this kernel's per-row shared-memory
+#   limit, despite passing the small-system test. These failures are retained.
+# - Natural-order cuSPARSE ILU(0) uses the existing opt-in AMGX backend. The
+#   20x20 trial relies only on contiguous CSR regrouping, not a mesh/face model.
+# - CSR, 4x4 and 20x20 storage represent the same equations. Groupings introducing
+#   more than 25% stored padding are rejected. This is not HYBRIDGE geometric ASM.
+# - W cycles, three pre/post smoothing sweeps and a larger dense coarse solve
+#   make AMG more expensive than the first benchmark. Blocks use aggregation;
+#   scalar CSR uses classical HMIS/D2 coarsening with strength threshold 0.1.
+# - fgmres_inner* uses flexible outer GMRES around a 30- or 50-step inner Krylov
+#   approximate inverse. fgmres_amg_f_krylov_csr uses Krylov smoothing in F cycles.
+# - Native BINORMALIZATION / NBINORMALIZATION presets are probe-only: they failed
+#   the physical-residual smoke checks with this build/backend combination and
+#   are excluded from the default search. They remain explicitly selectable.
+# - Equilibration solves (Dr A Dc)y = Dr b and recovers x = Dc y. Acceptance is
+#   based solely on finite x and the original CPU FP64 ||Ax-b||/||b|| <= 1e-8.
+# - Residual correction solves use the same factors/hierarchy and a fresh zero
+#   vector. Original residuals and all inner statuses are recorded separately.
+# - Timing separates preprocessing, upload, setup, inner GPU solves, RHS resets
+#   and CPU validation. Ranking includes preprocessing + upload + setup + solves.
+# - Candidate failures and 30-minute timeouts are isolated in child processes.
+#   Nonfinite native iteration residuals stop the worker immediately at all verbosity levels.
+# - Original first-sweep records are retained unchanged.
+# - Custom experiments are deferred at the user's request; see
+#   commands_experimental.txt only when that work is explicitly resumed.

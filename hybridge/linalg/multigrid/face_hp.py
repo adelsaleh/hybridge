@@ -19,6 +19,7 @@ from typing import Any, Callable
 import numpy as np
 
 from hybridge.runtime.optional import require_cupy
+from hybridge.runtime.env import getenv
 from hybridge.linalg.results import residual_history_is_stagnated
 from hybridge.linalg.multigrid.policy import (
     FB_HP_MG_MAX_DEGREE,
@@ -29,8 +30,10 @@ from hybridge.linalg.multigrid.policy import (
 )
 from hybridge.linalg.gpu.legendre_face_bsr import (
     LegendreFaceBsrOperator,
+    PackedFaceBsrKernels,
     modal_degree_schedule,
     principal_modal_bsr_data,
+    select_face_bsr_kernels,
 )
 
 
@@ -49,6 +52,8 @@ class FacePmgLevelDiagnostics:
 
 @dataclass
 class _FacePmgLevel:
+    """One fixed modal level, its selected kernels and calibration record."""
+
     degree: int
     operator: LegendreFaceBsrOperator
     diagonal: Any
@@ -57,11 +62,40 @@ class _FacePmgLevel:
     lambda_max: float | None
     lambda_low: float | None
     smoother_backend: str
+    packed: PackedFaceBsrKernels | None = None
+    tuning_report: dict | None = None
 
     @property
     def block_size(self) -> int:
         """Return the number of retained face modes."""
         return int(self.degree + 1)
+
+
+FACE_PMG_KERNEL_PRESETS = {
+    # name: (smoother_backend, transfer_backend, cuda_graphs)
+    # Measured legacy/packed kernels; keep legacy transfers and PCG recurrence.
+    "auto": ("auto", "cupy", False),
+    "legacy": ("fused-raw-cuda", "cupy", False),
+    # Bitwise equal to legacy: same row sums, all lanes busy.
+    "packed": ("packed-raw-cuda", "cupy", False),
+    # Residual+restriction in one kernel and prolongation folded into the first
+    # post-smoothing stage; round-off-level differences from cuSPARSE.
+    "packed-fused": ("packed-raw-cuda", "fused", False),
+    # packed-fused with each p-sweep replayed as one CUDA graph.
+    "graph": ("packed-raw-cuda", "fused", True),
+}
+
+
+def face_pmg_kernel_preset(name: str | None = None) -> tuple[str, str, bool]:
+    """Resolve a solve-kernel preset, by default from ``HYBRIDGE_HP_MG_KERNELS``."""
+    if name is None:
+        name = getenv("HP_MG_KERNELS", "auto")
+    key = str(name).strip().lower()
+    if key not in FACE_PMG_KERNEL_PRESETS:
+        raise ValueError(
+            f"hp-MG kernel preset must be one of {sorted(FACE_PMG_KERNEL_PRESETS)}; got {name!r}"
+        )
+    return FACE_PMG_KERNEL_PRESETS[key]
 
 
 @dataclass
@@ -230,6 +264,62 @@ def _format_fb_hp_mg_pcg_row(
     )
 
 
+_PCGF_FUSED_UPDATES = r"""
+// Explicit _rn intrinsics keep CuPy's two roundings (product, then sum) so the
+// fused updates are bitwise equal to the elementwise sequences they replace.
+typedef double real_t;
+__device__ __forceinline__ real_t mul_rn(real_t a, real_t b) {
+    if constexpr (sizeof(real_t) == 8) return __dmul_rn(a, b); else return __fmul_rn(a, b);
+}
+__device__ __forceinline__ real_t add_rn(real_t a, real_t b) {
+    if constexpr (sizeof(real_t) == 8) return __dadd_rn(a, b); else return __fadd_rn(a, b);
+}
+__device__ __forceinline__ real_t sub_rn(real_t a, real_t b) {
+    if constexpr (sizeof(real_t) == 8) return __dsub_rn(a, b); else return __fsub_rn(a, b);
+}
+
+extern "C" __global__
+void pcgf_step_update(const long long n,
+        const double* __restrict__ rho, const double* __restrict__ curvature,
+        const double* __restrict__ direction, const double* __restrict__ applied,
+        double* __restrict__ x, double* __restrict__ residual,
+        double* __restrict__ residual_previous)
+{
+    const double alpha = rho[0] / curvature[0];
+    for (long long k = blockIdx.x * (long long)blockDim.x + threadIdx.x; k < n;
+         k += (long long)gridDim.x * blockDim.x) {
+        const double r = residual[k];
+        residual_previous[k] = r;
+        x[k] = add_rn(x[k], mul_rn(alpha, direction[k]));
+        residual[k] = sub_rn(r, mul_rn(alpha, applied[k]));
+    }
+}
+
+extern "C" __global__
+void pcgf_direction_update(const long long n,
+        const double* __restrict__ numerator, const double* __restrict__ rho,
+        const double* __restrict__ z, double* __restrict__ direction)
+{
+    const double beta = numerator[0] / rho[0];
+    for (long long k = blockIdx.x * (long long)blockDim.x + threadIdx.x; k < n;
+         k += (long long)gridDim.x * blockDim.x) {
+        direction[k] = add_rn(mul_rn(direction[k], beta), z[k]);
+    }
+}
+"""
+_PCGF_MODULE = None
+
+
+def _pcgf_kernels():
+    """Compile (once) the fused PCGF vector updates."""
+    global _PCGF_MODULE
+    if _PCGF_MODULE is None:
+        from hybridge.runtime.precision import real_raw_module
+
+        _PCGF_MODULE = real_raw_module(code=_PCGF_FUSED_UPDATES, options=("--std=c++17",))
+    return _PCGF_MODULE
+
+
 def _pcgf_beta(cp, preconditioned_residual, residual_delta, previous_rho):
     """AMGX's flexible CG update, shared by native and prototype iterations."""
     return cp.real(cp.vdot(preconditioned_residual, residual_delta)) / previous_rho
@@ -246,6 +336,9 @@ class AmgxScalarVcycle:
 
         self.operator = operator
         self.config = copy.deepcopy(config)
+        # The scalar face graph is canonical int32 CSR with a diagonal block in every row, so
+        # AMGX borrows the operator's arrays instead of copying them (falls back to a copy
+        # otherwise; ``solver.borrow_note`` says which).
         self.solver = PyAMGXCsrDeviceSolver(
             config=self.config,
             tolerance=1.0e-30,
@@ -253,6 +346,7 @@ class AmgxScalarVcycle:
             verbose=verbose,
             reusable=True,
             fixed_amg_cycles=1,
+            borrow_csr=True,
         )
         self.setup_seconds = float(self.solver.setup(operator))
         self.apply_count = 0
@@ -442,8 +536,19 @@ class FaceBlockPmgPrototype:
             spmv_backend: str = "auto",
             smoother_backend: str = "auto",
             coarse_factory: Callable[[LegendreFaceBsrOperator], Callable] | None = None,
+            transfer_backend: str = "cupy",
+            cuda_graphs: bool = False,
     ):
-        """Build every nested p-level and the reusable p-zero correction."""
+        """Build every nested p-level and the reusable p-zero correction.
+
+        ``smoother_backend="packed-raw-cuda"`` runs one thread per scalar row
+        (bitwise equal to ``fused-raw-cuda``). ``transfer_backend="fused"``
+        (packed smoothers only) computes the restricted residual in one kernel
+        and folds the prolongation into the first post-smoothing stage.
+        ``cuda_graphs`` (fused transfers only) captures the down- and
+        up-sweeps once and replays each as one graph launch around the coarse
+        solve.
+        """
         cp = require_cupy()
         self.cp = cp
         self.indptr = cp.ascontiguousarray(indptr, dtype=cp.int32)
@@ -462,10 +567,18 @@ class FaceBlockPmgPrototype:
         if not 0.0 < float(lambda_low_fraction) < 1.0:
             raise ValueError("lambda_low_fraction must lie in (0,1)")
         requested_smoother = str(smoother_backend).replace("_", "-").lower()
-        if requested_smoother not in {"auto", "cupy", "fused-raw-cuda"}:
+        if requested_smoother not in {"auto", "cupy", "fused-raw-cuda", "packed-raw-cuda"}:
             raise ValueError(
-                "smoother_backend must be auto, cupy, or fused-raw-cuda"
+                "smoother_backend must be auto, cupy, fused-raw-cuda, or packed-raw-cuda"
             )
+        self.transfer_backend = str(transfer_backend).replace("_", "-").lower()
+        if self.transfer_backend not in {"cupy", "fused"}:
+            raise ValueError("transfer_backend must be cupy or fused")
+        if self.transfer_backend == "fused" and requested_smoother != "packed-raw-cuda":
+            raise ValueError("fused transfers require smoother_backend='packed-raw-cuda'")
+        self.cuda_graphs = bool(cuda_graphs)
+        if self.cuda_graphs and self.transfer_backend != "fused":
+            raise ValueError("cuda_graphs requires transfer_backend='fused'")
         self.smoother_backend_requested = requested_smoother
         self.levels: list[_FacePmgLevel] = []
         for level_index, level_degree in enumerate(self.degree_schedule):
@@ -502,12 +615,29 @@ class FaceBlockPmgPrototype:
                     self.chebyshev_order, lambda_low, lambda_max
                 )
             level_smoother = "coarse"
+            tuning_report = None
+            packed_threads = 256
             if level_index + 1 < len(self.degree_schedule):
                 level_smoother = requested_smoother
                 if level_smoother == "auto":
-                    level_smoother = (
-                        "fused-raw-cuda" if block_size <= 10 else "cupy"
-                    )
+                    if block_size <= 10:
+                        variant, tuning_report = select_face_bsr_kernels(
+                            operator, diagonal_inverse,
+                            reuse=dict(regime="fixed-pmg-hierarchy", weights=list(weights),
+                                       presweeps=self.presweeps, postsweeps=self.postsweeps,
+                                       coarse_block_size=self.degree_schedule[level_index + 1] + 1))
+                        level_smoother = "fused-raw-cuda" if variant == "legacy" else "packed-raw-cuda"
+                        if variant != "legacy":
+                            packed_threads = int(variant.split(":")[1])
+                    else:
+                        level_smoother = "cupy"
+            packed = None
+            if level_smoother == "packed-raw-cuda":
+                packed = PackedFaceBsrKernels(
+                    operator, diagonal_inverse,
+                    coarse_block_size=self.degree_schedule[level_index + 1] + 1,
+                    threads=packed_threads,
+                )
             self.levels.append(_FacePmgLevel(
                 degree=level_degree,
                 operator=operator,
@@ -517,6 +647,8 @@ class FaceBlockPmgPrototype:
                 lambda_max=lambda_max,
                 lambda_low=lambda_low,
                 smoother_backend=level_smoother,
+                packed=packed,
+                tuning_report=tuning_report,
             ))
         if int(self.levels[-1].block_size) != 1:
             self.close()
@@ -537,6 +669,12 @@ class FaceBlockPmgPrototype:
                 coarse_rhs=cp.empty(coarse_size, dtype=REAL_DTYPE),
             ))
         self._apply_active = False
+        # CUDA-graph replay needs fixed input and coarse-correction pointers.
+        self._graph_rhs = self._graph_coarse_error = None
+        self._graphs = None
+        if self.cuda_graphs:
+            self._graph_rhs = cp.empty(self.num_faces * self.levels[0].block_size, dtype=REAL_DTYPE)
+            self._graph_coarse_error = cp.empty(self.num_faces, dtype=REAL_DTYPE)
 
     @property
     def fine_operator(self) -> LegendreFaceBsrOperator:
@@ -561,12 +699,39 @@ class FaceBlockPmgPrototype:
             smoother_backend=level.smoother_backend,
         ) for level in self.levels)
 
+    @property
+    def kernel_tuning_reports(self) -> tuple[dict, ...]:
+        """Per-level setup/calibration records, separate from solve diagnostics."""
+        return tuple(dict(degree=level.degree, spmv=level.operator.tuning_report,
+                          smoother=level.tuning_report) for level in self.levels)
+
     def _smooth(
             self, level: _FacePmgLevel, rhs, correction, *, reverse: bool,
-            zero_initial: bool = False, scratch=None,
+            zero_initial: bool = False, scratch=None, coarse_correction=None,
     ):
-        """Apply fixed block-preconditioned Richardson-Chebyshev stages."""
+        """Apply fixed block-preconditioned Richardson-Chebyshev stages.
+
+        ``coarse_correction`` (packed smoothers only) is prolonged into
+        ``correction`` by the first stage instead of a separate update.
+        """
         weights = level.chebyshev_weights[::-1] if reverse else level.chebyshev_weights
+        if level.smoother_backend == "packed-raw-cuda":
+            packed = level.packed
+            first_stage = True
+            for _ in range(self.postsweeps if reverse else self.presweeps):
+                for weight in weights:
+                    if zero_initial and first_stage:
+                        packed.zero_start(rhs, weight, scratch)
+                    else:
+                        packed.step(
+                            rhs, correction, weight, scratch,
+                            coarse_correction=coarse_correction if first_stage else None,
+                        )
+                    correction, scratch = scratch, correction
+                    first_stage = False
+            return correction
+        if coarse_correction is not None:
+            raise ValueError("coarse_correction requires the packed smoother")
         if level.smoother_backend == "fused-raw-cuda":
             if scratch is None:
                 scratch = self.cp.empty_like(correction)
@@ -627,18 +792,34 @@ class FaceBlockPmgPrototype:
             )
         else:
             correction.fill(0.0)
-        level.operator.matvec(correction, out=workspace.residual)
-        self.cp.subtract(rhs, workspace.residual, out=workspace.residual)
-        fine_residual = workspace.residual.reshape(
-            (self.num_faces, level.block_size)
-        )
-        coarse_rhs = workspace.coarse_rhs.reshape(
-            (self.num_faces, coarse_level.block_size)
-        )
-        coarse_rhs[...] = fine_residual[:, :coarse_level.block_size]
+        if self.transfer_backend == "fused":
+            level.packed.restricted_residual(rhs, correction, workspace.coarse_rhs)
+        else:
+            level.operator.matvec(correction, out=workspace.residual)
+            self.cp.subtract(rhs, workspace.residual, out=workspace.residual)
+            fine_residual = workspace.residual.reshape(
+                (self.num_faces, level.block_size)
+            )
+            coarse_rhs = workspace.coarse_rhs.reshape(
+                (self.num_faces, coarse_level.block_size)
+            )
+            coarse_rhs[...] = fine_residual[:, :coarse_level.block_size]
         coarse_error = self._apply_level(
             level_index + 1, workspace.coarse_rhs
         )
+        return self._post_level(level_index, rhs, correction, coarse_error)
+
+    def _post_level(self, level_index: int, rhs, correction, coarse_error):
+        """Prolong the coarse error into ``correction`` and post-smooth."""
+        level = self.levels[level_index]
+        coarse_level = self.levels[level_index + 1]
+        workspace = self._workspaces[level_index]
+        if self.transfer_backend == "fused" and self.postsweeps:
+            return self._smooth(
+                level, rhs, correction, reverse=True,
+                scratch=self._alternate_buffer(workspace, correction),
+                coarse_correction=coarse_error,
+            )
         correction_view = correction.reshape(
             (self.num_faces, level.block_size)
         )
@@ -647,12 +828,75 @@ class FaceBlockPmgPrototype:
         )
         if self.postsweeps:
             scratch = None
-            if level.smoother_backend == "fused-raw-cuda":
+            if level.smoother_backend in {"fused-raw-cuda", "packed-raw-cuda"}:
                 scratch = self._alternate_buffer(workspace, correction)
             correction = self._smooth(
                 level, rhs, correction, reverse=True, scratch=scratch
             )
         return correction
+
+    def _down_sweep(self, rhs):
+        """Pre-smooth and restrict on every smoothed level (fused transfers).
+
+        Returns each level's pre-smoothed correction buffer; the coarsest
+        right-hand side is left in the last workspace's ``coarse_rhs``.
+        """
+        corrections = []
+        for level_index, level in enumerate(self.levels[:-1]):
+            workspace = self._workspaces[level_index]
+            correction = workspace.correction
+            if self.presweeps:
+                correction = self._smooth(
+                    level, rhs, correction, reverse=False, zero_initial=True,
+                    scratch=workspace.scratch,
+                )
+            else:
+                correction.fill(0.0)
+            level.packed.restricted_residual(rhs, correction, workspace.coarse_rhs)
+            corrections.append(correction)
+            rhs = workspace.coarse_rhs
+        return corrections
+
+    def _up_sweep(self, corrections, coarse_error):
+        """Prolong and post-smooth from the coarsest smoothed level upward."""
+        for level_index in range(len(self.levels) - 2, -1, -1):
+            rhs = self._graph_rhs if level_index == 0 else self._workspaces[level_index - 1].coarse_rhs
+            coarse_error = self._post_level(
+                level_index, rhs, corrections[level_index], coarse_error
+            )
+        return coarse_error
+
+    def _capture_graphs(self):
+        """Capture the down- and up-sweeps once on a private stream."""
+        cp = self.cp
+        stream = cp.cuda.Stream(non_blocking=True)
+        cp.cuda.get_current_stream().synchronize()
+        with stream:
+            stream.begin_capture()
+            try:
+                corrections = self._down_sweep(self._graph_rhs)
+            finally:
+                down = stream.end_capture()
+            stream.begin_capture()
+            try:
+                output = self._up_sweep(corrections, self._graph_coarse_error)
+            finally:
+                up = stream.end_capture()
+        stream.synchronize()
+        self._graphs = (down, up, output)
+
+    def _apply_graphs(self, rhs):
+        """Replay the captured sweeps around the (uncaptured) coarse solve."""
+        if self._graphs is None:
+            self._capture_graphs()
+        down, up, output = self._graphs
+        stream = self.cp.cuda.get_current_stream()
+        if int(rhs.data.ptr) != int(self._graph_rhs.data.ptr):
+            self._graph_rhs[...] = rhs
+        down.launch(stream=stream)
+        self._graph_coarse_error[...] = self.coarse_solver(self._workspaces[-1].coarse_rhs)
+        up.launch(stream=stream)
+        return output
 
     def apply(self, rhs):
         """Apply one serial V-cycle and return its borrowed workspace output."""
@@ -663,6 +907,8 @@ class FaceBlockPmgPrototype:
             raise RuntimeError("FaceBlockPmgPrototype.apply is not reentrant")
         self._apply_active = True
         try:
+            if self.cuda_graphs:
+                return self._apply_graphs(rhs)
             return self._apply_level(0, rhs)
         finally:
             self._apply_active = False
@@ -702,6 +948,7 @@ class FaceBlockPmgPrototype:
             coarse.close()
         for level in getattr(self, "levels", ()):
             level.operator.close()
+        self._graphs = None
         self._workspaces = []
         self.levels = []
 
@@ -721,8 +968,14 @@ class FaceBlockHpMgPcgSolver:
             preconditioner_policy: str = "standard",
             preconditioner_tuning: dict | None = None,
             verbose: int = 0,
+            kernels: str | None = None,
     ):
-        """Build and validate the fixed native hierarchy."""
+        """Build and validate the fixed native hierarchy.
+
+        ``kernels`` names a ``FACE_PMG_KERNEL_PRESETS`` entry; ``None`` reads
+        ``HYBRIDGE_HP_MG_KERNELS`` (default ``auto``). Automatic selection keeps
+        the legacy transfers and PCG update recurrence unchanged.
+        """
         from hybridge.linalg.gpu.legendre_face_bsr import legendre_orthonormal_scales
 
         cp = require_cupy()
@@ -758,6 +1011,8 @@ class FaceBlockHpMgPcgSolver:
             data * self.scales[None, :, None] * self.scales[None, None, :]
         )
         self.preconditioner = None
+        smoother, transfers, graphs = face_pmg_kernel_preset(kernels)
+        self.kernels = (smoother, transfers, graphs)
         try:
             self.preconditioner = FaceBlockPmgPrototype(
                 indptr=indptr,
@@ -769,8 +1024,10 @@ class FaceBlockHpMgPcgSolver:
                 chebyshev_order=policy["chebyshev_order"],
                 presweeps=policy["presweeps"],
                 postsweeps=policy["postsweeps"],
-                spmv_backend="auto",
-                smoother_backend="fused-raw-cuda",
+                spmv_backend="auto" if smoother == "auto" else "legacy",
+                smoother_backend=smoother,
+                transfer_backend=transfers,
+                cuda_graphs=graphs,
                 coarse_factory=lambda operator: AmgxScalarVcycle(
                     operator,
                     config=policy["coarse_config"],
@@ -968,6 +1225,13 @@ class FaceBlockHpMgPcgSolver:
         converged = initial_norm <= target
         iterations = 0
         breakdown_reason = None
+        fused_updates = getattr(self, "kernels", ("fused-raw-cuda",))[0] == "packed-raw-cuda"
+        if fused_updates:
+            module = _pcgf_kernels()
+            step_update = module.get_function("pcgf_step_update")
+            direction_update = module.get_function("pcgf_direction_update")
+            block = (256,)
+            grid = (-(-size // 256),)
         if not converged:
             z = self.preconditioner.apply(self._residual)
             rho = cp.real(cp.vdot(self._residual, z))
@@ -982,10 +1246,17 @@ class FaceBlockHpMgPcgSolver:
             for iteration in range(1, int(maxiter) + 1):
                 self.fine_operator.matvec(self._direction, out=self._applied)
                 curvature = cp.real(cp.vdot(self._direction, self._applied))
-                self._residual_delta[...] = self._residual
-                alpha = rho / curvature
-                self._x += alpha * self._direction
-                self._residual -= alpha * self._applied
+                if fused_updates:
+                    step_update(grid, block, (
+                        np.int64(size), rho, curvature, self._direction,
+                        self._applied, self._x, self._residual,
+                        self._residual_delta,
+                    ))
+                else:
+                    self._residual_delta[...] = self._residual
+                    alpha = rho / curvature
+                    self._x += alpha * self._direction
+                    self._residual -= alpha * self._applied
                 is_true = (
                     true_residual_every > 0
                     and iteration % int(true_residual_every) == 0
@@ -1082,6 +1353,11 @@ class FaceBlockHpMgPcgSolver:
                 if restart_direction:
                     self._direction[...] = z
                     residual_restart_count += 1
+                elif fused_updates:
+                    direction_update(grid, block, (
+                        np.int64(size), cp.real(cp.vdot(z, self._residual_delta)),
+                        rho, z, self._direction,
+                    ))
                 else:
                     self._direction *= _pcgf_beta(cp, z, self._residual_delta, rho)
                     self._direction += z

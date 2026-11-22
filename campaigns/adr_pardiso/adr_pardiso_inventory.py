@@ -44,9 +44,14 @@ def result_rows(data):
 
 
 def timing_metrics(row):
-    """Only full, accepted measurements receive ranked times; never warmups."""
+    """Only full, accepted measurements receive ranked times; never warmups.
+
+    ``residual_floor`` rows (every residual within ``floor_rtol`` but not all within ``rtol``) are
+    accepted against ``floor_rtol``; their status marks the miss.
+    """
     samples = row.get("samples", [])
-    if row.get("status") != "passed" or row.get("profile_note") or not samples:
+    floor = row.get("status") == "residual_floor"
+    if row.get("status") not in ("passed", "residual_floor") or row.get("profile_note") or not samples:
         return None
     if len(samples) != row.get("requested_repeats", len(samples)):
         return None
@@ -54,8 +59,9 @@ def timing_metrics(row):
     if any(len(t.get("solves", [])) != 2 for t in trials):
         return None
     solves = [s for t in trials for s in t["solves"]]
-    if any(not s.get("passed") or not math.isfinite(s.get("true_relative_residual", math.inf))
-           or s["true_relative_residual"] > row.get("rtol", 1e-10) for s in solves):
+    limit = row.get("floor_rtol") if floor else row.get("rtol", 1e-10)
+    if any(not (s.get("passed") or floor) or not math.isfinite(s.get("true_relative_residual", math.inf))
+           or s["true_relative_residual"] > limit for s in solves):
         return None
     times = [s.get("solve_ms", math.nan) for s in solves] + [t.get("setup_ms", math.nan) for t in trials]
     if any(not math.isfinite(t) or t < 0 for t in times):

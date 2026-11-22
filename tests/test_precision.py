@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-BINDING = ROOT / '.cache' / 'pyamgx-fp32'
 
 
 def _run(code: str, precision: str, tmp_path: Path) -> subprocess.CompletedProcess:
@@ -62,15 +61,15 @@ def _require_cuda_and_binding():
         assert cp.cuda.runtime.getDeviceCount() > 0
     except Exception as exc:
         pytest.skip(f'CUDA unavailable: {exc}')
-    if not tuple(BINDING.glob('pyamgx*.so')):
-        pytest.skip('local precision-aware PyAMGX extension has not been built')
+    pytest.importorskip('pyamgx')
+    from hybridge.linalg.amgx.host import pyamgx_supports_real_dtype
+    if not pyamgx_supports_real_dtype(np.float32):
+        pytest.skip('selected PyAMGX extension does not support FP32 arrays')
 
 
 def test_fp32_cuda_math_and_amgx_vector_round_trip(tmp_path):
     _require_cuda_and_binding()
     code = f'''
-import sys
-sys.path.insert(0, {str(BINDING)!r})
 import cupy as cp
 import numpy as np
 import pyamgx

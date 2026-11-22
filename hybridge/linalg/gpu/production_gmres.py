@@ -26,12 +26,14 @@ import numpy as np
 
 from hybridge.runtime.optional import require_cupy_device
 from hybridge.linalg.gpu.gmres import (
+    CuPyEstimateTarget,
     CuPyGMRESResult,
     CuPyGMRESWorkspace,
     CuPyOrthogonalization,
     CuPyRestartedGMRESSolver,
     DeviceMatvecOperator,
     DevicePreconditioner,
+    _validate_estimate_target,
     _validate_restart_parameters,
     _validate_robustness_parameters,
 )
@@ -63,6 +65,7 @@ class CuPyProductionGMRESOptions:
     divergence_factor: float = 1.0e6
     cgs2_fallback_threshold: FallbackThreshold = "auto"
     raise_on_failure: bool = False
+    estimate_target: CuPyEstimateTarget = "cycle_relative"
 
     def with_overrides(self, **overrides: Any) -> "CuPyProductionGMRESOptions":
         """Return a validated-field-name copy with selected changes."""
@@ -106,6 +109,7 @@ class CuPyProductionGMRESOptions:
             divergence_factor=self.divergence_factor,
             cgs2_fallback_threshold=self.resolved_fallback_threshold(dtype),
         )
+        _validate_estimate_target(self.estimate_target)
         if self.orthogonalization not in ("mgs", "mgs2", "cgs", "cgs2"):
             raise ValueError(
                 "orthogonalization must be one of mgs, mgs2, cgs, or cgs2"
@@ -168,6 +172,7 @@ class CuPyProductionGMRESSolver:
             divergence_factor=self.options.divergence_factor,
             cgs2_fallback_threshold=fallback,
             workspace=workspace,
+            estimate_target=self.options.estimate_target,
         )
 
     @property

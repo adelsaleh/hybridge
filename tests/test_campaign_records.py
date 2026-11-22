@@ -33,7 +33,7 @@ def test_records_preserve_bytes_and_report_partial_attempts(campaign):
     for name in ["AGENTS.md", "CODEMAP.md", "failure_system.npz", "run.log"]:
         (data / name).write_bytes(b"not a record\0")
     result = records.collect("sample", data, 200, label="phase", include=("inputs/*.json",), status="partial")
-    assert result == destination / "records" / "phase"
+    assert result == destination.parents[1] / "docs" / "campaigns" / "sample" / "records" / "phase"
     manifest = json.loads((result / "manifest.json").read_text())
     assert manifest["status"] == "partial"
     assert manifest["run_attempt_statuses"] == {"failed": 1, "ok": 1}
@@ -59,5 +59,22 @@ def test_records_reject_escaping_paths_and_skip_symlinked_evidence(campaign, tmp
     for kwargs in [{"campaign": "../escape"}, {"label": "../escape"}, {"include": ("../*.json",)}]:
         with pytest.raises(ValueError):
             records.collect(**{"campaign": "sample", "data": data, **kwargs})
+    docs = destination.parents[1] / "docs"
+    docs.mkdir(exist_ok=True)
     with pytest.raises(ValueError, match="outside the data"):
-        records.collect("sample", destination)
+        records.collect("sample", docs)
+
+
+def test_explicit_log_collection_preserves_bytes_and_size_limits(campaign):
+    data, _ = campaign
+    raw = b'72 passed\n'
+    (data / 'selection.log').write_bytes(raw)
+    (data / 'large.log').write_bytes(b'x'*201)
+    (data / 'binary.log').write_bytes(b'bad\0log')
+    default = records.collect('sample', data, 200, label='default')
+    assert not (default / 'selection.log').exists()
+    included = records.collect('sample', data, 200, label='with-logs', include_logs=True)
+    assert (included / 'selection.log').read_bytes() == raw
+    manifest = json.loads((included / 'manifest.json').read_text())
+    assert {r['path'] for r in manifest['copied']} == {'selection.log'}
+    assert {r['path'] for r in manifest['too_large_or_nontext']} == {'large.log', 'binary.log'}

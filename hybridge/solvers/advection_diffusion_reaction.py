@@ -87,6 +87,7 @@ class AdvectionDiffusionReactionResult:
     reconstruction_backend: str = "numpy"
     postprocessing_backend: str = "numba"
     global_solve_result: SolveResult | None = None
+    recovery_data: Any = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,8 @@ class AdvectionDiffusionReactionHDGOptions:
     diffusion tensor, the diffusion stabilization and the sparsity pattern
     while ``diffusion`` and ``diffusion_stabilization`` stay the same objects.
     The one-shot function has no cache, so ``amgx_reuse`` needs the solver class.
+    ``amgx_retry_attempts`` (raw CUDA only) adds bounded attempts after a rejected
+    solve, with the retry contract of ``solve_reduced_system_amgx_device``.
 
     Host (Numba) counterparts: ``numba_reuse_local_columns`` keeps every
     element's local solution columns from assembly so reconstruction is a
@@ -150,6 +153,7 @@ class AdvectionDiffusionReactionHDGOptions:
     ilu_permc_spec: str = "COLAMD"
     cupyx_solver: str = "bicgstab"
     amgx_config: dict | None = None
+    amgx_retry_attempts: tuple[dict[str, Any], ...] | None = None
     initial_guess: np.ndarray | None = None
     assembly_backend: AssemblyBackend = "numba"
     reconstruction_backend: ReconstructionBackend = "auto"
@@ -165,6 +169,9 @@ class AdvectionDiffusionReactionHDGOptions:
     amgx_reuse: Literal["none", "solver", "preconditioner"] = "none"
     amgx_refresh_interval: int = 20
     amgx_refresh_iteration_growth: float = 2.0
+    # One-shot raw-CUDA CSR solves (``amgx_reuse="none"``): let AMGX borrow the assembled
+    # CSR arrays (attach_CSR) when they are canonical with explicit diagonals, else copy.
+    amgx_borrow_csr: bool = False
     reuse_static_coefficients: bool = True
     numba_reuse_local_columns: bool = False
     pardiso_reuse_analysis: bool = False
@@ -307,6 +314,8 @@ def solve_advection_diffusion_reaction_hdg(
     if opts.amgx_reuse != "none" and (backend != "raw-cuda" or cache is None):
         raise ValueError("amgx_reuse needs assembly_backend='raw-cuda' and the reusable "
                          "AdvectionDiffusionReactionHDGSolver, which owns the cache")
+    if opts.amgx_retry_attempts and backend != "raw-cuda":
+        raise ValueError("amgx_retry_attempts needs assembly_backend='raw-cuda'")
     if opts.pardiso_reuse_analysis and (backend == "raw-cuda" or cache is None
                                         or str(opts.solver).lower() != "pypardiso"):
         raise ValueError("pardiso_reuse_analysis needs a host assembly backend, solver='pypardiso' and the "
@@ -662,6 +671,7 @@ def solve_advection_diffusion_reaction_hdg(
             postprocessing_backend, post_mode
         ),
         global_solve_result=solve_result,
+        recovery_data=prepared,
     )
 
 
@@ -786,6 +796,43 @@ class AdvectionDiffusionReactionHDGSolver:
             cache=self._raw_cache,
         )
         return self.result
+
+    def recover_primal(self, *, accepted_field=None, workspace=None):
+        """Recover p+1 from the last mixed solve, optionally after a primal correction.
+
+        Rebuild total-flux recovery using the accepted primal coefficients and
+        the last solve's diffusive flux and trace. Neither the result, trace nor
+        caller field is modified. This is a recovery, not a new PDE solve; a
+        large external correction can invalidate superconvergence assumptions.
+        """
+        from hybridge.runtime.optional import array_module
+        result = self.result
+        if result is None or result.recovery_data is None:
+            raise RuntimeError('recover_primal requires a completed solve with recovery data')
+        unknowns = result.local_unknowns
+        xp = array_module(unknowns)
+        if accepted_field is not None:
+            if accepted_field.space is not self.space:
+                raise ValueError('accepted recovery field must use the solver space')
+            if xp is np:
+                coefficients = accepted_field.coeffs
+            else:
+                from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+                coefficients = as_cupy_coefficients(accepted_field, as_cupy_space(self.space))
+            unknowns = unknowns.copy()
+            unknowns[:, :self.space.el_dof] = coefficients
+        backend = 'numba' if xp is np else 'cupy'
+        trace_space = self.space.trace_space(self.options.trace_basis)
+        if workspace is not None:
+            if workspace.space is not self.space or workspace.trace_space is not trace_space:
+                raise ValueError('Recovery workspace must use the solver spaces')
+            return workspace.recover(unknowns, result.trace, self.beta, result.recovery_data,
+                                     self.options.advection_stabilization, self.options.diffusion)
+        flux = _postprocess_total_flux(unknowns, result.trace, self.beta, result.recovery_data,
+            self.space, trace_space, self.options.advection_stabilization,
+            self.options.flux_postprocess_space, backend)
+        return _postprocess_primal_from_total_flux(unknowns, flux, self.beta, result.recovery_data,
+            self.space, trace_space, self.options.advection_stabilization, self.options.diffusion, backend)
 
 
 __all__ = [

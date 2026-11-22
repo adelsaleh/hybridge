@@ -1,0 +1,36 @@
+{
+  "idrmsync4_unpreconditioned_absolute_csr": {
+    "block_size": 1,
+    "host_scaling": "none",
+    "probe_only": true,
+    "requires_disabled_history_capture": true,
+    "note": "Conditional probe: driver must skip get_residual capture when store_res_history=0; scalar only; max_iters10000 with s4 avoids known equality-boundary overshoot.",
+    "config": {
+      "config_version": 2,
+      "exception_handling": 0,
+      "determinism_flag": 1,
+      "block_format": "ROW_MAJOR",
+      "solver": {
+        "scope": "main",
+        "solver": "IDRMSYNC",
+        "subspace_dim_s": 4,
+        "max_iters": 10000,
+        "tolerance": 0.010463057375140307,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "use_scalar_norm": 1,
+        "scaling": "NONE",
+        "monitor_residual": 1,
+        "store_res_history": 0,
+        "print_solve_stats": 1,
+        "print_solve_stats_interval": 1,
+        "obtain_timings": 1,
+        "verbosity_level": 3,
+        "rel_div_tolerance": 1000000.0,
+        "divergence_patience": 5,
+        "divergence_grace_iters": 10,
+        "preconditioner": "NOSOLVER"
+      }
+    }
+  }
+}
