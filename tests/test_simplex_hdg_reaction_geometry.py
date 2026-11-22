@@ -28,23 +28,30 @@ from math import factorial
 import numpy as np
 import pytest
 
-from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis, _evaluate_simplex_basis
-from hybridge.core.simplex.reference import face_permutations, reference_simplex, simplex_face_rule, simplex_volume_rule
+from hybridge.core.quadrature import _evaluate_basis, _evaluate_simplex_basis
+from hybridge.core.simplex.reference import face_permutations, reference_simplex
 from simplex_hdg_helpers import random_polynomial, reaction_blocks
 from simplex_hdg_mesh import (
+    MESH_NAMES,
     cell_load,
-    cell_weighted_mass,
-    cube_patch,
     evaluate_cells,
     face_trace_projection,
     kuhn_box_mesh,
-    l2_error,
+    named_mesh,
     perturb_interior_vertices,
+    polynomial_data,
+    quadratic_alpha,
+    reaction_convergence,
+    reference_element,
     relabel_cells,
+    sample_points,
     simplex_mesh,
+    smooth_source,
     solve_condensed,
+    solve_polynomial_problem,
     solve_reaction,
     two_cell_patch,
+    volume_rule,
 )
 
 VOLUME_BASES = ("orthonormal", "dub_orth", "bernstein", "hier_C0", "lagrange_warp_blend", "lagrange_fekete")
@@ -52,62 +59,6 @@ TRACE_BASES = ("lagrange_warp_blend", "orthonormal")
 ORDERS = {2: (0, 1, 2, 4), 3: (0, 1, 2, 3)}
 ALPHA = 1.7
 TAU = 2.3
-MESHES = ("two cells", "cube", "box", "perturbed box")
-
-
-def _reference(dim: int, order: int, basis: str) -> ReferenceElementData:
-    """Reference data of the triangle (``dim = 2``) or tetrahedron (``dim = 3``)."""
-    if dim == 2:
-        return ReferenceElementData.triangle(order, basis_type=basis)
-    return ReferenceElementData.tetrahedron(order, basis_type=basis)
-
-
-def _volume_rule(dim: int, degree: int):
-    """Reference volume rule ``(points (nq, dim), weights)`` exact for ``degree``."""
-    points, weights = simplex_volume_rule(dim, degree)
-    return np.asarray(points, dtype=np.float64), np.asarray(weights, dtype=np.float64)
-
-
-def _face_rule(dim: int, degree: int):
-    """Reference-face rule ``(points (nq, dim - 1), weights)`` exact for ``degree``."""
-    points, weights = simplex_face_rule(dim, degree)
-    return np.asarray(points, dtype=np.float64).reshape(len(weights), dim - 1), np.asarray(weights, dtype=np.float64)
-
-
-def _mesh(name: str, dim: int):
-    """The patches and meshes of this stage: two cells, the cube patch, the Kuhn box with N = 2 and a perturbed, relabeled copy."""
-    if name == "two cells":
-        return two_cell_patch(dim)
-    if name == "cube":
-        return cube_patch(dim)
-    box = kuhn_box_mesh(dim, 2)
-    if name == "box":
-        return box
-    return relabel_cells(perturb_interior_vertices(box, 0.12, seed=7), seed=8)
-
-
-def _sample_points(mesh, count: int = 6, seed: int = 4) -> np.ndarray:
-    """Random physical points inside every cell, shape ``(n_K, count, d)``."""
-    rng = np.random.default_rng(seed)
-    bary = rng.dirichlet(np.ones(mesh.dim + 1), size=count)
-    return mesh.map_points(reference_simplex(mesh.dim).from_barycentric(bary))
-
-
-def _quadratic_alpha(x: np.ndarray) -> np.ndarray:
-    """A positive coefficient of degree 2, ``1 + |x|^2 / 2``."""
-    return 1.0 + 0.5 * np.sum(x * x, axis=1)
-
-
-def _polynomial_data(dim: int, order: int):
-    """Source and boundary data that are polynomials of degree p + 2, so that a rule of degree 2p + 2 is exact.
-
-    The solution is then not in ``P_p``, and the rules integrate every product
-    exactly: comparisons between two computations of the same discrete problem
-    (relabeled cells, another volume basis) are exact up to rounding.
-    """
-    source = random_polynomial(dim, order + 2, seed=31 + order)
-    boundary = random_polynomial(dim, order + 2, seed=37 + order)
-    return source, boundary, _volume_rule(dim, 2 * order + 2), _face_rule(dim, 2 * order + 2)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +104,7 @@ def _one_cell_mesh(vertices: np.ndarray, seed: int):
     return simplex_mesh(coordinates, numbers[None, :]), numbers
 
 
-def _to_reference(vertices: np.ndarray, points: np.ndarray) -> np.ndarray:
+def _reference_coordinates(vertices: np.ndarray, points: np.ndarray) -> np.ndarray:
     """Reference coordinates of physical points, from their barycentric coordinates in the cell ``vertices``."""
     dim = vertices.shape[1]
     system = np.vstack((vertices.T, np.ones(dim + 1)))
@@ -177,7 +128,7 @@ def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
     points, weights = reference._generic_volume_rule
     measure = abs(np.linalg.det((vertices[1:] - vertices[0]).T)) / factorial(dim)
     x = simplex.barycentric(points) @ vertices
-    phi = np.asarray(_evaluate_basis(reference.basis_type, order, _to_reference(vertices, x)), dtype=np.float64)
+    phi = np.asarray(_evaluate_basis(reference.basis_type, order, _reference_coordinates(vertices, x)), dtype=np.float64)
     w = weights * measure / simplex.measure
     a = alpha * phi.T @ (w[:, None] * phi)
     face_points, face_weights = reference._generic_face_rule
@@ -191,7 +142,7 @@ def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
         else:
             area = 0.5 * np.linalg.norm(np.cross(corners[1] - corners[0], corners[2] - corners[0]))
         xf = face_simplex.barycentric(face_points) @ corners
-        phi_f = np.asarray(_evaluate_basis(reference.basis_type, order, _to_reference(vertices, xf)), dtype=np.float64)
+        phi_f = np.asarray(_evaluate_basis(reference.basis_type, order, _reference_coordinates(vertices, xf)), dtype=np.float64)
         wf = face_weights * area / face_simplex.measure
         a += tau * phi_f.T @ (wf[:, None] * phi_f)
         columns.append(tau * phi_f.T @ (wf[:, None] * mu))
@@ -242,7 +193,7 @@ def test_cell_blocks_equal_direct_quadrature(dim, kind, trace):
     """The blocks from the reference tables with J_K, r_{K,f} and the orientations equal quadrature on the cell."""
     for order in (0, 1, 2, 3, 4):
         for basis in ("orthonormal", "bernstein", "lagrange_warp_blend"):
-            reference = _reference(dim, order, basis)
+            reference = reference_element(dim, order, basis)
             for seed in range(2):
                 vertices = _cell_vertices(dim, kind, 10 * seed + order)
                 mesh, numbers = _one_cell_mesh(vertices, seed + order)
@@ -260,13 +211,13 @@ def test_one_cell_reproduces_polynomials(dim, kind):
     """On one physical cell with uhat = u* on every face, the local solve returns every u* of degree p."""
     for order in ORDERS[dim]:
         for basis in ("orthonormal", "hier_C0", "lagrange_fekete"):
-            reference = _reference(dim, order, basis)
+            reference = reference_element(dim, order, basis)
             vertices = _cell_vertices(dim, kind, order)
             mesh, _ = _one_cell_mesh(vertices, order)
             exact = random_polynomial(dim, order, seed=order + 3)
             solution = solve_reaction(mesh, reference, "lagrange_warp_blend", alpha=ALPHA, tau=TAU,
                                       source=lambda x: ALPHA * exact(x), boundary=exact)
-            points = _sample_points(mesh)
+            points = sample_points(mesh)
             values = evaluate_cells(mesh, reference, solution.u, points)
             expected = exact(points.reshape(-1, dim)).reshape(values.shape)
             a = reaction_blocks(reference, "lagrange_warp_blend", alpha=ALPHA, tau=TAU,
@@ -281,15 +232,15 @@ def test_one_cell_reproduces_polynomials(dim, kind):
 
 
 @pytest.mark.parametrize("dim", (2, 3))
-@pytest.mark.parametrize("name", MESHES)
+@pytest.mark.parametrize("name", MESH_NAMES)
 @pytest.mark.parametrize("basis", VOLUME_BASES)
 @pytest.mark.parametrize("trace", TRACE_BASES)
 def test_mesh_reproduces_polynomials(dim, name, basis, trace):
     """For u* of degree p, alpha constant and uhat = u* on the boundary, u_h = u* and uhat = P_F u* on every face."""
-    mesh = _mesh(name, dim)
-    points = _sample_points(mesh)
+    mesh = named_mesh(name, dim)
+    points = sample_points(mesh)
     for order in ORDERS[dim]:
-        reference = _reference(dim, order, basis)
+        reference = reference_element(dim, order, basis)
         exact = random_polynomial(dim, order, seed=17 + order)
         solution = solve_reaction(mesh, reference, trace, alpha=ALPHA, tau=TAU,
                                   source=lambda x: ALPHA * exact(x), boundary=exact)
@@ -307,17 +258,17 @@ def test_mesh_reproduces_polynomials(dim, name, basis, trace):
 
 
 @pytest.mark.parametrize("dim", (2, 3))
-@pytest.mark.parametrize("name", MESHES)
+@pytest.mark.parametrize("name", MESH_NAMES)
 @pytest.mark.parametrize("trace", TRACE_BASES)
 def test_global_condensed_matrix_is_symmetric_positive_definite(dim, name, trace):
     """The global trace matrix S = sum_K S_K (all faces) is symmetric positive definite, for constant and variable alpha."""
-    mesh = _mesh(name, dim)
+    mesh = named_mesh(name, dim)
     for order in ORDERS[dim]:
-        reference = _reference(dim, order, "bernstein")
-        source, boundary, rule, face_rule = _polynomial_data(dim, order)
-        for alpha in (ALPHA, _quadratic_alpha):
+        reference = reference_element(dim, order, "bernstein")
+        source, boundary, rule, rule_on_faces = polynomial_data(dim, order)
+        for alpha in (ALPHA, quadratic_alpha):
             solution = solve_reaction(mesh, reference, trace, alpha=alpha, tau=TAU, source=source,
-                                      boundary=boundary, rule=rule, face_rule=face_rule)
+                                      boundary=boundary, rule=rule, face_rule=rule_on_faces)
             matrix = solution.matrix.toarray()
             scale = np.abs(matrix).max()
             assert np.abs(matrix - matrix.T).max() <= 1e-13 * scale
@@ -325,15 +276,8 @@ def test_global_condensed_matrix_is_symmetric_positive_definite(dim, name, trace
             assert eigenvalues.min() > 1e-8 * eigenvalues.max(), (order, eigenvalues.min(), eigenvalues.max())
 
 
-def _solve_polynomial_problem(mesh, reference, trace, order):
-    """Solve the problem of :func:`_polynomial_data` with the quadratic alpha; return the solution."""
-    source, boundary, rule, face_rule = _polynomial_data(mesh.dim, order)
-    return solve_reaction(mesh, reference, trace, alpha=_quadratic_alpha, tau=TAU, source=source,
-                          boundary=boundary, rule=rule, face_rule=face_rule)
-
-
 @pytest.mark.parametrize("dim", (2, 3))
-@pytest.mark.parametrize("name", MESHES)
+@pytest.mark.parametrize("name", MESH_NAMES)
 @pytest.mark.parametrize("keep_sign", (True, False), ids=("even", "any"))
 def test_solution_does_not_change_under_relabeling(dim, name, keep_sign):
     """Permuting the local vertex order of every cell leaves S, uhat and u_h (at physical points) unchanged.
@@ -342,17 +286,17 @@ def test_solution_does_not_change_under_relabeling(dim, name, keep_sign):
     make det A_K negative. The faces keep their global order and numbering, so the
     global matrices are compared entry by entry.
     """
-    mesh = _mesh(name, dim)
-    points = _sample_points(mesh)
+    mesh = named_mesh(name, dim)
+    points = sample_points(mesh)
     for order in (1, 2, 3):
         for trace in TRACE_BASES:
-            reference = _reference(dim, order, "orthonormal")
-            base = _solve_polynomial_problem(mesh, reference, trace, order)
+            reference = reference_element(dim, order, "orthonormal")
+            base = solve_polynomial_problem(mesh, reference, trace, tau=TAU)
             base_values = evaluate_cells(mesh, reference, base.u, points)
             for seed in range(3):
                 relabeled = relabel_cells(mesh, seed=100 + seed, keep_sign=keep_sign)
                 assert np.array_equal(relabeled.faces, mesh.faces)
-                solution = _solve_polynomial_problem(relabeled, reference, trace, order)
+                solution = solve_polynomial_problem(relabeled, reference, trace, tau=TAU)
                 scale = np.abs(base.matrix).max()
                 assert np.abs((solution.matrix - base.matrix).toarray()).max() <= 1e-12 * scale
                 assert np.abs(solution.uhat - base.uhat).max() <= 1e-11 * max(1.0, np.abs(base.uhat).max())
@@ -365,11 +309,11 @@ def test_every_orientation_of_the_shared_face(dim):
     """On the two-cell patch, every local order of either cell gives the same S and u_h; all d! orientations occur."""
     mesh = two_cell_patch(dim)
     shared = int(np.flatnonzero(~mesh.boundary_faces)[0])
-    points = _sample_points(mesh)
+    points = sample_points(mesh)
     order = 2
     for trace in TRACE_BASES:
-        reference = _reference(dim, order, "hier_C0")
-        base = _solve_polynomial_problem(mesh, reference, trace, order)
+        reference = reference_element(dim, order, "hier_C0")
+        base = solve_polynomial_problem(mesh, reference, trace, tau=TAU)
         base_values = evaluate_cells(mesh, reference, base.u, points)
         seen = set()
         for cell in (0, 1):
@@ -379,7 +323,7 @@ def test_every_orientation_of_the_shared_face(dim):
                 relabeled = simplex_mesh(mesh.vertices, cells)
                 side = int(np.flatnonzero(relabeled.cell_faces[cell] == shared)[0])
                 seen.add(int(relabeled.orientations[cell, side]))
-                solution = _solve_polynomial_problem(relabeled, reference, trace, order)
+                solution = solve_polynomial_problem(relabeled, reference, trace, tau=TAU)
                 assert np.abs((solution.matrix - base.matrix).toarray()).max() <= 1e-12 * np.abs(base.matrix).max()
                 values = evaluate_cells(relabeled, reference, solution.u, points)
                 assert np.abs(values - base_values).max() <= 1e-11 * max(1.0, np.abs(base_values).max())
@@ -387,17 +331,17 @@ def test_every_orientation_of_the_shared_face(dim):
 
 
 @pytest.mark.parametrize("dim", (2, 3))
-@pytest.mark.parametrize("name", MESHES)
+@pytest.mark.parametrize("name", MESH_NAMES)
 @pytest.mark.parametrize("trace", TRACE_BASES)
 def test_condensed_matrix_and_solution_do_not_depend_on_the_volume_basis(dim, name, trace):
     """S, uhat and u_h (at physical points) are the same for every volume basis."""
-    mesh = _mesh(name, dim)
-    points = _sample_points(mesh)
+    mesh = named_mesh(name, dim)
+    points = sample_points(mesh)
     for order in ORDERS[dim][1:]:
         results = {}
         for basis in VOLUME_BASES:
-            reference = _reference(dim, order, basis)
-            solution = _solve_polynomial_problem(mesh, reference, trace, order)
+            reference = reference_element(dim, order, basis)
+            solution = solve_polynomial_problem(mesh, reference, trace, tau=TAU)
             results[basis] = (solution, evaluate_cells(mesh, reference, solution.u, points))
         base, base_values = results["orthonormal"]
         scale = np.abs(base.matrix).max()
@@ -410,36 +354,6 @@ def test_condensed_matrix_and_solution_do_not_depend_on_the_volume_basis(dim, na
 # ---------------------------------------------------------------------------
 # (c) Convergence on the Kuhn box for a smooth solution and variable alpha
 # ---------------------------------------------------------------------------
-
-
-def smooth_solution(x: np.ndarray) -> np.ndarray:
-    """The smooth non-polynomial solution ``u = exp((x_1 + ... + x_d) / 2) cos(pi x_1 / 2)``."""
-    return np.exp(0.5 * np.sum(x, axis=1)) * np.cos(0.5 * np.pi * x[:, 0])
-
-
-def smooth_source(x: np.ndarray) -> np.ndarray:
-    """The source ``f = alpha u`` of :func:`smooth_solution` with ``alpha = 1 + |x|^2 / 2``."""
-    return _quadratic_alpha(x) * smooth_solution(x)
-
-
-def convergence_errors(dim: int, order: int, subdivisions, *, tau: float = 1.0, basis: str = "orthonormal",
-                       trace: str = "orthonormal"):
-    """L2 errors of u_h and of the L2 projection of u on Kuhn box meshes with ``subdivisions`` cubes per direction.
-
-    Loads and errors use rules exact for degree ``2p + 6``. Returns two lists of floats.
-    """
-    rule, face_rule = _volume_rule(dim, 2 * order + 6), _face_rule(dim, 2 * order + 6)
-    reference = _reference(dim, order, basis)
-    errors, projection_errors = [], []
-    for n in subdivisions:
-        mesh = kuhn_box_mesh(dim, n)
-        solution = solve_reaction(mesh, reference, trace, alpha=_quadratic_alpha, tau=tau, source=smooth_source,
-                                  boundary=smooth_solution, rule=rule, face_rule=face_rule)
-        errors.append(l2_error(mesh, reference, solution.u, smooth_solution, rule))
-        mass = cell_weighted_mass(mesh, reference, 1.0, rule)
-        projection = np.linalg.solve(mass, cell_load(mesh, reference, smooth_solution, rule)[:, :, None])[:, :, 0]
-        projection_errors.append(l2_error(mesh, reference, projection, smooth_solution, rule))
-    return errors, projection_errors
 
 
 H_SUBDIVISIONS = {2: (4, 8, 16), 3: (2, 4, 6)}
@@ -456,7 +370,7 @@ def test_h_convergence_on_the_kuhn_box(dim, order):
     approaches p + 1 from below (2.8 to 2.9 at p = 2 on these meshes).
     """
     subdivisions = H_SUBDIVISIONS[dim]
-    errors, projection_errors = convergence_errors(dim, order, subdivisions)
+    errors, projection_errors = reaction_convergence(dim, order, subdivisions)
     rates = np.log(np.divide(errors[:-1], errors[1:])) / np.log(np.divide(subdivisions[1:], subdivisions[:-1]))
     assert rates[-1] >= order + 1 - 0.3, (errors, rates)
     assert np.all(np.divide(errors, projection_errors) <= 2.5), (errors, projection_errors)
@@ -464,9 +378,9 @@ def test_h_convergence_on_the_kuhn_box(dim, order):
 
 @pytest.mark.parametrize("dim", (2, 3))
 def test_p_convergence_on_the_kuhn_box(dim):
-    """At N = 2 the L2 error of u_h decreases faster than geometrically in p (a factor of at least 5 per degree)."""
+    """At N = 2 the L2 error of u_h decreases by a factor of at least 5 per degree (exponential convergence in p)."""
     orders = range(1, 9) if dim == 2 else range(1, 7)
-    errors = [convergence_errors(dim, order, (2,))[0][0] for order in orders]
+    errors = [reaction_convergence(dim, order, (2,))[0][0] for order in orders]
     assert np.all(np.divide(errors[:-1], errors[1:]) >= 5.0), errors
     assert errors[-1] <= (1e-8 if dim == 2 else 1e-5)
 
@@ -519,7 +433,7 @@ def test_two_dimensional_blocks_equal_the_present_assembly(order, basis, kind, t
         element_boundary = element_boundary_mats_from_trace_weight(space, tau_face, trace_space=trace_space)
         lift = advection_trace_lift_from_stabilization(space, tau_face, trace_space=trace_space)
 
-        reference = _reference(2, order, basis)
+        reference = reference_element(2, order, basis)
         a, b, c, _ = reaction_blocks(reference, trace, alpha=ALPHA, tau=TAU, orientations=mesh.orientations,
                                      jacobian=mesh.jacobians, face_ratios=mesh.face_ratios)
         rotation = reference.trace_tables(trace).orientation_matrices.astype(np.float64)
@@ -554,8 +468,8 @@ def test_two_dimensional_solution_equals_solve_advection_reaction_hdg(order, bas
     boundary = random_polynomial(2, order, seed=41)
     for dg_mesh in _two_dimensional_meshes().values():
         mesh = simplex_mesh(dg_mesh.node_coords, dg_mesh.triangles)
-        reference = _reference(2, order, basis)
-        moments = cell_load(mesh, reference, smooth_source, _volume_rule(2, 2 * order + 8))
+        reference = reference_element(2, order, basis)
+        moments = cell_load(mesh, reference, smooth_source, volume_rule(2, 2 * order + 8))
         blocks = reaction_blocks(reference, trace, alpha=ALPHA, tau=TAU, orientations=mesh.orientations,
                                  jacobian=mesh.jacobians, face_ratios=mesh.face_ratios)
         ours = solve_condensed(mesh, blocks, (moments, np.zeros((mesh.num_cells, blocks[1].shape[2]))),

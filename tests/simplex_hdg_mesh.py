@@ -47,7 +47,12 @@ import numpy as np
 import scipy.sparse
 
 from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis, _evaluate_simplex_basis
-from hybridge.core.simplex.reference import face_permutations, reference_simplex
+from hybridge.core.simplex.reference import (
+    face_permutations,
+    reference_simplex,
+    simplex_face_rule,
+    simplex_volume_rule,
+)
 from hybridge.linalg.system import solve_global_system
 from simplex_hdg_helpers import volume_load, weighted_mass
 
@@ -316,6 +321,49 @@ def perturb_interior_vertices(mesh: SimplexMesh, amplitude: float, seed: int) ->
     return result
 
 
+MESH_NAMES = ("two cells", "cube", "box", "perturbed box")
+
+
+def named_mesh(name: str, dim: int) -> SimplexMesh:
+    """The patches and meshes of the geometry tests, by name.
+
+    ``"two cells"``: :func:`two_cell_patch`; ``"cube"``: :func:`cube_patch`; ``"box"``:
+    the Kuhn box mesh with 2 cubes per direction; ``"perturbed box"``: the same with
+    its interior vertices moved by up to 0.12 per coordinate and every cell
+    relabeled at random (so its faces show every orientation).
+    """
+    if name == "two cells":
+        return two_cell_patch(dim)
+    if name == "cube":
+        return cube_patch(dim)
+    box = kuhn_box_mesh(dim, 2)
+    if name == "box":
+        return box
+    if name == "perturbed box":
+        return relabel_cells(perturb_interior_vertices(box, 0.12, seed=7), seed=8)
+    raise ValueError(f"unknown mesh name {name!r}; expected one of {MESH_NAMES}")
+
+
+def sample_points(mesh: SimplexMesh, count: int = 6, seed: int = 4) -> np.ndarray:
+    """Random physical points inside every cell (the same barycentric coordinates in each), shape ``(n_K, count, d)``."""
+    rng = np.random.default_rng(seed)
+    bary = rng.dirichlet(np.ones(mesh.dim + 1), size=count)
+    return mesh.map_points(reference_simplex(mesh.dim).from_barycentric(bary))
+
+
+def cells_containing(mesh: SimplexMesh, points, tolerance: float = 1e-12) -> np.ndarray:
+    """Index of a cell that contains each physical point ``(n, d)``, or ``-1`` for points outside the mesh, shape ``(n,)``.
+
+    A point is in cell ``K`` when all its barycentric coordinates in ``K`` are at
+    least ``-tolerance``; on a face shared by two cells the lower cell index is returned.
+    """
+    points = np.asarray(points, dtype=np.float64)
+    xi = mesh.pull_back(np.broadcast_to(points, (mesh.num_cells,) + points.shape))
+    bary = reference_simplex(mesh.dim).barycentric(xi.reshape(-1, mesh.dim)).reshape(mesh.num_cells, len(points), -1)
+    inside = np.all(bary >= -tolerance, axis=2)
+    return np.where(inside.any(axis=0), np.argmax(inside, axis=0), -1)
+
+
 # ---------------------------------------------------------------------------
 # Integrals on the mesh
 # ---------------------------------------------------------------------------
@@ -521,3 +569,85 @@ def solve_reaction(mesh: SimplexMesh, reference: ReferenceElementData, trace_bas
     loads = (cell_load(mesh, reference, source, rule), np.zeros((mesh.num_cells, blocks[1].shape[2])))
     boundary_trace = face_trace_projection(mesh, reference, trace_basis, boundary, face_rule)
     return solve_condensed(mesh, blocks, loads, boundary_trace)
+
+
+def reference_element(dim: int, order: int, basis: str) -> ReferenceElementData:
+    """Reference data of the triangle (``dim = 2``) or the tetrahedron (``dim = 3``) for one volume basis."""
+    if dim == 2:
+        return ReferenceElementData.triangle(order, basis_type=basis)
+    return ReferenceElementData.tetrahedron(order, basis_type=basis)
+
+
+def volume_rule(dim: int, degree: int):
+    """Reference volume rule ``(points (nq, dim), weights (nq,))`` exact for total degree ``degree``."""
+    points, weights = simplex_volume_rule(dim, degree)
+    return np.asarray(points, dtype=np.float64), np.asarray(weights, dtype=np.float64)
+
+
+def face_rule(dim: int, degree: int):
+    """Reference-face rule ``(points (nq, dim - 1), weights (nq,))`` exact for total degree ``degree``."""
+    points, weights = simplex_face_rule(dim, degree)
+    return np.asarray(points, dtype=np.float64).reshape(len(weights), dim - 1), np.asarray(weights, dtype=np.float64)
+
+
+def quadratic_alpha(x: np.ndarray) -> np.ndarray:
+    """The positive coefficient ``alpha(x) = 1 + |x|^2 / 2`` (degree 2) at points ``(n, d)``."""
+    return 1.0 + 0.5 * np.sum(x * x, axis=1)
+
+
+def smooth_solution(x: np.ndarray) -> np.ndarray:
+    """The smooth non-polynomial solution ``u = exp((x_1 + ... + x_d) / 2) cos(pi x_1 / 2)`` at points ``(n, d)``."""
+    return np.exp(0.5 * np.sum(x, axis=1)) * np.cos(0.5 * np.pi * x[:, 0])
+
+
+def smooth_source(x: np.ndarray) -> np.ndarray:
+    """The source ``f = alpha u`` of :func:`smooth_solution` with :func:`quadratic_alpha`."""
+    return quadratic_alpha(x) * smooth_solution(x)
+
+
+def polynomial_data(dim: int, order: int):
+    """Source and boundary data of degree ``p + 2`` with rules of degree ``2p + 2``: ``(f, g, rule, face_rule)``.
+
+    With :func:`quadratic_alpha`, these rules integrate every product of the
+    problem exactly, while the solution is not in ``P_p``. Two computations of the
+    same discrete problem (relabeled cells, another volume basis) then agree up to
+    rounding. ``f`` and ``g`` are random polynomials with fixed seeds.
+    """
+    from simplex_hdg_helpers import random_polynomial
+
+    source = random_polynomial(dim, order + 2, seed=31 + order)
+    boundary = random_polynomial(dim, order + 2, seed=37 + order)
+    return source, boundary, volume_rule(dim, 2 * order + 2), face_rule(dim, 2 * order + 2)
+
+
+def solve_polynomial_problem(mesh: SimplexMesh, reference: ReferenceElementData, trace_basis: str, *,
+                             tau: float) -> CondensedSolution:
+    """Solve ``alpha u = f`` with :func:`quadratic_alpha` and the data of :func:`polynomial_data` (degree ``reference.order``)."""
+    source, boundary, rule, rule_on_faces = polynomial_data(mesh.dim, reference.order)
+    return solve_reaction(mesh, reference, trace_basis, alpha=quadratic_alpha, tau=tau, source=source,
+                          boundary=boundary, rule=rule, face_rule=rule_on_faces)
+
+
+def reaction_convergence(dim: int, order: int, subdivisions, *, tau: float = 1.0, basis: str = "orthonormal",
+                         trace_basis: str = "orthonormal"):
+    """L2 errors of ``u_h`` and of the L2 projection of ``u`` on Kuhn box meshes of ``[-1, 1]^d``.
+
+    The problem is ``alpha u = f`` with :func:`quadratic_alpha`, the solution
+    :func:`smooth_solution` (also the boundary data) and the source
+    :func:`smooth_source`; ``subdivisions`` lists the numbers ``N`` of cubes per
+    direction. Loads, boundary projections and errors use rules exact for degree
+    ``2p + 6``. Returns two lists of floats: the errors of ``u_h`` and of the
+    projection, one per ``N``.
+    """
+    rule, rule_on_faces = volume_rule(dim, 2 * order + 6), face_rule(dim, 2 * order + 6)
+    reference = reference_element(dim, order, basis)
+    errors, projection_errors = [], []
+    for n in subdivisions:
+        mesh = kuhn_box_mesh(dim, n)
+        solution = solve_reaction(mesh, reference, trace_basis, alpha=quadratic_alpha, tau=tau, source=smooth_source,
+                                  boundary=smooth_solution, rule=rule, face_rule=rule_on_faces)
+        errors.append(l2_error(mesh, reference, solution.u, smooth_solution, rule))
+        mass = cell_weighted_mass(mesh, reference, 1.0, rule)
+        projection = np.linalg.solve(mass, cell_load(mesh, reference, smooth_solution, rule)[:, :, None])[:, :, 0]
+        projection_errors.append(l2_error(mesh, reference, projection, smooth_solution, rule))
+    return errors, projection_errors
