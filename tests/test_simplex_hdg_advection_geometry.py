@@ -43,7 +43,6 @@ from simplex_hdg_mesh import (
     relabel_cells,
     sample_points,
     simplex_mesh,
-    smooth_solution,
     solve_condensed,
     two_cell_patch,
     two_dimensional_meshes,
