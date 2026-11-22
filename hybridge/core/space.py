@@ -20,7 +20,12 @@ from typing import Any, Callable, Literal, Sequence
 import weakref
 import numpy as np
 from hybridge.core.mesh import DGMesh, as_dg_mesh
-from hybridge.core.quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
+from hybridge.core.quadrature import ReferenceElementData
+from hybridge.core.simplex.polynomials import _bernstein_edge_basis, _lagrange_basis, _legendre_edge_basis
+from hybridge.core.simplex.reference import _legendre_gauss_lobatto, triangle_edge_points
+
+# Former name of the triangle edge map, kept for callers in other modules.
+_reference_edge_points = triangle_edge_points
 
 
 def _cache_key(points: np.ndarray) -> tuple[int, tuple[int, ...], str]:
@@ -142,42 +147,6 @@ def _normalize_trace_basis_kind(kind: str) -> TraceBasisKind:
     if normalized not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
         raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
     return normalized
-
-
-def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
-    """Tabulate the Bernstein trace basis at one-dimensional edge points."""
-    from math import factorial
-
-    r = 0.5 * (np.asarray(points, dtype=REAL_DTYPE) + 1.0)
-    values = np.empty((order + 1, r.size), dtype=REAL_DTYPE)
-    for j in range(order + 1):
-        coeff = factorial(order) / (factorial(j) * factorial(order - j))
-        values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
-    return np.ascontiguousarray(values)
-
-
-def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
-    """Tabulate the Legendre trace basis at one-dimensional edge points."""
-    points = np.asarray(points, dtype=REAL_DTYPE)
-    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
-    for j in range(order + 1):
-        values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
-    return np.ascontiguousarray(values)
-
-
-def _reference_edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
-    """Map one-dimensional edge coordinates onto all reference-triangle faces."""
-    t = np.asarray(edge_points_1d, dtype=REAL_DTYPE)
-    return np.ascontiguousarray(
-        np.stack(
-            (
-                np.stack((t, -np.ones_like(t)), axis=1),
-                np.stack((-t, t), axis=1),
-                np.stack((-np.ones_like(t), -t), axis=1),
-            ),
-            axis=1,
-        )
-    )
 
 
 @dataclass(frozen=True)

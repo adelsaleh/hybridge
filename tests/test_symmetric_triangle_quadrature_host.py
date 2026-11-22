@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from fractions import Fraction
 from itertools import permutations, product
-from math import comb, factorial
 
 import numba as nb
 import numpy as np
@@ -10,6 +8,7 @@ import pytest
 
 from hybridge.core import basis as basis_module
 from hybridge.core.quadrature import ReferenceElementData
+from hybridge.core.simplex.reference import monomial_integral
 
 
 BASIS_TYPES = ("bernstein", "hier_C0", "dub_orth")
@@ -219,14 +218,7 @@ def _symmetric_degree_5_rule() -> tuple[np.ndarray, np.ndarray]:
 
 
 def _exact_reference_monomial_integral(x_power: int, y_power: int) -> float:
-    total = Fraction(0)
-    for i in range(x_power + 1):
-        coeff_x = comb(x_power, i) * ((-1) ** (x_power - i)) * (2 ** i)
-        for j in range(y_power + 1):
-            coeff_y = comb(y_power, j) * ((-1) ** (y_power - j)) * (2 ** j)
-            simplex_integral = Fraction(factorial(i) * factorial(j), factorial(i + j + 2))
-            total += coeff_x * coeff_y * 4 * simplex_integral
-    return float(total)
+    return float(monomial_integral((x_power, y_power)))
 
 
 @nb.njit
