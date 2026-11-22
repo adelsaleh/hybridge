@@ -63,6 +63,7 @@ DEVELOPMENT_PLAN_CONTENTS = {
     "raw_cuda_adr_tensor.md",
     "package_reorganization.md",
     "shipped_kernel_choices.md",
+    "tetrahedral_hdg.md",
 }
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(

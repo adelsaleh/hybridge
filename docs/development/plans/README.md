@@ -32,6 +32,10 @@ algorithm, API, backend, or release contracts.
   layering and reorganization by HDG operator family (transport AR; mixed DR and
   ADR, where DR is ADR at β = 0), shared-helper consolidation, the divergence
   bugs fixed first, the implemented layout, and its status.
+- [`tetrahedral_hdg.md`](tetrahedral_hdg.md): HDG on affine tetrahedra, starting with the
+  reference triangle and tetrahedron, their bases (orthogonal, Bernstein, modified C0, nodal on
+  equispaced, warp and blend, recursive and Fekete nodes), the reference integrals, and HDG tests
+  in four stages (reaction, geometry, advection, diffusion).
 
 ## Ownership And Lifecycle
 
