@@ -268,6 +268,20 @@ seen, the cause and the fix.
     relative links kept the old depth. Fix: each link has one more `../`, and
     every target was checked to be a tracked file.
 
+42. **Wrong gradients of the triangle bases at the vertex (-1, 1).** Seen:
+    the reference gradients of the `dub_orth` and `hier_C0` bases at the
+    vertex (-1, 1) differed from their limit from inside the triangle for
+    p >= 2 (by 2.0, 7.5 and 35 for `dub_orth` at p = 2, 3, 5), and so did the
+    gradients of the continuous Lagrange basis at that lattice node. Cause:
+    the collapsed coordinate is undefined at that vertex, and the special
+    branch of the two gradient kernels in `hybridge/core/basis.py` used wrong
+    limits (`dub_orth`: d/dxi = r + 1 instead of C(r + 3, 3) for p = 1, and
+    d/deta = r (r + 2)/2 instead of r (r + 1)(r + 2)/4 for p = 0; `hier_C0`:
+    the derivative of the collapsed coordinate set to zero). Fix: the branch
+    writes the exact limits; no other point changes. Solvers were not
+    affected, because they evaluate gradients at quadrature points only.
+    Test: `tests/test_basis_vertex_gradients.py`.
+
 Commit ids quoted in other documents refer to the development history, which
 is kept locally and is not published.
 

@@ -360,7 +360,10 @@ def _hierarchical_c0_gradient_kernel(order: int, points: np.ndarray, modes: np.n
         xi1 = points[qpt, 0]
         xi2 = points[qpt, 1]
         denom = 1.0 - xi2
-        if abs(denom) <= 1e-14:
+        # On the triangle, 1 - xi2 = 0 only at the vertex (-1, 1), where the collapsed
+        # coordinate eta = 2 (1 + xi1) / (1 - xi2) - 1 is undefined.
+        at_vertex = abs(denom) <= 1e-14
+        if at_vertex:
             eta = -1.0
             eta_x1 = 0.0
             eta_x2 = 0.0
@@ -402,11 +405,23 @@ def _hierarchical_c0_gradient_kernel(order: int, points: np.ndarray, modes: np.n
                 djq = _jacobi_derivative(r - 1, 1.0, 1.0, xi2)
                 out[qpt, m, 0] = 0.5 * eta_x1 * d * jq
                 out[qpt, m, 1] = (0.5 * eta_x2) * d * jq + w_ep * d_dxi2 * jq + w_ep * d * djq
+                if at_vertex:
+                    # The mode is lambda_1 lambda_2 P_{r-1}^{(1,1)}(xi2). At the vertex (-1, 1),
+                    # lambda_1 = 0 and lambda_2 = 1, so its gradient is
+                    # P_{r-1}^{(1,1)}(1) grad(lambda_1) = (jq / 2, 0).
+                    out[qpt, m, 0] = 0.5 * jq
+                    out[qpt, m, 1] = 0.0
             elif p == 0:
                 jq = _jacobi_p(r - 1, 1.0, 1.0, xi2)
                 djq = _jacobi_derivative(r - 1, 1.0, 1.0, xi2)
                 out[qpt, m, 0] = -0.5 * eta_x1 * d * jq
                 out[qpt, m, 1] = (-0.5 * eta_x2) * d * jq + w_em * d_dxi2 * jq + w_em * d * djq
+                if at_vertex:
+                    # The mode is lambda_0 lambda_2 P_{r-1}^{(1,1)}(xi2). At the vertex (-1, 1),
+                    # lambda_0 = 0 and lambda_2 = 1, so its gradient is
+                    # P_{r-1}^{(1,1)}(1) grad(lambda_0) = (-jq / 2, -jq / 2).
+                    out[qpt, m, 0] = -0.5 * jq
+                    out[qpt, m, 1] = -0.5 * jq
             else:
                 jp = _jacobi_p(p - 1, 1.0, 1.0, eta)
                 djp = _jacobi_derivative(p - 1, 1.0, 1.0, eta)
@@ -544,12 +559,22 @@ def _dubiner_gradient_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
             p = pq[m, 0]
             r = pq[m, 1]
             if at_vertex:
-                out[qpt, m, 0] = float(r + 1) if p == 1 else 0.0
+                # Limits at the vertex (-1, 1), where a is undefined. The mode equals
+                # Q_p(x, t) P_r^{(2p+1,0)}(eta) with Q_p(x, t) = t^p P_p(x / t),
+                # x = (1 + 2 xi + eta) / 2 and t = (1 - eta) / 2. Q_p is homogeneous of
+                # degree p and x = t = 0 at the vertex, so the gradient vanishes for
+                # p >= 2; Q_0 = 1 and Q_1 = x, with grad(x) = (1, 1/2).
                 if p == 0:
-                    out[qpt, m, 1] = 0.5 * r * (r + 2)
+                    # d/deta P_r^{(1,0)}(1) = (r + 2)/2 P_{r-1}^{(2,1)}(1) = r (r + 1) (r + 2) / 4.
+                    out[qpt, m, 0] = 0.0
+                    out[qpt, m, 1] = 0.25 * r * (r + 1) * (r + 2)
                 elif p == 1:
-                    out[qpt, m, 1] = 0.5 * (r + 1)
+                    # grad(x) P_r^{(3,0)}(1), with P_r^{(3,0)}(1) = C(r + 3, 3).
+                    c = (r + 1) * (r + 2) * (r + 3) / 6.0
+                    out[qpt, m, 0] = c
+                    out[qpt, m, 1] = 0.5 * c
                 else:
+                    out[qpt, m, 0] = 0.0
                     out[qpt, m, 1] = 0.0
             else:
                 fac = _pow_int(fac_base, p)
