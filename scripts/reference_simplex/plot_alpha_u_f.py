@@ -50,6 +50,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import scipy.linalg
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 if str(REPOSITORY) not in sys.path:
@@ -60,7 +61,9 @@ from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis, _eva
 from hybridge.core.simplex.reference import reference_simplex, simplex_volume_rule  # noqa: E402
 from hybridge.io import reference_plots as rp  # noqa: E402
 from hybridge.io.figures import publication_style  # noqa: E402
-from simplex_hdg_helpers import reaction_blocks, trace_coefficients, volume_load, weighted_mass  # noqa: E402
+from simplex_hdg_helpers import (  # noqa: E402
+    basis_blocks, reaction_blocks, trace_coefficients, volume_load, weighted_mass,
+)
 
 DEFAULT_PROBLEM = Path(__file__).resolve().with_name("alpha_u_f_problem.py")
 # Segment through the centroid used for the line plots: midpoints of two opposite
@@ -110,8 +113,13 @@ def solve(problem: Problem, dim: int, order: int, *, basis: str, trace: str, tau
     """Solve ``alpha u = f`` by HDG on the reference simplex with ``u_h`` of degree ``order``.
 
     Returns a dictionary with the reference data, the coefficients of ``u_h`` and
-    of the L2 projection ``Pi_p u`` in the volume basis, and the L2 errors of both
-    measured on a rule exact for degree ``2 order + extra_degree``.
+    of the L2 projection ``Pi_p u`` in the volume basis, the L2 errors of both
+    measured on a rule exact for degree ``2 order + extra_degree``, and
+    ``max_error``, the largest ``|u - u_h|`` at the points of that rule and of the
+    segment of the line plots. The volume integrals and the errors are computed
+    block by block over the points of the rule (:func:`basis_blocks`), so the
+    basis is never tabulated on the whole rule at once. ``A`` is symmetric
+    positive definite (``alpha > 0``, ``tau > 0``) and is solved by Cholesky.
     """
     degree = 2 * order + extra_degree
     if dim == 2:
@@ -121,18 +129,23 @@ def solve(problem: Problem, dim: int, order: int, *, basis: str, trace: str, tau
     rule = simplex_volume_rule(dim, degree)
     alpha_mass = weighted_mass(reference, problem.alpha, rule)
     a, b, _, _ = reaction_blocks(reference, trace, alpha=0.0, tau=tau, alpha_mass=alpha_mass)
-    load = volume_load(reference, problem.f, rule)
+    loads = volume_load(reference, lambda x: np.column_stack((problem.f(x), problem.u(x))), rule)
     uhat = trace_coefficients(reference, trace, problem.u)
-    coefficients = np.linalg.solve(a, load + b @ uhat)
-    projection = np.linalg.solve(weighted_mass(reference, 1.0, rule), volume_load(reference, problem.u, rule))
-    points, weights = rule
-    basis_values = np.asarray(_evaluate_basis(reference.basis_type, order, points), dtype=np.float64)
-    exact = problem.u(points)
-    error_hdg = float(np.sqrt(weights @ (exact - basis_values @ coefficients) ** 2))
-    error_projection = float(np.sqrt(weights @ (exact - basis_values @ projection) ** 2))
+    factor = scipy.linalg.cho_factor(a)
+    coefficients = scipy.linalg.cho_solve(factor, loads[:, 0] + b @ uhat)
+    projection = scipy.linalg.cho_solve(scipy.linalg.cho_factor(reference.exact_mass.astype(np.float64)), loads[:, 1])
+    both = np.column_stack((coefficients, projection))
+    squares = np.zeros(2)
+    segment = segment_points(dim, 400)[1]
+    max_error = float(np.abs(problem.u(segment) - evaluate(reference, coefficients, segment)).max())
+    for points, weights, values in basis_blocks(reference, rule):
+        errors = problem.u(points)[:, None] - values @ both
+        squares += weights @ errors**2
+        max_error = max(max_error, float(np.abs(errors[:, 0]).max()))
+    error_hdg, error_projection = (float(value) for value in np.sqrt(squares))
     result = {"reference": reference, "coefficients": coefficients, "projection": projection, "uhat": uhat,
               "trace": trace, "l2_error": error_hdg, "l2_projection_error": error_projection,
-              "condition_A": float(np.linalg.cond(a))}
+              "max_error": max_error, "condition_A": spd_condition_number(a)}
     face_points, face_weights = reference._generic_face_rule
     trace_squares = volume_squares = 0.0
     for f in range(reference.num_faces):
@@ -144,6 +157,19 @@ def solve(problem: Problem, dim: int, order: int, *, basis: str, trace: str, tau
     result["trace_l2_error"] = float(np.sqrt(trace_squares))
     result["face_l2_error"] = float(np.sqrt(volume_squares))
     return result
+
+
+def spd_condition_number(matrix: np.ndarray) -> float:
+    """Return the 2-norm condition number ``lambda_max / lambda_min`` of a symmetric positive definite matrix.
+
+    All eigenvalues are computed (``scipy.linalg.eigh``, ``O(n^3)``: 0.4 s for
+    ``n = 2925``, ``p = 24``). A Lanczos estimate of the two extreme eigenvalues
+    looks cheaper but is not: the smallest eigenvalues of ``A`` are clustered
+    (the interior modes all lie near ``alpha lambda_min(M)``), and it took 37 s at
+    ``p = 24``.
+    """
+    eigenvalues = scipy.linalg.eigh(matrix, eigvals_only=True)
+    return float(eigenvalues[-1] / eigenvalues[0])
 
 
 def trace_values(result: dict, dim: int, face: int, face_points: np.ndarray):
@@ -742,6 +768,23 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights, fa
     plotter.show()
 
 
+def limit_blas_threads(count: int) -> None:
+    """Limit the threads of the BLAS/LAPACK library under NumPy and SciPy to ``count``.
+
+    On a node shared with other jobs, OpenBLAS with one thread per CPU makes a
+    dense ``1000 x 1000`` solve hundreds of times slower than with 8 threads: its
+    threads wait on each other while other processes hold some of the cores.
+    Uses ``threadpoolctl`` when it is installed; otherwise prints how to set
+    ``OPENBLAS_NUM_THREADS`` before starting Python.
+    """
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        print(f"threadpoolctl is not installed: start with OPENBLAS_NUM_THREADS={count} to limit the BLAS threads")
+        return
+    threadpool_limits(limits=max(1, int(count)), user_api="blas")
+
+
 def main(argv=None) -> int:
     """Parse the options, solve for every degree, write the figures and ``errors.json``."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -759,6 +802,9 @@ def main(argv=None) -> int:
                         help="window: matplotlib 3D axes or a PyVista render window")
     parser.add_argument("--out", type=Path, help="also write alpha_u_f.pdf, PNG pages and errors.json here")
     parser.add_argument("--no-show", action="store_true", help="do not open a window")
+    parser.add_argument("--blas-threads", type=int, default=min(8, os.cpu_count() or 1),
+                        help="threads of the BLAS/LAPACK library for the dense products and solves (default "
+                             "min(8, CPUs); more threads are slower on a shared node)")
     parser.add_argument("--face-opacity", type=float, default=0.4,
                         help="opacity of the faces drawn over the cross-sections in the u - u_h view")
     args = parser.parse_args(argv)
@@ -777,15 +823,12 @@ def main(argv=None) -> int:
         print("no display (DISPLAY is not set): writing files only")
         show = False
 
+    limit_blas_threads(args.blas_threads)
     results = {}
-    probe = np.vstack([segment_points(dim, 400)[1],
-                       simplex_volume_rule(dim, 2 * max(degrees) + args.extra_degree)[0]])
     for p in degrees:
         start = time.perf_counter()
         results[p] = solve(problem, dim, p, basis=args.basis, trace=args.trace, tau=problem.tau,
                            extra_degree=args.extra_degree)
-        results[p]["max_error"] = float(np.abs(problem.u(probe) - evaluate(results[p]["reference"],
-                                                                             results[p]["coefficients"], probe)).max())
         print(f"p = {p:2d}: ||u - u_h|| = {results[p]['l2_error']:.3e}, ||u - Pi_p u|| = "
               f"{results[p]['l2_projection_error']:.3e}, max |u - u_h| = {results[p]['max_error']:.3e}, "
               f"cond(A) = {results[p]['condition_A']:.2e} ({time.perf_counter() - start:.2f} s)", flush=True)
