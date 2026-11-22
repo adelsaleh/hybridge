@@ -3,8 +3,8 @@
 Usage::
 
     python scripts/reference_simplex/plot_alpha_u_f.py [--problem FILE] [--degrees 1 2 4 8] [--dim 3]
-        [--basis orthonormal] [--trace lagrange_warp_blend] [--tau 1] [--extra-degree 10]
-        [--out DIR] [--show]
+        [--backend matplotlib|pyvista] [--basis orthonormal] [--trace lagrange_warp_blend]
+        [--tau 1] [--extra-degree 10] [--out DIR] [--no-show]
 
 ``FILE`` is a Python module that defines ``alpha`` and ``f`` (and optionally
 ``DIM``, ``DEGREES``, ``TAU``); the default is
@@ -24,13 +24,19 @@ degree ``p``. For each degree ``p`` the script
 4. computes the L2 projection ``Pi_p u`` (best approximation in ``P_p``) and
    the errors ``||u - u_h||_L2``, ``||u - Pi_p u||_L2`` and ``max |u - u_h|``.
 
-Figures (one page per degree, then a summary page) go to ``DIR`` (default
-``run_outputs/reference_simplex/alpha_u_f/<UTC time>``): ``alpha_u_f.pdf``,
-one PNG per page and ``errors.json``. On the tetrahedron each field is drawn on
-horizontal cross-sections ``xi_3 = const`` inside the element's edges; on the
-triangle each field is a surface ``z = u(x, y)``. The last column plots ``u``
-and ``u_h`` along a segment through the centroid. ``--show`` also opens the
-figures in a window (needs a display).
+The results are shown in one window (needs a display; ``--no-show`` skips it),
+with a slider that selects the degree:
+
+- ``--backend matplotlib`` (default): ``u``, ``u_h`` and ``u - u_h`` in three
+  rotatable 3D views (horizontal cross-sections ``xi_3 = const`` of the
+  tetrahedron, or surfaces ``z = u(x, y)`` over the triangle), ``u`` and ``u_h``
+  along a segment through the centroid, and the errors against ``p``;
+- ``--backend pyvista``: the same three fields on cross-sections of a
+  tetrahedral mesh of the reference tetrahedron (warped surfaces on the
+  triangle), with linked views.
+
+Files are written only with ``--out DIR``: ``alpha_u_f.pdf`` (one page per
+degree and a summary page), one PNG per page and ``errors.json``.
 """
 
 from __future__ import annotations
@@ -38,6 +44,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -56,17 +63,6 @@ from hybridge.io.figures import publication_style  # noqa: E402
 from simplex_hdg_helpers import reaction_blocks, trace_coefficients, volume_load, weighted_mass  # noqa: E402
 
 DEFAULT_PROBLEM = Path(__file__).resolve().with_name("alpha_u_f_problem.py")
-# With --show the figures are created by pyplot so that the 3D views can be rotated.
-_INTERACTIVE = {"on": False}
-
-
-def new_figure(width: float, height: float):
-    """Return a figure of ``width x height`` inches: a pyplot figure with ``--show``, else an Agg figure."""
-    if _INTERACTIVE["on"]:
-        import matplotlib.pyplot as plt
-
-        return plt.figure(figsize=(width, height), layout="constrained")
-    return rp.new_figure(width, height)
 # Segment through the centroid used for the line plots: midpoints of two opposite
 # edges of the tetrahedron, and from the midpoint of edge 0 to vertex 2 on the triangle.
 SEGMENTS = {2: (np.array([0.0, -1.0]), np.array([-1.0, 1.0])),
@@ -242,7 +238,7 @@ def degree_page(problem: Problem, dim: int, order: int, result: dict, heights):
         probe = triangle_lattice(np.array([[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0]]), 40)[0]
     cmap, norm = color_scale(problem.u(probe), signed=False)
     error_cmap, error_norm = color_scale(error(probe), signed=True)
-    figure = new_figure(15.0, 4.6)
+    figure = rp.new_figure(15.0, 4.6)
     titles = ("exact u = f / alpha", f"HDG u_h, p = {order}", "error u - u_h")
     fields = (problem.u, u_h, error)
     axes = []
@@ -273,7 +269,7 @@ def degree_page(problem: Problem, dim: int, order: int, result: dict, heights):
 
 def summary_page(problem: Problem, dim: int, degrees, results):
     """Figure with the errors against the degree and ``u_h`` of several degrees along the segment."""
-    figure = new_figure(11.0, 4.2)
+    figure = rp.new_figure(11.0, 4.2)
     ax = figure.add_subplot(1, 2, 1)
     rp.plot_series(ax, list(degrees), {
         "||u - u_h|| (HDG)": [results[p]["l2_error"] for p in degrees],
@@ -296,6 +292,198 @@ def summary_page(problem: Problem, dim: int, degrees, results):
     return figure
 
 
+def write_files(problem: Problem, dim: int, degrees, results: dict, args) -> None:
+    """Write ``alpha_u_f.pdf`` (a page per degree and a summary), the PNG pages and ``errors.json`` to ``args.out``."""
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    out = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    with publication_style(), PdfPages(out / "alpha_u_f.pdf", metadata={"Creator": "HYBRIDGE"}) as pdf:
+        figures = [degree_page(problem, dim, p, results[p], args.heights) for p in degrees]
+        figures.append(summary_page(problem, dim, degrees, results))
+        for index, figure in enumerate(figures):
+            pdf.savefig(figure)
+            name = f"degree-{degrees[index]:02d}.png" if index < len(degrees) else "summary.png"
+            figure.savefig(out / name, dpi=140)
+    record = {"problem": str(problem.path), "dim": dim, "basis": args.basis, "trace": args.trace, "tau": problem.tau,
+              "extra_degree": args.extra_degree,
+              "degrees": {str(p): {k: v for k, v in results[p].items() if isinstance(v, float)} for p in degrees}}
+    with open(out / "errors.json", "w") as handle:
+        json.dump(record, handle, indent=1)
+    print(f"wrote {out / 'alpha_u_f.pdf'}, {len(figures)} PNG pages and errors.json")
+
+
+def fields_for_degree(problem: Problem, result: dict):
+    """Callables ``(u, u_h, u - u_h)`` on points ``(n, dim)`` for one solved degree."""
+    reference, coefficients = result["reference"], result["coefficients"]
+
+    def u_h(points):
+        """Values of the HDG solution ``u_h``."""
+        return evaluate(reference, coefficients, points)
+
+    def error(points):
+        """Values of ``u - u_h``."""
+        return problem.u(points) - u_h(points)
+
+    return problem.u, u_h, error
+
+
+def show_matplotlib(problem: Problem, dim: int, degrees, results: dict, heights) -> None:
+    """Open one window: three rotatable 3D views, the segment plot, the errors against p and a degree slider."""
+    import matplotlib.pyplot as plt
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.widgets import Slider
+
+    if dim == 3:
+        probe = np.vstack([triangle_lattice(slice_corners(h), 12)[0] for h in heights])
+    else:
+        probe = triangle_lattice(np.array([[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0]]), 40)[0]
+    cmap, norm = color_scale(problem.u(probe), signed=False)
+    figure = plt.figure(figsize=(15.0, 8.8), layout="constrained")
+    figure.canvas.manager.set_window_title(f"alpha u = f: {problem.path.name}")
+    grid = figure.add_gridspec(3, 3, height_ratios=(1.0, 0.75, 0.06))
+    views = [figure.add_subplot(grid[0, k], projection="3d") for k in range(3)]
+    if hasattr(views[0], "shareview"):
+        for ax in views[1:]:
+            ax.shareview(views[0])
+    figure.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=views[:2], shrink=0.6, label="u, u_h")
+    error_bar = figure.colorbar(ScalarMappable(norm=norm, cmap=rp.diverging_colormap()), ax=views[2], shrink=0.6,
+                                label="u - u_h")
+    segment_ax = figure.add_subplot(grid[1, 0:2])
+    errors_ax = figure.add_subplot(grid[1, 2])
+    slider_ax = figure.add_subplot(grid[2, :])
+    s, segment = segment_points(dim)
+    rp.plot_series(errors_ax, list(degrees), {
+        "||u - u_h|| (HDG)": [results[p]["l2_error"] for p in degrees],
+        "||u - Pi_p u|| (best)": [results[p]["l2_projection_error"] for p in degrees],
+        "max |u - u_h|": [results[p]["max_error"] for p in degrees],
+    }, xlabel="degree p", ylabel="error", title="Errors against the degree")
+    marker = errors_ax.axvline(degrees[0], color=rp.TEXT_SECONDARY, linewidth=1.0, linestyle="--")
+    rp.plot_series(segment_ax, s, {"u": problem.u(segment), "u_h": problem.u(segment)}, logy=False,
+                   xlabel="position on the segment through the centroid", ylabel="value")
+    for line in segment_ax.lines:
+        line.set_marker("")
+    segment_ax.lines[0].set_linewidth(3.0)
+    segment_ax.legend(frameon=False)
+
+    def draw(index: int) -> None:
+        """Draw the three views and the segment plot for ``degrees[index]``."""
+        p = degrees[index]
+        u, u_h, error = fields_for_degree(problem, results[p])
+        error_cmap, error_norm = color_scale(error(probe), signed=True)
+        error_bar.mappable.set_norm(error_norm)
+        error_bar.update_normal(error_bar.mappable)
+        for ax, field, scale, title in zip(
+                views, (u, u_h, error), ((cmap, norm), (cmap, norm), (error_cmap, error_norm)),
+                ("exact u = f / alpha", f"HDG u_h, p = {p}", f"error u - u_h, p = {p}")):
+            elev, azim = ax.elev, ax.azim
+            ax.cla()
+            if dim == 3:
+                draw_tetrahedron_slices(ax, field, heights, *scale)
+            else:
+                draw_triangle_surface(ax, field, *scale)
+            ax.view_init(elev=elev, azim=azim)
+            ax.set_title(title)
+        segment_ax.lines[1].set_ydata(u_h(segment))
+        segment_ax.relim()
+        segment_ax.autoscale_view()
+        segment_ax.set_title(f"p = {p}: L2 error {results[p]['l2_error']:.2e} "
+                             f"(best {results[p]['l2_projection_error']:.2e}), max {results[p]['max_error']:.2e}")
+        marker.set_xdata([p, p])
+        figure.canvas.draw_idle()
+
+    slider = Slider(slider_ax, "degree", 0, len(degrees) - 1, valinit=0, valstep=1)
+    slider.valtext.set_text(f"p = {degrees[0]}")
+
+    def on_change(value) -> None:
+        """Redraw for the degree chosen with the slider."""
+        index = int(round(value))
+        slider.valtext.set_text(f"p = {degrees[index]}")
+        draw(index)
+
+    slider.on_changed(on_change)
+    for ax in views:
+        ax.view_init(elev=28, azim=35) if dim == 3 else ax.view_init(elev=28, azim=-62)
+    draw(0)
+    name = "tetrahedron" if dim == 3 else "triangle"
+    figure.suptitle(f"alpha u = f on the reference {name} ({problem.path.name}, tau = {problem.tau:g}); "
+                    "drag a 3D view to rotate, move the slider to change p")
+    plt.show()
+
+
+def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) -> None:
+    """Open one PyVista window with u, u_h and u - u_h side by side (linked views) and a degree slider."""
+    import pyvista as pv
+
+    if dim == 3:
+        corners = np.array([[-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
+        n = 28
+        lattice = np.array([(i, j, k) for i in range(n + 1) for j in range(n + 1 - i) for k in range(n + 1 - i - j)])
+        points = -1.0 + 2.0 * lattice / n
+        mesh = pv.PolyData(points).delaunay_3d()
+        coordinates = np.asarray(mesh.points, dtype=np.float64)
+        edges = pv.PolyData(corners, lines=np.hstack([[2, a, b] for a, b in
+                                                     ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3))]))
+    else:
+        points, triangles = triangle_lattice(np.array([[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0]]), 48)
+        faces = np.hstack([np.full((len(triangles), 1), 3), triangles]).ravel()
+        mesh = pv.PolyData(np.column_stack((points, np.zeros(len(points)))), faces)
+        coordinates = np.asarray(mesh.points, dtype=np.float64)[:, :2]
+        edges = None
+    exact = problem.u(coordinates)
+    bound = float(np.abs(exact).max())
+    plotter = pv.Plotter(shape=(1, 3), window_size=(1650, 650), title=f"alpha u = f: {problem.path.name}")
+    plotter.set_background("white")
+    cmap = rp.sequential_colormap() if exact.min() >= 0.0 else rp.diverging_colormap()
+    u_limits = (float(exact.min()), float(exact.max())) if exact.min() >= 0.0 else (-bound, bound)
+
+    def show_field(column: int, name: str, values: np.ndarray, colormap, limits, title: str) -> None:
+        """Draw ``values`` in subplot ``column`` (cross-sections in 3D, a warped surface in 2D)."""
+        plotter.subplot(0, column)
+        grid = mesh.copy()
+        grid.point_data[name] = values
+        if dim == 3:
+            shown = grid.slice_along_axis(n=len(heights), axis="z", bounds=(-1, 1, -1, 1, min(heights), max(heights)))
+            plotter.add_mesh(edges, color="#52514e", line_width=2, name=f"edges{column}")
+        else:
+            scale = 1.0 / max(np.abs(values).max(), 1e-300)
+            shown = grid.warp_by_scalar(name, factor=scale)
+        plotter.add_mesh(shown, scalars=name, cmap=colormap, clim=limits, name=f"field{column}", lighting=False,
+                         scalar_bar_args={"title": name, "color": "black", "vertical": True, "fmt": "%.3g",
+                                          "position_x": 0.86, "width": 0.07, "label_font_size": 12})
+        if dim == 3:
+            plotter.add_point_labels(edges.points, ["A", "B", "C", "D"], font_size=12, text_color="black",
+                                     shape=None, show_points=False, name=f"labels{column}")
+        plotter.add_text(title, font_size=10, color="black", name=f"title{column}")
+
+    slider = {}
+
+    def update(value) -> None:
+        """Redraw u_h and u - u_h for the degree nearest to the slider value; the slider snaps to that degree."""
+        p = min(degrees, key=lambda degree: abs(degree - value))
+        if "widget" in slider:
+            slider["widget"].GetRepresentation().SetValue(p)
+        _, u_h, error = fields_for_degree(problem, results[p])
+        values = u_h(coordinates)
+        errors = exact - values
+        error_bound = max(float(np.abs(errors).max()), 1e-300)
+        show_field(1, "u_h", values, cmap, u_limits, f"HDG u_h, p = {p}: L2 error {results[p]['l2_error']:.2e}")
+        show_field(2, "u - u_h", errors, rp.diverging_colormap(), (-error_bound, error_bound),
+                   f"error u - u_h, p = {p} (max {results[p]['max_error']:.2e})")
+        plotter.render()
+
+    show_field(0, "u", exact, cmap, u_limits, "exact u = f / alpha")
+    update(degrees[0])
+    plotter.subplot(0, 1)
+    if len(degrees) > 1:
+        slider["widget"] = plotter.add_slider_widget(
+            update, rng=[degrees[0], degrees[-1]], value=degrees[0], title="degree p", fmt="%.0f",
+            pointa=(0.1, 0.08), pointb=(0.9, 0.08), color="black")
+    plotter.link_views()
+    plotter.view_vector((1.0, 0.75, 0.75)) if dim == 3 else plotter.view_vector((0.3, -1.0, 0.9))
+    plotter.show()
+
+
 def main(argv=None) -> int:
     """Parse the options, solve for every degree, write the figures and ``errors.json``."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -309,8 +497,10 @@ def main(argv=None) -> int:
                         help="rules are exact for degree 2p + this, for non-polynomial alpha and f")
     parser.add_argument("--heights", type=float, nargs="+", default=(-0.9, -0.55, -0.2, 0.15),
                         help="xi_3 of the cross-sections drawn on the tetrahedron")
-    parser.add_argument("--out", type=Path, help="output directory")
-    parser.add_argument("--show", action="store_true", help="also open the figures in a window")
+    parser.add_argument("--backend", choices=("matplotlib", "pyvista"), default="matplotlib",
+                        help="window: matplotlib 3D axes or a PyVista render window")
+    parser.add_argument("--out", type=Path, help="also write alpha_u_f.pdf, PNG pages and errors.json here")
+    parser.add_argument("--no-show", action="store_true", help="do not open a window")
     args = parser.parse_args(argv)
 
     problem = Problem(args.problem.resolve())
@@ -320,9 +510,12 @@ def main(argv=None) -> int:
         problem.tau = args.tau
     if problem.tau <= 0.0:
         raise ValueError("tau must be positive")
-    out = args.out or REPOSITORY / "run_outputs" / "reference_simplex" / "alpha_u_f" / time.strftime(
-        "%Y%m%dT%H%M%SZ", time.gmtime())
-    out.mkdir(parents=True, exist_ok=True)
+    show = not args.no_show
+    if show and not os.environ.get("DISPLAY") and sys.platform.startswith("linux"):
+        if args.out is None:
+            raise SystemExit("no display (DISPLAY is not set): pass --out DIR to write the figures instead")
+        print("no display (DISPLAY is not set): writing files only")
+        show = False
 
     results = {}
     probe = np.vstack([segment_points(dim, 400)[1],
@@ -337,26 +530,11 @@ def main(argv=None) -> int:
               f"{results[p]['l2_projection_error']:.3e}, max |u - u_h| = {results[p]['max_error']:.3e}, "
               f"cond(A) = {results[p]['condition_A']:.2e} ({time.perf_counter() - start:.2f} s)", flush=True)
 
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    _INTERACTIVE["on"] = bool(args.show)
-    with publication_style(), PdfPages(out / "alpha_u_f.pdf", metadata={"Creator": "HYBRIDGE"}) as pdf:
-        figures = [degree_page(problem, dim, p, results[p], args.heights) for p in degrees]
-        figures.append(summary_page(problem, dim, degrees, results))
-        for index, figure in enumerate(figures):
-            pdf.savefig(figure)
-            name = f"degree-{degrees[index]:02d}.png" if index < len(degrees) else "summary.png"
-            figure.savefig(out / name, dpi=140)
-    record = {"problem": str(problem.path), "dim": dim, "basis": args.basis, "trace": args.trace, "tau": problem.tau,
-              "extra_degree": args.extra_degree,
-              "degrees": {str(p): {k: v for k, v in results[p].items() if isinstance(v, float)} for p in degrees}}
-    with open(out / "errors.json", "w") as handle:
-        json.dump(record, handle, indent=1)
-    print(f"wrote {out / 'alpha_u_f.pdf'}, {len(figures)} PNG pages and errors.json")
-    if args.show:
-        import matplotlib.pyplot as plt
-
-        plt.show()
+    if args.out is not None:
+        write_files(problem, dim, degrees, results, args)
+    if show:
+        viewer = show_pyvista if args.backend == "pyvista" else show_matplotlib
+        viewer(problem, dim, degrees, results, args.heights)
     return 0
 
 

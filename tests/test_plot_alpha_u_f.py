@@ -39,7 +39,8 @@ def test_cubic_solution_is_reproduced_from_degree_three(dim, tmp_path):
     problem = tmp_path / "problem.py"
     problem.write_text(POLYNOMIAL_PROBLEM)
     out = tmp_path / "out"
-    assert _driver().main(["--problem", str(problem), "--dim", str(dim), "--degrees", "1", "3", "--out", str(out)]) == 0
+    assert _driver().main(["--problem", str(problem), "--dim", str(dim), "--degrees", "1", "3", "--out", str(out),
+                           "--no-show"]) == 0
     record = json.loads((out / "errors.json").read_text())
     assert record["degrees"]["1"]["l2_error"] > 1e-3
     assert record["degrees"]["3"]["l2_error"] < 1e-12
