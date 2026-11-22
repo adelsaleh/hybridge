@@ -245,6 +245,23 @@ TETRAHEDRON_VERTICES = np.array([[-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [-1.0, 1
 VERTEX_NAMES = ("A", "B", "C", "D")
 
 
+def face_names(dim: int) -> list[str]:
+    """Labels ``"F<f> <vertices>"`` of the faces, in the numbering of ``reference_simplex(dim).face_vertices``.
+
+    Tetrahedron: face ``f`` is opposite vertex ``f`` (F0 BCD, F1 ACD, F2 ABD, F3 ABC).
+    Triangle: face ``f`` is the edge from vertex ``f`` to vertex ``f + 1`` (F0 AB, F1 BC, F2 CA).
+    """
+    return [f"F{f} " + "".join(VERTEX_NAMES[v] for v in vertices)
+            for f, vertices in enumerate(reference_simplex(dim).face_vertices)]
+
+
+def face_label_positions(dim: int, offset: float = 0.15) -> np.ndarray:
+    """Positions ``(dim + 1, dim)`` for face labels: face centroids moved ``offset`` outward along the face normals."""
+    simplex = reference_simplex(dim)
+    centroids = np.array([simplex.vertices[list(vertices)].mean(axis=0) for vertices in simplex.face_vertices])
+    return centroids + offset * np.asarray(simplex.outward_normals)
+
+
 def face_samples(dim: int, subdivisions: int = 24):
     """Sample points on the reference face: a triangle lattice ``(points (n, 2), triangles)`` in 3D, a line in 2D."""
     if dim == 3:
@@ -268,12 +285,21 @@ def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> N
 
     if dim == 3:
         _, triangles = face_samples(dim)
+        polygons, colors = [], []
         for x, _, values in face_errors(problem, result, dim):
-            colors = cmap(norm(values[triangles].mean(axis=1)))
-            ax.add_collection3d(Poly3DCollection(x[triangles], facecolors=colors, edgecolors="none", alpha=0.97))
+            polygons.append(x[triangles])
+            colors.append(cmap(norm(values[triangles].mean(axis=1))))
+        # One collection, so that its triangles are sorted by depth together; the labels are drawn
+        # after it (computed_zorder off), so they stay readable from every direction.
+        ax.computed_zorder = False
+        ax.add_collection3d(Poly3DCollection(np.concatenate(polygons), facecolors=np.concatenate(colors),
+                                             edgecolors="none", alpha=0.97, zorder=1))
         rp.draw_simplex_outline(ax, TETRAHEDRON_VERTICES, ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)))
         for name, position in zip(VERTEX_NAMES, TETRAHEDRON_VERTICES):
-            ax.text(*position, " " + name, fontsize=7, color=rp.TEXT_SECONDARY)
+            ax.text(*position, " " + name, fontsize=7, color=rp.TEXT_SECONDARY, zorder=5)
+        for name, position in zip(face_names(3), face_label_positions(3)):
+            ax.text(*position, name, fontsize=8, color="black", ha="center", va="center", zorder=10,
+                    bbox={"boxstyle": "round,pad=0.15", "facecolor": "white", "edgecolor": "none", "alpha": 0.8})
         ax.set_xlim(-1, 1)
         ax.set_ylim(-1, 1)
         ax.set_zlim(-1, 1)
@@ -282,8 +308,10 @@ def draw_faces_3d(ax, problem: Problem, result: dict, dim: int, cmap, norm) -> N
         return
     closed = np.vstack((REFERENCE_TRIANGLE, REFERENCE_TRIANGLE[:1]))
     ax.plot(closed[:, 0], closed[:, 1], np.zeros(4), color=rp.OUTLINE, linewidth=0.8)
-    for f, (x, _, values) in enumerate(face_errors(problem, result, dim)):
+    for f, ((x, _, values), name) in enumerate(zip(face_errors(problem, result, dim), face_names(2))):
         ax.plot(x[:, 0], x[:, 1], values, color=rp.CATEGORICAL[f], linewidth=2.0)
+        middle = len(values) // 2
+        ax.text(x[middle, 0], x[middle, 1], values[middle], " " + name, fontsize=8, color="black")
     ax.set_xlabel("xi_1", labelpad=-8)
     ax.set_ylabel("xi_2", labelpad=-8)
     ax.tick_params(labelsize=6, pad=-2)
@@ -304,16 +332,19 @@ def draw_faces_flat(ax, problem: Problem, result: dict, dim: int, cmap, norm) ->
             ax.plot(closed[:, 0], closed[:, 1], color=rp.OUTLINE, linewidth=0.8)
             for v, corner in zip(face_vertices[f], net[f]):
                 ax.text(corner[0], corner[1], VERTEX_NAMES[v], fontsize=7, color=rp.TEXT_SECONDARY)
+            centre = net[f].mean(axis=0)
+            ax.text(centre[0], centre[1], face_names(3)[f], fontsize=8, color="black", ha="center", va="center",
+                    bbox={"boxstyle": "round,pad=0.15", "facecolor": "white", "edgecolor": "none", "alpha": 0.75})
         ax.set_aspect("equal")
         ax.set_axis_off()
         ax.set_title("u - uhat_h on the unfolded faces")
         return
-    edges = ("edge AB", "edge BC", "edge CA")
+    edges = face_names(2)
     errors = face_errors(problem, result, dim)
     rp.plot_series(ax, {name: s[:, 0] for name, (_, s, _) in zip(edges, errors)},
                    {name: values for name, (_, _, values) in zip(edges, errors)}, logy=False,
                    xlabel="edge parameter t (from first to second vertex)", ylabel="u - uhat_h",
-                   title="u - uhat_h on the edges")
+                   title="u - uhat_h on the faces (edges)")
     for line in ax.lines:
         line.set_marker("")
     ax.axhline(0.0, color=rp.TEXT_SECONDARY, linewidth=0.6)
@@ -589,6 +620,12 @@ def show_pyvista(problem: Problem, dim: int, degrees, results: dict, heights) ->
             plotter.add_mesh(edges, color="#52514e", line_width=2, name="edges3")
             plotter.add_point_labels(edges.points, ["A", "B", "C", "D"], font_size=12, text_color="black",
                                      shape=None, show_points=False, name="labels3")
+        positions = face_label_positions(dim, 0.12)
+        if dim == 2:
+            positions = np.column_stack((positions, np.zeros(len(positions))))
+        plotter.add_point_labels(positions, face_names(dim), font_size=13, text_color="black", shape="rounded_rect",
+                                 shape_color="white", shape_opacity=0.7, show_points=False, name="faces3",
+                                 always_visible=True)
         plotter.add_text(f"u - uhat_h on the faces, p = {p} (L2 {results[p]['trace_l2_error']:.2e})",
                          font_size=10, color="black", name="title3")
         plotter.render()
