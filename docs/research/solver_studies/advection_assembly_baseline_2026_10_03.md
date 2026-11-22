@@ -169,7 +169,7 @@ the same as `getrf` followed by `getrs`.
    HYBRIDGE installed in the chosen environment.
 
    ```bash
-   python guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py --mesh-size 0.0095 \
+   python guiding_center_cg_hdg/hdg/studies/solver_tuning/benchmark_advection_tsle_tensor.py --mesh-size 0.0095 \
      --native fused,split3 \
      --configs float64/cutensor/default/coop,float64/cutensor/default/cublas,float64/cutensor/default/magma,float64/cublas/default/coop,float64/cublas/default/cublas,float64/cublas/default/magma,float32/cutensor/default/coop,float32/cutensor/default/cublas,float32/cutensor/default/magma,float32/cublas/default/coop,float32/cublas/default/cublas,float32/cublas/default/magma \
      --output-json run_logs/h100/advection_assembly_fp64_process.json
@@ -178,7 +178,7 @@ the same as `getrf` followed by `getrs`.
 5. **FP32 native run** (a separate process):
 
    ```bash
-   HYBRIDGE_PRECISION=float32 python guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py \
+   HYBRIDGE_PRECISION=float32 python guiding_center_cg_hdg/hdg/studies/solver_tuning/benchmark_advection_tsle_tensor.py \
      --mesh-size 0.0095 --native fused,split3 --configs none \
      --output-json run_logs/h100/advection_assembly_fp32_native.json
    ```
@@ -190,5 +190,5 @@ used the same solver paths and statistics as the runner. Recapturing them with
 the runner first gives a like-for-like diff:
 
 ```bash
-HYBRIDGE_MAGMA_ROOT=../magma-build-cuda13 .venv/bin/python guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py <same arguments as step 4>
+HYBRIDGE_MAGMA_ROOT=../magma-build-cuda13 .venv/bin/python guiding_center_cg_hdg/hdg/studies/solver_tuning/benchmark_advection_tsle_tensor.py <same arguments as step 4>
 ```

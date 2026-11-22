@@ -69,7 +69,7 @@ evidence rather than new performance or convergence claims.
 ```
 
 From the research checkout, using the HDG environment and both checkouts on
-`PYTHONPATH`, run `python -B -m pytest tests/hybridge_guiding_center` and the
+`PYTHONPATH`, run `python -B -m pytest tests/hdg` and the
 package's layout/relocation tests. Optional device and DOLFINx tests require
 their respective execution environments.
 

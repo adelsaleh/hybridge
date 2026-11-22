@@ -4,7 +4,7 @@
 campaign_setup() {
     CAMPAIGN_REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
     HYBRIDGE_PYTHON=${HYBRIDGE_PYTHON:-"$CAMPAIGN_REPO/.venv/bin/python"}
-    HYBRIDGE_ARTICLE_ROOT=${HYBRIDGE_ARTICLE_ROOT:-"$CAMPAIGN_REPO/../guiding-center-cg-hdg/guiding_center_cg_hdg/gc-hdg-article"}
+    HYBRIDGE_ARTICLE_ROOT=${HYBRIDGE_ARTICLE_ROOT:-"$CAMPAIGN_REPO/../guiding-center-cg-hdg/article"}
     CAMPAIGN_OUT=${HYBRIDGE_CAMPAIGN_OUT:-"$CAMPAIGN_REPO/run_outputs/campaigns/$1"}
     export PYTHONUNBUFFERED=1
     export HYBRIDGE_PYTHON HYBRIDGE_ARTICLE_ROOT

@@ -184,7 +184,7 @@ def install(spans, capture):
 def run_worker(spec, out, on_case=None):
     """Run the campaign worker in this process; ``on_case(index)`` precedes warmup (0) and measurement (1)."""
     from guiding_center_cg_hdg.campaigns.gc_article_h200 import worker
-    import guiding_center_cg_hdg.guiding_center.runtime.runner as runner
+    import guiding_center_cg_hdg.hdg.runtime.runner as runner
     overrides = json.loads(os.environ.get('HYBRIDGE_POISSON_ELEMENT_COST_OVERRIDES') or '{}')
     if overrides:
         # An existing solver option changed for one arm; the worker's measurement stays as it is.

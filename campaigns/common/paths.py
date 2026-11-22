@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-ARTICLE = Path(os.environ.get("HYBRIDGE_ARTICLE_ROOT", REPO.parent / "guiding-center-cg-hdg/guiding_center_cg_hdg/gc-hdg-article")).expanduser().resolve()
+ARTICLE = Path(os.environ.get("HYBRIDGE_ARTICLE_ROOT", REPO.parent / "guiding-center-cg-hdg/article")).expanduser().resolve()
 
 
 DOCS_CAMPAIGNS = REPO / "docs" / "campaigns"

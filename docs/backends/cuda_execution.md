@@ -34,7 +34,7 @@ or PyAMGX.
   and matrix-format comparisons.
 - `scripts/gpu/benchmark_advection_tsle_bsr.py` compares fused and three-stage
   face-BSR assembly without including AMGX solve time.
-- research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py`) compares split3 with the
+- research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/hdg/studies/solver_tuning/benchmark_advection_tsle_tensor.py`) compares split3 with the
   experimental tensorized TSLE configurations on a prescribed transport
   state (assembly only).
 
@@ -136,7 +136,7 @@ FP64 = 1/64 of FP32), driver 580.126.09, CUDA 13.0, CuPy 14.2.0, cuBLAS
 guiding-center star mesh, one BDF2 transport step, zero-flux boundaries,
 conflict-averaged upwind, and face-BSR output, measured on 2026-10-03. Values
 are median CUDA-event assembly times in ms, excluding pattern construction
-and AMGX. Reproduce them with research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/guiding_center/studies/solver_tuning/benchmark_advection_tsle_tensor.py`)
+and AMGX. Reproduce them with research tensor-assembly runner (`../../../guiding-center-cg-hdg/guiding_center_cg_hdg/hdg/studies/solver_tuning/benchmark_advection_tsle_tensor.py`)
 (`--native fused,split3` for the native columns).
 
 **FP64 on the baseline machine (its production precision):**
