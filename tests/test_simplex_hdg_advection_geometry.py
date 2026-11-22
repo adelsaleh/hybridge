@@ -28,8 +28,6 @@ from math import factorial
 import numpy as np
 import pytest
 
-from hybridge.core.quadrature import _evaluate_simplex_basis
-from hybridge.core.simplex.reference import reference_simplex
 from simplex_hdg_helpers import random_polynomial
 from simplex_hdg_mesh import (
     CELL_KINDS,
@@ -41,7 +39,6 @@ from simplex_hdg_mesh import (
     named_mesh,
     one_cell_mesh,
     polynomial_data,
-    reference_coordinates,
     reference_element,
     relabel_cells,
     sample_points,
@@ -53,6 +50,7 @@ from simplex_hdg_mesh import (
     volume_rule,
 )
 from simplex_hdg_transport import (
+    direct_cell_blocks,
     interior_trace_matrix,
     mesh_transport_blocks,
     polynomial_gradient,
@@ -100,77 +98,6 @@ def _solve_polynomial_problem(mesh, reference, trace, *, beta, stabilization=Non
 # ---------------------------------------------------------------------------
 
 
-def _upwind_weights(normal_flux: float, stabilization) -> tuple[float, float]:
-    """``(tau, gamma)`` of one face from ``beta.n``: ``|beta.n|``, ``2 |beta.n|`` or the given absolute value."""
-    if stabilization is None:
-        tau = abs(normal_flux)
-    elif stabilization == "lax-friedrichs":
-        tau = 2.0 * abs(normal_flux)
-    else:
-        tau = float(stabilization)
-    return tau, tau - normal_flux
-
-
-def _direct_transport_blocks(vertices, numbers, reference, trace, beta, alpha, stabilization):
-    """Blocks of ``beta . grad u + alpha u = f`` on one physical cell by quadrature on the cell itself.
-
-    Nothing here comes from :class:`simplex_hdg_mesh.SimplexMesh`. Volume points are
-    ``x_q = sum_k lambda_k(xi_q) X_k`` with weights scaled by ``|K| / |K^|``; basis values
-    and reference gradients are taken at the reference point of ``x_q`` found from its
-    barycentric coordinates, and the derivative along ``beta`` is
-    ``grad^ phi(xi(x_q)) . (xi(x_q + beta) - xi(x_q))``, exact for an affine map. The unit
-    normal of a face comes from its corners (a rotated edge or a cross product) and points
-    away from the cell centroid; the face is parametrized with its vertices sorted by mesh
-    number (the global order) and its weights scaled by ``|F| / |F^|``.
-
-    ``A_ij = alpha (phi_j, phi_i) - (phi_j, beta . grad phi_i) + sum_f tau_f <phi_j, phi_i>_f``,
-    ``B_ia = gamma_f <mu_a, phi_i>_f``, ``C_ai = tau_f <phi_i, mu_a>_f``, ``D_ab = gamma_f <mu_b, mu_a>_f``.
-    """
-    dim = vertices.shape[1]
-    simplex = reference_simplex(dim)
-    face_simplex = reference_simplex(dim - 1)
-    points, weights = reference._generic_volume_rule
-    measure = abs(np.linalg.det((vertices[1:] - vertices[0]).T)) / factorial(dim)
-    x = simplex.barycentric(points) @ vertices
-    xi = reference_coordinates(vertices, x)
-    phi = np.asarray(reference.basis_at(xi), dtype=np.float64)
-    gradients = np.asarray(reference.gradients_at(xi), dtype=np.float64)  # (nq, n_u, d)
-    step = reference_coordinates(vertices, x + beta) - xi  # A_K^{-1} beta in every row
-    derivative = np.einsum("qik,qk->qi", gradients, step)
-    w = weights * measure / simplex.measure
-    a = alpha * phi.T @ (w[:, None] * phi) - derivative.T @ (w[:, None] * phi)
-    face_points, face_weights = reference._generic_face_rule
-    mu = np.asarray(_evaluate_simplex_basis(trace, dim - 1, reference.order, face_points, gradients=False),
-                    dtype=np.float64)
-    centroid = vertices.mean(axis=0)
-    columns, rows, diagonal = [], [], []
-    for local in simplex.face_vertices:
-        corners = vertices[sorted(local, key=lambda k: numbers[k])]
-        if dim == 2:
-            tangent = corners[1] - corners[0]
-            area = np.linalg.norm(tangent)
-            normal = np.array([tangent[1], -tangent[0]]) / area
-        else:
-            cross = np.cross(corners[1] - corners[0], corners[2] - corners[0])
-            area = 0.5 * np.linalg.norm(cross)
-            normal = cross / np.linalg.norm(cross)
-        if normal @ (corners.mean(axis=0) - centroid) < 0.0:
-            normal = -normal
-        tau, gamma = _upwind_weights(float(beta @ normal), stabilization)
-        xf = face_simplex.barycentric(face_points) @ corners
-        phi_f = np.asarray(reference.basis_at(reference_coordinates(vertices, xf)), dtype=np.float64)
-        wf = face_weights * area / face_simplex.measure
-        a += tau * phi_f.T @ (wf[:, None] * phi_f)
-        columns.append(gamma * phi_f.T @ (wf[:, None] * mu))
-        rows.append(tau * mu.T @ (wf[:, None] * phi_f))
-        diagonal.append(gamma * mu.T @ (wf[:, None] * mu))
-    n_t = mu.shape[1]
-    d = np.zeros((len(diagonal) * n_t,) * 2)
-    for f, block in enumerate(diagonal):
-        d[f * n_t:(f + 1) * n_t, f * n_t:(f + 1) * n_t] = block
-    return a, np.concatenate(columns, axis=1), np.concatenate(rows, axis=0), d
-
-
 @pytest.mark.parametrize("dim", (2, 3))
 @pytest.mark.parametrize("kind", CELL_KINDS)
 @pytest.mark.parametrize("trace", TRACE_BASES)
@@ -194,7 +121,7 @@ def test_cell_blocks_equal_direct_quadrature(dim, kind, trace):
                 for stabilization in STABILIZATIONS:
                     blocks = mesh_transport_blocks(mesh, reference, trace, beta=beta, alpha=ALPHA,
                                                    stabilization=stabilization)
-                    direct = _direct_transport_blocks(vertices, numbers, reference, trace, beta, ALPHA, stabilization)
+                    direct = direct_cell_blocks(vertices, numbers, reference, trace, beta, ALPHA, stabilization)
                     for name, ours, theirs in zip("ABCD", blocks, direct):
                         scale = max(np.abs(theirs).max(), np.abs(direct[0]).max())
                         error = np.abs(ours[0] - theirs).max()
@@ -274,9 +201,9 @@ def test_interior_trace_matrix_is_nonsingular(dim, name):
 
     ``S_II`` is not symmetric. Its 2-norm condition number is at most ``1e6`` for p <= 4
     (2D) and p <= 3 (3D) with the nodal and the orthonormal trace basis; the largest
-    value found is about 2e2 (see the report). With the upwind tau the outflow
-    boundary faces have zero columns in the matrix of all faces, which is therefore
-    singular; those faces are prescribed and not solved for.
+    value found is 174 (perturbed Kuhn box, d = 3; see the report). With the upwind
+    tau the outflow boundary faces have zero columns in the matrix of all faces,
+    which is therefore singular; those faces are prescribed and not solved for.
     """
     mesh = named_mesh(name, dim)
     if mesh.boundary_faces.all():
@@ -382,7 +309,8 @@ def test_h_convergence_on_the_kuhn_box(dim, order):
     ``u = exp((x_1 + ... + x_d) / 2) cos(pi x_1 / 2)``, ``alpha = 1``, upwind ``tau``,
     ``beta = (1, 0.45)`` or ``(1, 0.65, 0.3)``, oblique to every face of the Kuhn
     mesh. The theory of upwind DG guarantees only ``p + 1/2``; these meshes give
-    ``p + 1`` (rates 1.96 to 4.01 measured, see the report).
+    ``p + 1``: rates 1.90 to 4.01 up to N = 32 in 2D and N = 8 in 3D, with the
+    error at most 1.62 times the projection error (see the report).
     """
     subdivisions = H_SUBDIVISIONS[dim]
     errors, projection_errors = transport_convergence(dim, order, subdivisions, beta=BETA[dim])
