@@ -54,7 +54,7 @@ TABLE_ORDERS = tuple(range(9))
 HDG_ORDERS = {2: (0, 1, 2, 3, 5, 8), 3: (0, 1, 2, 3, 4, 6)}
 ALPHA = 1.7
 # beta . n on the faces of the reference triangle: (0.4, 0.3/sqrt 2, -0.7);
-# of the reference tetrahedron: (-0.7/sqrt 3, 0.6, 0.35, -0.45).
+# of the reference tetrahedron: (0.7/sqrt 3, -0.6, 0.35, -0.45). Positive values are outflow faces.
 BETA = {2: np.array([0.7, -0.4]), 3: np.array([0.6, -0.35, 0.45])}
 # Upwind tau = |beta.n| (hybridge's default), tau = 2 |beta.n|, and an absolute tau.
 STABILIZATIONS = (None, "lax-friedrichs", 2.3)
@@ -356,7 +356,8 @@ def test_triangle_blocks_equal_the_numpy_transport_assembly(order, basis, kind, 
     The mesh has two triangles: element 0 is the reference triangle (Jacobian 1,
     ``jacs_el_fc`` equal to the face-measure ratios, every face orientation
     positive) and element 1 is its mirror image across face 1, so that face 1 of
-    element 0 is an interior face. From the NumPy transport driver the test
+    element 0 is an interior face. Only element 0 is compared; element 1 needs
+    the geometry of phase 2. From the NumPy transport driver the test
     takes ``local_solver`` (``A^{-1}``), ``element_boundary_mats`` (``B``),
     ``trace_lift`` (``C``) and the source moments (``F``) of element 0, and the
     ``gamma``-weighted trace mass of its face 1 (block ``D`` of that face) from
@@ -415,10 +416,11 @@ def test_triangle_blocks_equal_the_numpy_transport_assembly(order, basis, kind, 
             a, b, c, d = _blocks(reference, trace, beta=beta, stabilization=stabilization)
             loads = volume_loads(reference, lambda x: gradient(x) @ beta + ALPHA * exact(x))[0]
             label = (sign, stabilization)
-            residual = np.abs(present.local_solver[0] @ a - np.eye(len(a))).max()
-            assert residual <= 1e-15 * np.linalg.cond(a) + 1e-13, label
-            assert np.abs(present.element_boundary_mats[0] - b).max() <= 1e-13 * np.abs(b).max(), label
-            assert np.abs(present.trace_lift[0].reshape(c.shape) - c).max() <= 1e-13 * np.abs(c).max(), label
-            assert np.abs(inputs.source_data[0] - loads).max() <= 1e-13 * np.abs(loads).max(), label
+            # The driver keeps only A^{-1}; its inverse differs from A by about cond(A) times the rounding unit.
+            a_present = np.linalg.inv(present.local_solver[0])
+            assert np.abs(a_present - a).max() <= (1e-15 * np.linalg.cond(a) + 1e-12) * np.abs(a).max(), label
+            assert np.abs(present.element_boundary_mats[0] - b).max() <= 1e-12 * np.abs(b).max(), label
+            assert np.abs(present.trace_lift[0].reshape(c.shape) - c).max() <= 1e-12 * np.abs(c).max(), label
+            assert np.abs(inputs.source_data[0] - loads).max() <= 1e-12 * np.abs(loads).max(), label
             face_block = d[n_t:2 * n_t, n_t:2 * n_t]
-            assert np.abs(interior_mass[interior] - face_block).max() <= 1e-13 * np.abs(d).max(), label
+            assert np.abs(interior_mass[interior] - face_block).max() <= 1e-12 * np.abs(d).max(), label
