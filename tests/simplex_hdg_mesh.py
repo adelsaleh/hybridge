@@ -428,6 +428,23 @@ def evaluate_cells(mesh: SimplexMesh, reference: ReferenceElementData, coefficie
     return np.einsum("kni,ki->kn", basis, coefficients)
 
 
+def evaluate_at_points(mesh: SimplexMesh, reference: ReferenceElementData, coefficients, points) -> np.ndarray:
+    """Values of ``u_h`` at scattered physical points ``(n, d)``, each in a cell that contains it; shape ``(n,)``.
+
+    The cell is found by :func:`cells_containing`; points outside the mesh get ``nan``.
+    """
+    points = np.asarray(points, dtype=np.float64)
+    cell = cells_containing(mesh, points)
+    inside = cell >= 0
+    values = np.full(len(points), np.nan)
+    owner = cell[inside]
+    shifted = points[inside] - mesh.affine_shifts[owner]
+    xi = np.linalg.solve(mesh.affine_matrices[owner], shifted[:, :, None])[:, :, 0]
+    basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, xi), dtype=np.float64)
+    values[inside] = np.einsum("ni,ni->n", basis, np.asarray(coefficients)[owner])
+    return values
+
+
 def l2_error(mesh: SimplexMesh, reference: ReferenceElementData, coefficients, exact, rule) -> float:
     """Return ``||u_h - u||_{L2}`` over the mesh with the reference volume rule ``rule = (points, weights)``."""
     points, weights = rule
