@@ -45,5 +45,7 @@ def test_cubic_solution_is_reproduced_from_degree_three(dim, tmp_path):
     assert record["degrees"]["1"]["l2_error"] > 1e-3
     assert record["degrees"]["3"]["l2_error"] < 1e-12
     assert record["degrees"]["3"]["max_error"] < 1e-11
+    assert record["degrees"]["1"]["trace_l2_error"] > 1e-3
+    assert record["degrees"]["3"]["trace_l2_error"] < 1e-12  # the trace of a cubic lies in the trace space
     for name in ("alpha_u_f.pdf", "degree-01.png", "degree-03.png", "summary.png"):
         assert (out / name).stat().st_size > 1000
