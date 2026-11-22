@@ -37,6 +37,7 @@ import numpy as np
 
 from hybridge.core.mesh import DGMesh, as_dg_mesh
 from hybridge.core.quadrature import ReferenceElementData
+from hybridge.core.simplex.nodes import simplex_nodes
 from hybridge.core.space import DGField, DGSpace, VectorDGField
 from hybridge.runtime.optional import array_module, require_cupy
 from hybridge.runtime.precision import REAL_DTYPE
@@ -107,11 +108,6 @@ def _fused_device_path(array) -> bool:
     return array_module(array) is not np and array.dtype == np.float64
 
 
-# Reference triangle vertices, matching ``DGMesh`` (local edge i runs from
-# vertex i to vertex (i + 1) % 3).
-_REFERENCE_VERTICES = np.array([[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0]], dtype=np.float64)
-
-
 def lattice_reference_nodes(degree: int) -> np.ndarray:
     """Return the equispaced degree-``degree`` lattice of the reference triangle.
 
@@ -119,25 +115,16 @@ def lattice_reference_nodes(degree: int) -> np.ndarray:
     vertices, then the ``degree - 1`` interior nodes of local edges 0, 1, 2
     (each listed from the edge's start vertex to its end vertex), then the
     interior nodes. Local edge ``i`` joins vertex ``i`` to vertex
-    ``(i + 1) % 3``, as in :class:`~hybridge.core.mesh.DGMesh`.
+    ``(i + 1) % 3``, as in :class:`~hybridge.core.mesh.DGMesh`. The array is
+    ``simplex_nodes("equispaced", 2, degree)`` of
+    :mod:`hybridge.core.simplex.nodes`, which computes these nodes with the same
+    floating-point expressions as the former implementation of this function.
+    Raises ``ValueError`` for ``degree < 1``.
     """
     k = int(degree)
     if k < 1:
         raise ValueError(f"continuous Lagrange degree must be at least 1; got {degree}")
-    nodes = [vertex for vertex in _REFERENCE_VERTICES]
-    for edge in range(3):
-        start = _REFERENCE_VERTICES[edge]
-        end = _REFERENCE_VERTICES[(edge + 1) % 3]
-        for j in range(1, k):
-            nodes.append(start + (j / k) * (end - start))
-    for b in range(1, k):
-        for a in range(1, k - b):
-            nodes.append(np.array([-1.0 + 2.0 * a / k, -1.0 + 2.0 * b / k]))
-    result = np.ascontiguousarray(np.asarray(nodes, dtype=np.float64))
-    expected = (k + 1) * (k + 2) // 2
-    if result.shape != (expected, 2):  # pragma: no cover - construction invariant
-        raise AssertionError(f"lattice has {result.shape[0]} nodes; expected {expected}")
-    return result
+    return simplex_nodes("equispaced", 2, k)
 
 
 class _IdentityCache:

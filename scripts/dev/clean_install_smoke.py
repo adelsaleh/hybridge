@@ -43,6 +43,21 @@ space = DGSpace(rectangle_mesh(1, 1), 1, basis_type="dub_orth")
 if space.mesh.num_tri != 2:
     raise RuntimeError("installed-wheel DG mesh/space smoke produced an unexpected mesh")
 
+# The Fekete table is package data: it must be read from the installed wheel, not recomputed.
+import importlib.resources
+import warnings
+
+from hybridge.core.simplex import nodes as simplex_nodes_module
+
+table_path = Path(str(importlib.resources.files("hybridge.core.simplex").joinpath("data/fekete.json"))).resolve()
+table_path.relative_to(site_root)
+fekete_entries = len(simplex_nodes_module.fekete_table()["entries"])
+with warnings.catch_warnings():
+    warnings.simplefilter("error", RuntimeWarning)  # a computed (not stored) set warns
+    fekete_nodes = simplex_nodes_module.simplex_nodes("fekete", 3, 4)
+if fekete_entries == 0 or fekete_nodes.shape != (35, 3):
+    raise RuntimeError("installed-wheel Fekete table is missing or gave an unexpected node set")
+
 print(
     json.dumps(
         {
@@ -51,6 +66,7 @@ print(
             "solver_backend": solve.backend,
             "physical_relative_residual": solve.physical_relative_residual_norm,
             "triangles": space.mesh.num_tri,
+            "fekete_entries": fekete_entries,
         },
         sort_keys=True,
     )

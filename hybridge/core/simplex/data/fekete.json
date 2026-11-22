@@ -1,0 +1,4358 @@
+{
+ "description": "Fekete node sets of the reference triangle and tetrahedron of hybridge.core.simplex.nodes. Each orbit lists its type, one representative in barycentric coordinates (lambda_0, ..., lambda_d) and the node indices of its points in the order of the distinct permutations of its label pattern.",
+ "generator": {
+  "script": "scripts/dev/compute_fekete_points.py",
+  "hybridge_commit": "f0ba6b0b348e33cfd8084929c241857c6f5f912b",
+  "uncommitted_changes": true,
+  "nodes_module_sha256": "ea068fa70291e008b5b2c4f65983308833692b2d5a849def29d2d05d63bee077",
+  "python": "3.12.4",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "created_utc": "2026-11-22T14:13:10Z",
+  "total_seconds": 10.960679786279798
+ },
+ "entries": {
+  "fekete/d2/p1": {
+   "dim": 2,
+   "order": 1,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    }
+   ],
+   "log_abs_det": 1.9944920232821373,
+   "start_log_abs_det": 1.9944920232821373,
+   "other_starts": {
+    "recursive interior": 1.9944920232821373
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.0000000000000009,
+   "seconds": 0.22233201190829277
+  },
+  "fekete_free/d2/p1": {
+   "dim": 2,
+   "order": 1,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    }
+   ],
+   "log_abs_det": 1.9944920232821373,
+   "start_log_abs_det": 1.9944920232821373,
+   "other_starts": {
+    "warp_blend": 1.9944920232821373
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.0000000000000009,
+   "seconds": 0.05281064007431269
+  },
+  "fekete/d2/p2": {
+   "dim": 2,
+   "order": 2,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [3, 5, 4],
+     "free": false
+    }
+   ],
+   "log_abs_det": 6.194761357851963,
+   "start_log_abs_det": 6.194761357851963,
+   "other_starts": {
+    "recursive interior": 6.194761357851963
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.666666666666667,
+   "seconds": 0.0614874167367816
+  },
+  "fekete_free/d2/p2": {
+   "dim": 2,
+   "order": 2,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [3, 5, 4],
+     "free": true
+    }
+   ],
+   "log_abs_det": 6.194761357851963,
+   "start_log_abs_det": 6.194761357851963,
+   "other_starts": {
+    "warp_blend": 6.194761357851963
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.666666666666667,
+   "seconds": 0.06219849269837141
+  },
+  "fekete/d2/p3": {
+   "dim": 2,
+   "order": 3,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.27639320225002095, 0.723606797749979],
+     "nodes": [6, 5, 7, 4, 8, 3],
+     "free": false
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [9],
+     "free": true
+    }
+   ],
+   "log_abs_det": 12.726717339760347,
+   "start_log_abs_det": 12.726717339760347,
+   "other_starts": {
+    "recursive interior": 12.726717339760347
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.112544390772777,
+   "seconds": 0.059508311562240124
+  },
+  "fekete_free/d2/p3": {
+   "dim": 2,
+   "order": 3,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.27639320225002095, 0.723606797749979],
+     "nodes": [6, 5, 7, 4, 8, 3],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [9],
+     "free": true
+    }
+   ],
+   "log_abs_det": 12.726717339760347,
+   "start_log_abs_det": 12.726717339760347,
+   "other_starts": {
+    "warp_blend": 12.726717339760347
+   },
+   "projected_gradient_norm": 1.3822276656583199e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.112544390772777,
+   "seconds": 0.060561561957001686
+  },
+  "fekete/d2/p4": {
+   "dim": 2,
+   "order": 4,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.17267316464601135, 0.8273268353539887],
+     "nodes": [8, 6, 9, 5, 11, 3],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [4, 10, 7],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.21654236465910046, 0.21654236465910046, 0.566915270681799],
+     "nodes": [14, 13, 12],
+     "free": true
+    }
+   ],
+   "log_abs_det": 21.80060161651406,
+   "start_log_abs_det": 21.791304412277903,
+   "other_starts": {
+    "recursive interior": 21.80060161651406
+   },
+   "projected_gradient_norm": 8.298917109073045e-15,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 5,
+    "evaluations": 13,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 2.7293639555896476,
+   "seconds": 0.06802493520081043
+  },
+  "fekete_free/d2/p4": {
+   "dim": 2,
+   "order": 4,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.17267316464601135, 0.8273268353539887],
+     "nodes": [8, 6, 9, 5, 11, 3],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [4, 10, 7],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.21654236465910048, 0.21654236465910048, 0.566915270681799],
+     "nodes": [14, 13, 12],
+     "free": true
+    }
+   ],
+   "log_abs_det": 21.80060161651406,
+   "start_log_abs_det": 21.80060161651406,
+   "other_starts": {
+    "warp_blend": 21.80060161651406
+   },
+   "projected_gradient_norm": 1.917910275039958e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.7293639555896476,
+   "seconds": 0.06407620012760162
+  },
+  "fekete/d2/p5": {
+   "dim": 2,
+   "order": 5,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.11747233803526763, 0.8825276619647324],
+     "nodes": [10, 7, 11, 6, 14, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35738424175967715, 0.6426157582403229],
+     "nodes": [9, 8, 12, 5, 13, 4],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.14801947131513385, 0.14801947131513385, 0.7039610573697324],
+     "nodes": [20, 17, 15],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.420825539292557, 0.420825539292557, 0.158348921414886],
+     "nodes": [16, 18, 19],
+     "free": true
+    }
+   ],
+   "log_abs_det": 33.57920044842605,
+   "start_log_abs_det": 33.54075524235077,
+   "other_starts": {
+    "recursive interior": 33.57920044842605
+   },
+   "projected_gradient_norm": 2.4896751327219135e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 7,
+    "evaluations": 8,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 3.610808661779216,
+   "seconds": 0.06646941415965557
+  },
+  "fekete_free/d2/p5": {
+   "dim": 2,
+   "order": 5,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.11747233803526763, 0.8825276619647324],
+     "nodes": [10, 7, 11, 6, 14, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35738424175967715, 0.6426157582403229],
+     "nodes": [9, 8, 12, 5, 13, 4],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.14801947131513382, 0.14801947131513382, 0.7039610573697324],
+     "nodes": [20, 17, 15],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.42082553929255706, 0.42082553929255706, 0.15834892141488588],
+     "nodes": [16, 18, 19],
+     "free": true
+    }
+   ],
+   "log_abs_det": 33.57920044842606,
+   "start_log_abs_det": 33.57920044842606,
+   "other_starts": {
+    "warp_blend": 33.57920044842605
+   },
+   "projected_gradient_norm": 1.0907941216942163e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 3.6108086617792208,
+   "seconds": 0.06444431841373444
+  },
+  "fekete/d2/p6": {
+   "dim": 2,
+   "order": 6,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.08488805186071652, 0.9151119481392835],
+     "nodes": [12, 8, 13, 7, 17, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2655756032646428, 0.7344243967353572],
+     "nodes": [11, 9, 14, 6, 16, 4],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [5, 15, 10],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.10633546837602398, 0.10633546837602398, 0.787329063247952],
+     "nodes": [27, 21, 18],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.11718091712788217, 0.3162697959354518, 0.5665492869366661],
+     "nodes": [26, 24, 25, 20, 22, 19],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [23],
+     "free": true
+    }
+   ],
+   "log_abs_det": 48.19573444783141,
+   "start_log_abs_det": 48.12870269291714,
+   "other_starts": {
+    "recursive interior": 48.19573444783141
+   },
+   "projected_gradient_norm": 3.419486915845482e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 7,
+    "evaluations": 8,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 4.171165314366106,
+   "seconds": 0.07066756766289473
+  },
+  "fekete_free/d2/p6": {
+   "dim": 2,
+   "order": 6,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.08488805186071652, 0.9151119481392835],
+     "nodes": [12, 8, 13, 7, 17, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2655756032646428, 0.7344243967353572],
+     "nodes": [11, 9, 14, 6, 16, 4],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [5, 15, 10],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.10633546837602398, 0.10633546837602398, 0.787329063247952],
+     "nodes": [27, 21, 18],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.11718091712788214, 0.3162697959354518, 0.5665492869366661],
+     "nodes": [26, 24, 25, 20, 22, 19],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [23],
+     "free": true
+    }
+   ],
+   "log_abs_det": 48.19573444783141,
+   "start_log_abs_det": 48.19573444783141,
+   "other_starts": {
+    "warp_blend": 48.19573444783141
+   },
+   "projected_gradient_norm": 3.7969627442180354e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 4.171165314366106,
+   "seconds": 0.06921525951474905
+  },
+  "fekete/d2/p7": {
+   "dim": 2,
+   "order": 7,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.06412992574519594, 0.9358700742548041],
+     "nodes": [14, 9, 15, 8, 20, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2041499092834289, 0.7958500907165711],
+     "nodes": [13, 10, 16, 7, 19, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.39535039104876046, 0.6046496089512395],
+     "nodes": [12, 11, 17, 6, 18, 5],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.07958850688018435, 0.07958850688018435, 0.8408229862396313],
+     "nodes": [35, 25, 21],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.08894304745543404, 0.24336464311503872, 0.6676923094295273],
+     "nodes": [34, 29, 33, 24, 26, 22],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4539853440609244, 0.4539853440609244, 0.09202931187815122],
+     "nodes": [23, 30, 32],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.26320910495693195, 0.26320910495693195, 0.4735817900861361],
+     "nodes": [31, 28, 27],
+     "free": true
+    }
+   ],
+   "log_abs_det": 65.7622424269004,
+   "start_log_abs_det": 65.63526771388916,
+   "other_starts": {
+    "recursive interior": 65.7622424269004
+   },
+   "projected_gradient_norm": 5.762057497804562e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 12,
+    "evaluations": 14,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 4.928481918698772,
+   "seconds": 0.07709065917879343
+  },
+  "fekete_free/d2/p7": {
+   "dim": 2,
+   "order": 7,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.06412992574519594, 0.9358700742548041],
+     "nodes": [14, 9, 15, 8, 20, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2041499092834289, 0.7958500907165711],
+     "nodes": [13, 10, 16, 7, 19, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.39535039104876046, 0.6046496089512395],
+     "nodes": [12, 11, 17, 6, 18, 5],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.07958850688018437, 0.07958850688018437, 0.8408229862396313],
+     "nodes": [35, 25, 21],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.08894304745543402, 0.24336464311503872, 0.6676923094295273],
+     "nodes": [34, 29, 33, 24, 26, 22],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4539853440609244, 0.4539853440609244, 0.09202931187815122],
+     "nodes": [23, 30, 32],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.26320910495693195, 0.26320910495693195, 0.4735817900861361],
+     "nodes": [31, 28, 27],
+     "free": true
+    }
+   ],
+   "log_abs_det": 65.7622424269004,
+   "start_log_abs_det": 65.7622424269004,
+   "other_starts": {
+    "warp_blend": 65.7622424269004
+   },
+   "projected_gradient_norm": 1.4414996973854954e-12,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 4.928481918698772,
+   "seconds": 0.07272162195295095
+  },
+  "fekete/d2/p8": {
+   "dim": 2,
+   "order": 8,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.050121002294269856, 0.9498789977057301],
+     "nodes": [16, 10, 17, 9, 23, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.16140686024463147, 0.8385931397553685],
+     "nodes": [15, 11, 18, 8, 22, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.318441268086911, 0.681558731913089],
+     "nodes": [14, 12, 19, 7, 21, 5],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [6, 20, 13],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.06157421796042387, 0.06157421796042387, 0.8768515640791522],
+     "nodes": [44, 29, 24],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.06925625617396222, 0.1917743373116781, 0.7389694065143597],
+     "nodes": [43, 34, 42, 28, 30, 25],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07304590716854177, 0.36724026350062927, 0.5597138293308289],
+     "nodes": [41, 38, 39, 27, 35, 26],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.21022161435326175, 0.21022161435326175, 0.5795567712934765],
+     "nodes": [40, 33, 31],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.39181716668345684, 0.39181716668345684, 0.21636566663308632],
+     "nodes": [32, 36, 37],
+     "free": true
+    }
+   ],
+   "log_abs_det": 86.37468691803122,
+   "start_log_abs_det": 86.1956989851692,
+   "other_starts": {
+    "recursive interior": 86.37468691803122
+   },
+   "projected_gradient_norm": 7.127631818093505e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 13,
+    "evaluations": 15,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 5.9048523862908295,
+   "seconds": 0.08870651759207249
+  },
+  "fekete_free/d2/p8": {
+   "dim": 2,
+   "order": 8,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.050121002294269856, 0.9498789977057301],
+     "nodes": [16, 10, 17, 9, 23, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.16140686024463147, 0.8385931397553685],
+     "nodes": [15, 11, 18, 8, 22, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.318441268086911, 0.681558731913089],
+     "nodes": [14, 12, 19, 7, 21, 5],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [6, 20, 13],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.061574217960423894, 0.061574217960423894, 0.8768515640791522],
+     "nodes": [44, 29, 24],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.06925625617396225, 0.1917743373116781, 0.7389694065143597],
+     "nodes": [43, 34, 42, 28, 30, 25],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07304590716854176, 0.36724026350062927, 0.5597138293308289],
+     "nodes": [41, 38, 39, 27, 35, 26],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.21022161435326175, 0.21022161435326175, 0.5795567712934765],
+     "nodes": [40, 33, 31],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.3918171666834569, 0.3918171666834569, 0.2163656666330862],
+     "nodes": [32, 36, 37],
+     "free": true
+    }
+   ],
+   "log_abs_det": 86.37468691803122,
+   "start_log_abs_det": 86.37468691803122,
+   "other_starts": {
+    "warp_blend": 86.3746869180312
+   },
+   "projected_gradient_norm": 3.6501357492113584e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 5.904852386290837,
+   "seconds": 0.08366528805345297
+  },
+  "fekete/d2/p9": {
+   "dim": 2,
+   "order": 9,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.04023304591676957, 0.9597669540832304],
+     "nodes": [18, 11, 19, 10, 26, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.130613067447248, 0.869386932552752],
+     "nodes": [17, 12, 20, 9, 25, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.26103752509477796, 0.738962474905222],
+     "nodes": [16, 13, 21, 8, 24, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.4173605211668065, 0.5826394788331934],
+     "nodes": [15, 14, 22, 7, 23, 6],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.048934569554733694, 0.048934569554733694, 0.9021308608905326],
+     "nodes": [54, 33, 27],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.05517580791650341, 0.15439019441047436, 0.7904339976730221],
+     "nodes": [53, 39, 52, 32, 34, 28],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.05885648789427287, 0.3010242109873133, 0.6401193011184138],
+     "nodes": [51, 44, 49, 31, 40, 29],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4699587644167645, 0.4699587644167645, 0.06008247116647103],
+     "nodes": [30, 45, 48],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.17043182009314317, 0.17043182009314317, 0.6591363598137137],
+     "nodes": [50, 38, 35],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1784337588079273, 0.32524348995619423, 0.49632275123587843],
+     "nodes": [47, 43, 46, 37, 41, 36],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [42],
+     "free": true
+    }
+   ],
+   "log_abs_det": 110.11638076159177,
+   "start_log_abs_det": 109.85366007388723,
+   "other_starts": {
+    "recursive interior": 110.11638076159176
+   },
+   "projected_gradient_norm": 8.923417560424696e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 17,
+    "evaluations": 19,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 6.80319616606084,
+   "seconds": 0.10980133432894945
+  },
+  "fekete_free/d2/p9": {
+   "dim": 2,
+   "order": 9,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.040233045916770606, 0.9597669540832294],
+     "nodes": [18, 11, 19, 10, 26, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.13061306744724746, 0.8693869325527526],
+     "nodes": [17, 12, 20, 9, 25, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.26103752509477773, 0.7389624749052223],
+     "nodes": [16, 13, 21, 8, 24, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.41736052116680644, 0.5826394788331936],
+     "nodes": [15, 14, 22, 7, 23, 6],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.04893456955473367, 0.04893456955473367, 0.9021308608905326],
+     "nodes": [54, 33, 27],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.05517580791650342, 0.1543901944104743, 0.7904339976730222],
+     "nodes": [53, 39, 52, 32, 34, 28],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.05885648789427289, 0.3010242109873133, 0.6401193011184138],
+     "nodes": [51, 44, 49, 31, 40, 29],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4699587644167645, 0.4699587644167645, 0.06008247116647103],
+     "nodes": [30, 45, 48],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.17043182009314317, 0.17043182009314317, 0.6591363598137137],
+     "nodes": [50, 38, 35],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.17843375880792722, 0.3252434899561943, 0.4963227512358785],
+     "nodes": [47, 43, 46, 37, 41, 36],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [42],
+     "free": true
+    }
+   ],
+   "log_abs_det": 110.11638076159176,
+   "start_log_abs_det": 109.85366007388723,
+   "other_starts": {
+    "fekete": 110.11638076159174
+   },
+   "projected_gradient_norm": 1.0087763957500329e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 19,
+    "evaluations": 20,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 6.80319616606086,
+   "seconds": 0.09198867250233889
+  },
+  "fekete/d2/p10": {
+   "dim": 2,
+   "order": 10,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.032999284795970196, 0.9670007152040299],
+     "nodes": [20, 12, 21, 11, 29, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.10775826316842796, 0.892241736831572],
+     "nodes": [19, 13, 22, 10, 28, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.21738233650189753, 0.7826176634981025],
+     "nodes": [18, 14, 23, 9, 27, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35212093220653007, 0.6478790677934699],
+     "nodes": [17, 15, 24, 8, 26, 6],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [7, 25, 16],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.039757698344856054, 0.039757698344856054, 0.9204846033102879],
+     "nodes": [65, 37, 30],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04484046909888408, 0.12663286553480615, 0.8285266653663098],
+     "nodes": [64, 44, 63, 36, 38, 31],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04815844363062837, 0.2501276619107099, 0.7017138944586617],
+     "nodes": [62, 50, 60, 35, 45, 32],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04981334506519473, 0.3972226883626488, 0.5529639665721564],
+     "nodes": [59, 55, 56, 34, 51, 33],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.1402669565469637, 0.1402669565469637, 0.7194660869060726],
+     "nodes": [61, 43, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14841000524992465, 0.2721868240558658, 0.5794031706942095],
+     "nodes": [58, 49, 57, 42, 46, 40],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4244361566385097, 0.4244361566385097, 0.1511276867229806],
+     "nodes": [41, 52, 54],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.28323397407105344, 0.28323397407105344, 0.4335320518578931],
+     "nodes": [53, 48, 47],
+     "free": true
+    }
+   ],
+   "log_abs_det": 137.06041597770934,
+   "start_log_abs_det": 136.73247774982795,
+   "other_starts": {
+    "recursive interior": 137.06041597770934
+   },
+   "projected_gradient_norm": 3.097938572338421e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 19,
+    "evaluations": 32,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 7.997139098336465,
+   "seconds": 0.1367444721981883
+  },
+  "fekete_free/d2/p10": {
+   "dim": 2,
+   "order": 10,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.032999284795970196, 0.9670007152040299],
+     "nodes": [20, 12, 21, 11, 29, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.10775826316842796, 0.892241736831572],
+     "nodes": [19, 13, 22, 10, 28, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.21738233650189753, 0.7826176634981025],
+     "nodes": [18, 14, 23, 9, 27, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35212093220653007, 0.6478790677934699],
+     "nodes": [17, 15, 24, 8, 26, 6],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [7, 25, 16],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.03975769834485604, 0.03975769834485604, 0.9204846033102879],
+     "nodes": [65, 37, 30],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04484046909888406, 0.12663286553480613, 0.8285266653663098],
+     "nodes": [64, 44, 63, 36, 38, 31],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04815844363062838, 0.2501276619107099, 0.7017138944586617],
+     "nodes": [62, 50, 60, 35, 45, 32],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04981334506519475, 0.3972226883626488, 0.5529639665721564],
+     "nodes": [59, 55, 56, 34, 51, 33],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.1402669565469637, 0.1402669565469637, 0.7194660869060726],
+     "nodes": [61, 43, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14841000524992465, 0.2721868240558658, 0.5794031706942095],
+     "nodes": [58, 49, 57, 42, 46, 40],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.42443615663850975, 0.42443615663850975, 0.1511276867229805],
+     "nodes": [41, 52, 54],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.28323397407105344, 0.28323397407105344, 0.4335320518578931],
+     "nodes": [53, 48, 47],
+     "free": true
+    }
+   ],
+   "log_abs_det": 137.06041597770934,
+   "start_log_abs_det": 137.06041597770934,
+   "other_starts": {
+    "warp_blend": 137.06041597770934
+   },
+   "projected_gradient_norm": 1.982296271574313e-12,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 7.997139098336475,
+   "seconds": 0.1105940667912364
+  },
+  "fekete/d2/p11": {
+   "dim": 2,
+   "order": 11,
+   "variant": "fekete",
+   "start": "recursive interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.027550363888559415, 0.9724496361114405],
+     "nodes": [22, 13, 23, 12, 32, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.09036033917799596, 0.9096396608220041],
+     "nodes": [21, 14, 24, 11, 31, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.1835619234840697, 0.8164380765159303],
+     "nodes": [20, 15, 25, 10, 30, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.3002345295173252, 0.6997654704826748],
+     "nodes": [19, 16, 26, 9, 29, 6],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.43172353357253634, 0.5682764664274637],
+     "nodes": [18, 17, 27, 8, 28, 7],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.03290129406767989, 0.03290129406767989, 0.9341974118646402],
+     "nodes": [77, 41, 33],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03707073478678925, 0.10555302344658618, 0.8573762417666246],
+     "nodes": [76, 49, 75, 40, 42, 34],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03997643313810228, 0.21051989455345876, 0.749503672308439],
+     "nodes": [74, 56, 72, 39, 50, 35],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04171231598545862, 0.3385614357045743, 0.619726248309967],
+     "nodes": [71, 62, 68, 38, 57, 36],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4788548708642413, 0.4788548708642413, 0.042290258271517445],
+     "nodes": [37, 63, 67],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.11706807419408072, 0.11706807419408072, 0.7658638516118386],
+     "nodes": [73, 48, 43],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.12469057814881969, 0.2299852292803342, 0.6453241925708462],
+     "nodes": [70, 55, 69, 47, 51, 44],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1285038456354267, 0.36430537346042774, 0.5071907809041456],
+     "nodes": [66, 61, 64, 46, 58, 45],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.24166978495896918, 0.24166978495896918, 0.5166604300820616],
+     "nodes": [65, 54, 52],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.3772135817933017, 0.3772135817933017, 0.24557283641339656],
+     "nodes": [53, 59, 60],
+     "free": true
+    }
+   ],
+   "log_abs_det": 167.27145245361663,
+   "start_log_abs_det": 166.83145840955632,
+   "other_starts": {
+    "warp_blend interior": 167.2714524536166
+   },
+   "projected_gradient_norm": 2.4472091020300013e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 23,
+    "evaluations": 24,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 9.518810197835492,
+   "seconds": 0.18279599118977785
+  },
+  "fekete_free/d2/p11": {
+   "dim": 2,
+   "order": 11,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.027550363888558818, 0.9724496361114412],
+     "nodes": [22, 13, 23, 12, 32, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.09036033917799662, 0.9096396608220034],
+     "nodes": [21, 14, 24, 11, 31, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.1835619234840696, 0.8164380765159304],
+     "nodes": [20, 15, 25, 10, 30, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.3002345295173255, 0.6997654704826746],
+     "nodes": [19, 16, 26, 9, 29, 6],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.43172353357253623, 0.5682764664274638],
+     "nodes": [18, 17, 27, 8, 28, 7],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.032901294067679894, 0.032901294067679894, 0.9341974118646402],
+     "nodes": [77, 41, 33],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03707073478678926, 0.10555302344658617, 0.8573762417666246],
+     "nodes": [76, 49, 75, 40, 42, 34],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03997643313810235, 0.21051989455345868, 0.749503672308439],
+     "nodes": [74, 56, 72, 39, 50, 35],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.04171231598545858, 0.33856143570457425, 0.6197262483099671],
+     "nodes": [71, 62, 68, 38, 57, 36],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.47885487086424133, 0.47885487086424133, 0.042290258271517334],
+     "nodes": [37, 63, 67],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.11706807419408077, 0.11706807419408077, 0.7658638516118385],
+     "nodes": [73, 48, 43],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.12469057814881973, 0.2299852292803342, 0.6453241925708462],
+     "nodes": [70, 55, 69, 47, 51, 44],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1285038456354267, 0.3643053734604278, 0.5071907809041455],
+     "nodes": [66, 61, 64, 46, 58, 45],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.24166978495896924, 0.24166978495896924, 0.5166604300820615],
+     "nodes": [65, 54, 52],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.3772135817933017, 0.3772135817933017, 0.24557283641339656],
+     "nodes": [53, 59, 60],
+     "free": true
+    }
+   ],
+   "log_abs_det": 167.27145245361666,
+   "start_log_abs_det": 166.797529029729,
+   "other_starts": {
+    "fekete": 167.27145245361663
+   },
+   "projected_gradient_norm": 7.27685273149703e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 25,
+    "evaluations": 35,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 9.518810197835483,
+   "seconds": 0.14754336513578892
+  },
+  "fekete/d2/p12": {
+   "dim": 2,
+   "order": 12,
+   "variant": "fekete",
+   "start": "recursive interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.023345076678917664, 0.9766549233210824],
+     "nodes": [24, 14, 25, 13, 35, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.07682621767406272, 0.9231737823259373],
+     "nodes": [23, 15, 26, 12, 34, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.15690576545912166, 0.8430942345408783],
+     "nodes": [22, 16, 27, 11, 33, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2585450894543316, 0.7414549105456685],
+     "nodes": [21, 17, 28, 10, 32, 6],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.37535653494688, 0.6246434650531201],
+     "nodes": [20, 18, 29, 9, 31, 7],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [8, 30, 19],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.027652994533692066, 0.027652994533692066, 0.9446940109326158],
+     "nodes": [90, 45, 36],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.031103848498183696, 0.08921710154250648, 0.8796790499593099],
+     "nodes": [89, 54, 88, 44, 46, 37],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03362064194417321, 0.1792690882218046, 0.7871102698340222],
+     "nodes": [87, 62, 85, 43, 55, 38],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03528787391103642, 0.2910815876231587, 0.673630538465805],
+     "nodes": [84, 69, 81, 42, 63, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03611994909989883, 0.41666639154649016, 0.5472136593536111],
+     "nodes": [80, 75, 76, 41, 70, 40],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.09895057261724555, 0.09895057261724555, 0.8020988547655089],
+     "nodes": [86, 53, 47],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1058362630600673, 0.19622592004667738, 0.6979378168932553],
+     "nodes": [83, 61, 82, 52, 56, 48],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.10996548332094196, 0.3145240810529943, 0.5755104356260639],
+     "nodes": [79, 68, 77, 51, 64, 49],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4443288410166835, 0.4443288410166835, 0.11134231796663296],
+     "nodes": [50, 71, 74],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.2075185339005533, 0.2075185339005533, 0.5849629321988934],
+     "nodes": [78, 60, 57],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.21317625621264752, 0.3286230023208709, 0.45820074146648154],
+     "nodes": [73, 67, 72, 59, 65, 58],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [66],
+     "free": true
+    }
+   ],
+   "log_abs_det": 200.80707448411692,
+   "start_log_abs_det": 200.20828889603416,
+   "other_starts": {
+    "warp_blend interior": 200.8070744841169
+   },
+   "projected_gradient_norm": 3.82353870787e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 24,
+    "evaluations": 26,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 11.080391384821667,
+   "seconds": 0.23398803174495697
+  },
+  "fekete_free/d2/p12": {
+   "dim": 2,
+   "order": 12,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.023345076678918063, 0.976654923321082],
+     "nodes": [24, 14, 25, 13, 35, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.07682621767406388, 0.9231737823259362],
+     "nodes": [23, 15, 26, 12, 34, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.15690576545912133, 0.8430942345408787],
+     "nodes": [22, 16, 27, 11, 33, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.25854508945433197, 0.741454910545668],
+     "nodes": [21, 17, 28, 10, 32, 6],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.37535653494688004, 0.62464346505312],
+     "nodes": [20, 18, 29, 9, 31, 7],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [8, 30, 19],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.0276529945336921, 0.0276529945336921, 0.9446940109326158],
+     "nodes": [90, 45, 36],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03110384849818363, 0.08921710154250646, 0.87967904995931],
+     "nodes": [89, 54, 88, 44, 46, 37],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03362064194417321, 0.1792690882218046, 0.7871102698340222],
+     "nodes": [87, 62, 85, 43, 55, 38],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.035287873911036334, 0.29108158762315867, 0.673630538465805],
+     "nodes": [84, 69, 81, 42, 63, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03611994909989884, 0.41666639154649016, 0.5472136593536111],
+     "nodes": [80, 75, 76, 41, 70, 40],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.09895057261724549, 0.09895057261724549, 0.802098854765509],
+     "nodes": [86, 53, 47],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.10583626306006724, 0.1962259200466774, 0.6979378168932554],
+     "nodes": [83, 61, 82, 52, 56, 48],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.10996548332094197, 0.31452408105299423, 0.5755104356260637],
+     "nodes": [79, 68, 77, 51, 64, 49],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4443288410166836, 0.4443288410166836, 0.11134231796663285],
+     "nodes": [50, 71, 74],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.2075185339005533, 0.2075185339005533, 0.5849629321988934],
+     "nodes": [78, 60, 57],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.21317625621264752, 0.32862300232087094, 0.4582007414664815],
+     "nodes": [73, 67, 72, 59, 65, 58],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [66],
+     "free": true
+    }
+   ],
+   "log_abs_det": 200.80707448411695,
+   "start_log_abs_det": 200.24246765968462,
+   "other_starts": {
+    "fekete": 200.80707448411692
+   },
+   "projected_gradient_norm": 4.4966461110185207e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 29,
+    "evaluations": 36,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 11.08039138482168,
+   "seconds": 0.18919425178319216
+  },
+  "fekete/d2/p13": {
+   "dim": 2,
+   "order": 13,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.020032477366369428, 0.9799675226336306],
+     "nodes": [26, 15, 27, 14, 38, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.06609947308482594, 0.9339005269151741],
+     "nodes": [25, 16, 28, 13, 37, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.13556570045433664, 0.8644342995456633],
+     "nodes": [24, 17, 29, 12, 36, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.22468029853567656, 0.7753197014643234],
+     "nodes": [23, 18, 30, 11, 35, 6],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.32863799332864374, 0.6713620066713563],
+     "nodes": [22, 19, 31, 10, 34, 7],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.44183406555814786, 0.5581659344418521],
+     "nodes": [21, 20, 32, 9, 33, 8],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.02355168240530106, 0.02355168240530106, 0.9528966351893979],
+     "nodes": [104, 49, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.02643430770845467, 0.07632832862069873, 0.8972373636708466],
+     "nodes": [103, 59, 102, 48, 50, 40],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.02860798750388102, 0.15427326486870307, 0.8171187476274159],
+     "nodes": [101, 68, 99, 47, 60, 41],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.030147616823616552, 0.2523774640705853, 0.7174749191057982],
+     "nodes": [98, 76, 95, 46, 69, 42],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0310687763148346, 0.3646349079661866, 0.6042963157189788],
+     "nodes": [94, 83, 90, 45, 77, 43],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.48431211931918233, 0.48431211931918233, 0.031375761361635335],
+     "nodes": [44, 84, 89],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.08458931892592586, 0.08458931892592586, 0.8308213621481483],
+     "nodes": [100, 58, 51],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09071013636094183, 0.16898320723775662, 0.7403066564013016],
+     "nodes": [97, 67, 96, 57, 61, 52],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09478321932916384, 0.273345960389677, 0.6318708202811592],
+     "nodes": [93, 75, 91, 56, 70, 53],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09681974238687781, 0.39050382868025274, 0.5126764289328694],
+     "nodes": [88, 82, 85, 55, 78, 54],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.1794612955411974, 0.1794612955411974, 0.6410774089176052],
+     "nodes": [92, 66, 62],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1857577091950283, 0.28734659874956126, 0.5268956920554104],
+     "nodes": [87, 74, 86, 65, 71, 63],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.40607058311953853, 0.40607058311953853, 0.18785883376092294],
+     "nodes": [64, 79, 81],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.29436477382271137, 0.29436477382271137, 0.41127045235457727],
+     "nodes": [80, 73, 72],
+     "free": true
+    }
+   ],
+   "log_abs_det": 237.7188443593064,
+   "start_log_abs_det": 236.93844062474977,
+   "other_starts": {
+    "recursive interior": 237.7188443593064
+   },
+   "projected_gradient_norm": 6.507121230736601e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 28,
+    "evaluations": 32,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 13.23982716384676,
+   "seconds": 0.3412029389292002
+  },
+  "fekete_free/d2/p13": {
+   "dim": 2,
+   "order": 13,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.020032477366369573, 0.9799675226336304],
+     "nodes": [26, 15, 27, 14, 38, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.06609947308482636, 0.9339005269151737],
+     "nodes": [25, 16, 28, 13, 37, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.1355657004543369, 0.8644342995456631],
+     "nodes": [24, 17, 29, 12, 36, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.22468029853567648, 0.7753197014643235],
+     "nodes": [23, 18, 30, 11, 35, 6],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.3286379933286436, 0.6713620066713564],
+     "nodes": [22, 19, 31, 10, 34, 7],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.4418340655581481, 0.5581659344418519],
+     "nodes": [21, 20, 32, 9, 33, 8],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.02355168240530102, 0.02355168240530102, 0.9528966351893979],
+     "nodes": [104, 49, 39],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.026434307708454695, 0.07632832862069872, 0.8972373636708466],
+     "nodes": [103, 59, 102, 48, 50, 40],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.028607987503881015, 0.15427326486870302, 0.8171187476274159],
+     "nodes": [101, 68, 99, 47, 60, 41],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03014761682361654, 0.2523774640705853, 0.7174749191057982],
+     "nodes": [98, 76, 95, 46, 69, 42],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.03106877631483463, 0.36463490796618664, 0.6042963157189787],
+     "nodes": [94, 83, 90, 45, 77, 43],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.48431211931918233, 0.48431211931918233, 0.031375761361635335],
+     "nodes": [44, 84, 89],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.08458931892592593, 0.08458931892592593, 0.8308213621481482],
+     "nodes": [100, 58, 51],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09071013636094179, 0.16898320723775656, 0.7403066564013016],
+     "nodes": [97, 67, 96, 57, 61, 52],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09478321932916378, 0.273345960389677, 0.6318708202811592],
+     "nodes": [93, 75, 91, 56, 70, 53],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.09681974238687781, 0.3905038286802528, 0.5126764289328694],
+     "nodes": [88, 82, 85, 55, 78, 54],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.17946129554119739, 0.17946129554119739, 0.6410774089176052],
+     "nodes": [92, 66, 62],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.18575770919502835, 0.28734659874956126, 0.5268956920554104],
+     "nodes": [87, 74, 86, 65, 71, 63],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.40607058311953853, 0.40607058311953853, 0.18785883376092294],
+     "nodes": [64, 79, 81],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.29436477382271137, 0.29436477382271137, 0.41127045235457727],
+     "nodes": [80, 73, 72],
+     "free": true
+    }
+   ],
+   "log_abs_det": 237.7188443593064,
+   "start_log_abs_det": 236.93844062474977,
+   "other_starts": {
+    "fekete": 237.71884435930636
+   },
+   "projected_gradient_norm": 5.324976570797446e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 30,
+    "evaluations": 32,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 13.239827163846725,
+   "seconds": 0.2469975035637617
+  },
+  "fekete/d2/p14": {
+   "dim": 2,
+   "order": 14,
+   "variant": "fekete",
+   "start": "recursive interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.017377036748080887, 0.9826229632519191],
+     "nodes": [28, 16, 29, 15, 41, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.057458977888512286, 0.9425410221114877],
+     "nodes": [27, 17, 30, 14, 40, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.11824015502409246, 0.8817598449759075],
+     "nodes": [26, 18, 31, 13, 39, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.19687339726507735, 0.8031266027349226],
+     "nodes": [25, 19, 32, 12, 38, 6],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.28968097264316345, 0.7103190273568365],
+     "nodes": [24, 20, 33, 11, 37, 7],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.3923230223181026, 0.6076769776818973],
+     "nodes": [23, 21, 34, 10, 36, 8],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [9, 35, 22],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.02028904566354349, 0.02028904566354349, 0.959421908672913],
+     "nodes": [119, 53, 42],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.022718740512915, 0.06599658986948899, 0.911284669617596],
+     "nodes": [118, 64, 117, 52, 54, 43],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.024598142554338672, 0.13402121486344393, 0.8413806425822175],
+     "nodes": [116, 74, 114, 51, 65, 44],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.02599305731290251, 0.2205585420746361, 0.7534484006124614],
+     "nodes": [113, 83, 110, 50, 75, 45],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.026919349643107368, 0.32101527557972176, 0.6520653747771709],
+     "nodes": [109, 91, 105, 49, 84, 46],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.027382129002810136, 0.43017752913570334, 0.5424403418614866],
+     "nodes": [104, 98, 99, 48, 92, 47],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.07304638214884054, 0.07304638214884054, 0.853907235702319],
+     "nodes": [115, 63, 55],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07845027852797963, 0.1467839309534074, 0.774765790518613],
+     "nodes": [112, 73, 111, 62, 66, 56],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0822976771250407, 0.23916237117518205, 0.6785399516997773],
+     "nodes": [108, 82, 106, 61, 76, 57],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.08460469962331049, 0.3446864679258854, 0.5707088324508041],
+     "nodes": [103, 90, 100, 60, 85, 58],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.457313021110008, 0.457313021110008, 0.08537395777998402],
+     "nodes": [59, 93, 97],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.15631253280266705, 0.15631253280266705, 0.6873749343946659],
+     "nodes": [107, 72, 67],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.1626696507477969, 0.2524572033093825, 0.5848731459428206],
+     "nodes": [102, 81, 101, 71, 77, 68],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.16585165632063617, 0.3605076273507395, 0.47364071632862437],
+     "nodes": [96, 89, 94, 70, 86, 69],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.2604534615903219, 0.2604534615903219, 0.4790930768193562],
+     "nodes": [95, 80, 78],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.3684386356786183, 0.3684386356786183, 0.2631227286427634],
+     "nodes": [79, 87, 88],
+     "free": true
+    }
+   ],
+   "log_abs_det": 278.0531370568449,
+   "start_log_abs_det": 277.0302423469495,
+   "other_starts": {
+    "warp_blend interior": 278.05313705684483
+   },
+   "projected_gradient_norm": 2.5812338377839694e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 29,
+    "evaluations": 33,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 15.96941831667195,
+   "seconds": 0.4889063807204366
+  },
+  "fekete_free/d2/p14": {
+   "dim": 2,
+   "order": 14,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.017377036748080724, 0.9826229632519192],
+     "nodes": [28, 16, 29, 15, 41, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.05745897788851185, 0.9425410221114882],
+     "nodes": [27, 17, 30, 14, 40, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.11824015502409241, 0.8817598449759076],
+     "nodes": [26, 18, 31, 13, 39, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.19687339726507716, 0.8031266027349229],
+     "nodes": [25, 19, 32, 12, 38, 6],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.2896809726431637, 0.7103190273568363],
+     "nodes": [24, 20, 33, 11, 37, 7],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.3923230223181029, 0.6076769776818971],
+     "nodes": [23, 21, 34, 10, 36, 8],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.5, 0.5, 0.0],
+     "nodes": [9, 35, 22],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.020289045663543472, 0.020289045663543472, 0.9594219086729131],
+     "nodes": [119, 53, 42],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.022718740512914955, 0.065996589869489, 0.911284669617596],
+     "nodes": [118, 64, 117, 52, 54, 43],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.024598142554338637, 0.13402121486344398, 0.8413806425822173],
+     "nodes": [116, 74, 114, 51, 65, 44],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.025993057312902464, 0.2205585420746362, 0.7534484006124614],
+     "nodes": [113, 83, 110, 50, 75, 45],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.026919349643107313, 0.32101527557972187, 0.6520653747771709],
+     "nodes": [109, 91, 105, 49, 84, 46],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.027382129002810136, 0.43017752913570334, 0.5424403418614866],
+     "nodes": [104, 98, 99, 48, 92, 47],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.07304638214884052, 0.07304638214884052, 0.853907235702319],
+     "nodes": [115, 63, 55],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07845027852797969, 0.14678393095340736, 0.7747657905186129],
+     "nodes": [112, 73, 111, 62, 66, 56],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.08229767712504073, 0.23916237117518202, 0.6785399516997772],
+     "nodes": [108, 82, 106, 61, 76, 57],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.08460469962331038, 0.34468646792588536, 0.5707088324508043],
+     "nodes": [103, 90, 100, 60, 85, 58],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.45731302111000793, 0.45731302111000793, 0.08537395777998413],
+     "nodes": [59, 93, 97],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.15631253280266702, 0.15631253280266702, 0.687374934394666],
+     "nodes": [107, 72, 67],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.16266965074779696, 0.25245720330938254, 0.5848731459428205],
+     "nodes": [102, 81, 101, 71, 77, 68],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.16585165632063614, 0.36050762735073943, 0.47364071632862437],
+     "nodes": [96, 89, 94, 70, 86, 69],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.2604534615903219, 0.2604534615903219, 0.4790930768193562],
+     "nodes": [95, 80, 78],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.36843863567861834, 0.36843863567861834, 0.2631227286427633],
+     "nodes": [79, 87, 88],
+     "free": true
+    }
+   ],
+   "log_abs_det": 278.0531370568449,
+   "start_log_abs_det": 277.11406790721867,
+   "other_starts": {
+    "fekete": 278.05313705684483
+   },
+   "projected_gradient_norm": 7.228141696291601e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 35,
+    "evaluations": 42,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 15.969418316671884,
+   "seconds": 0.3533799257129431
+  },
+  "fekete/d2/p15": {
+   "dim": 2,
+   "order": 15,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.015215976864891623, 0.9847840231351084],
+     "nodes": [30, 17, 31, 16, 44, 3],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.050399733453264095, 0.9496002665467359],
+     "nodes": [29, 18, 32, 15, 43, 4],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.10399585406909295, 0.896004145930907],
+     "nodes": [28, 19, 33, 14, 42, 5],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.1738056485587538, 0.8261943514412462],
+     "nodes": [27, 20, 34, 13, 41, 6],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.25697028905643154, 0.7430297109435684],
+     "nodes": [26, 21, 35, 12, 40, 7],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35008476554961815, 0.6499152344503818],
+     "nodes": [25, 22, 36, 11, 39, 8],
+     "free": false
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.44933686323902533, 0.5506631367609747],
+     "nodes": [24, 23, 37, 10, 38, 9],
+     "free": false
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.01765303717990749, 0.01765303717990749, 0.964693925640185],
+     "nodes": [135, 57, 45],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.019718425000422774, 0.05759724946078349, 0.9226843255387938],
+     "nodes": [134, 69, 133, 56, 58, 46],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.021348406559540532, 0.11741595977205213, 0.8612356336684074],
+     "nodes": [132, 80, 130, 55, 70, 47],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.022600544022685666, 0.19416841899161916, 0.7832310369856952],
+     "nodes": [129, 90, 126, 54, 81, 48],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0234903643361558, 0.2842867173167359, 0.6922229183471083],
+     "nodes": [125, 99, 121, 53, 91, 49],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.024023527546129343, 0.3836821311704727, 0.592294341283398],
+     "nodes": [120, 107, 115, 52, 100, 50],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.4878994312532557, 0.4878994312532557, 0.024201137493488623],
+     "nodes": [51, 108, 114],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.06364973728494264, 0.06364973728494264, 0.8727005254301148],
+     "nodes": [131, 68, 59],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0684110059006384, 0.12851565566485904, 0.8030733384345026],
+     "nodes": [128, 79, 127, 67, 71, 60],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07196513420411009, 0.210624912155654, 0.7174099536402359],
+     "nodes": [124, 89, 122, 66, 82, 61],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07433128439862058, 0.30570461214960476, 0.6199641034517747],
+     "nodes": [119, 98, 116, 65, 92, 62],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07551446033853279, 0.4090067000186359, 0.5154788396428313],
+     "nodes": [113, 106, 109, 64, 101, 63],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.1370942641262841, 0.1370942641262841, 0.7258114717474318],
+     "nodes": [123, 78, 72],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14322058585875025, 0.22295832292092854, 0.6338210912203212],
+     "nodes": [118, 88, 117, 77, 83, 73],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14689925935640025, 0.3210328908302094, 0.5320678498133904],
+     "nodes": [112, 97, 110, 76, 93, 74],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.42593679516225647, 0.42593679516225647, 0.14812640967548707],
+     "nodes": [75, 102, 105],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.23119725838386623, 0.23119725838386623, 0.5376054832322675],
+     "nodes": [111, 87, 84],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.23532342078973034, 0.33025471513877735, 0.4344218640714923],
+     "nodes": [104, 96, 103, 86, 94, 85],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [95],
+     "free": true
+    }
+   ],
+   "log_abs_det": 321.8518127673088,
+   "start_log_abs_det": 320.62584006677594,
+   "other_starts": {
+    "recursive interior": 321.8518127673088
+   },
+   "projected_gradient_norm": 9.386380561693386e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 34,
+    "evaluations": 37,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 20.533566829650532,
+   "seconds": 0.6926429979503155
+  },
+  "fekete_free/d2/p15": {
+   "dim": 2,
+   "order": 15,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S21",
+     "barycentric": [0.0, 0.0, 1.0],
+     "nodes": [2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.015215976864891623, 0.9847840231351084],
+     "nodes": [30, 17, 31, 16, 44, 3],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.050399733453264095, 0.9496002665467359],
+     "nodes": [29, 18, 32, 15, 43, 4],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.10399585406909295, 0.896004145930907],
+     "nodes": [28, 19, 33, 14, 42, 5],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.1738056485587538, 0.8261943514412462],
+     "nodes": [27, 20, 34, 13, 41, 6],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.25697028905643154, 0.7430297109435684],
+     "nodes": [26, 21, 35, 12, 40, 7],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.35008476554961815, 0.6499152344503818],
+     "nodes": [25, 22, 36, 11, 39, 8],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0, 0.44933686323902533, 0.5506631367609747],
+     "nodes": [24, 23, 37, 10, 38, 9],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.017653037179907516, 0.017653037179907516, 0.964693925640185],
+     "nodes": [135, 57, 45],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.019718425000422757, 0.057597249460783484, 0.9226843255387938],
+     "nodes": [134, 69, 133, 56, 58, 46],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.02134840655954051, 0.1174159597720521, 0.8612356336684074],
+     "nodes": [132, 80, 130, 55, 70, 47],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.022600544022685687, 0.19416841899161918, 0.7832310369856951],
+     "nodes": [129, 90, 126, 54, 81, 48],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.02349036433615581, 0.2842867173167359, 0.6922229183471083],
+     "nodes": [125, 99, 121, 53, 91, 49],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.024023527546129353, 0.3836821311704727, 0.592294341283398],
+     "nodes": [120, 107, 115, 52, 100, 50],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.48789943125325563, 0.48789943125325563, 0.024201137493488734],
+     "nodes": [51, 108, 114],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.06364973728494261, 0.06364973728494261, 0.8727005254301148],
+     "nodes": [131, 68, 59],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.06841100590063842, 0.128515655664859, 0.8030733384345026],
+     "nodes": [128, 79, 127, 67, 71, 60],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.0719651342041101, 0.210624912155654, 0.7174099536402359],
+     "nodes": [124, 89, 122, 66, 82, 61],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07433128439862058, 0.30570461214960476, 0.6199641034517747],
+     "nodes": [119, 98, 116, 65, 92, 62],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.07551446033853282, 0.4090067000186359, 0.5154788396428313],
+     "nodes": [113, 106, 109, 64, 101, 63],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.13709426412628412, 0.13709426412628412, 0.7258114717474318],
+     "nodes": [123, 78, 72],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14322058585875025, 0.22295832292092854, 0.6338210912203212],
+     "nodes": [118, 88, 117, 77, 83, 73],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.14689925935640025, 0.3210328908302094, 0.5320678498133904],
+     "nodes": [112, 97, 110, 76, 93, 74],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.42593679516225647, 0.42593679516225647, 0.14812640967548707],
+     "nodes": [75, 102, 105],
+     "free": true
+    },
+    {
+     "type": "S21",
+     "barycentric": [0.23119725838386623, 0.23119725838386623, 0.5376054832322675],
+     "nodes": [111, 87, 84],
+     "free": true
+    },
+    {
+     "type": "S111",
+     "barycentric": [0.23532342078973034, 0.33025471513877735, 0.4344218640714923],
+     "nodes": [104, 96, 103, 86, 94, 85],
+     "free": true
+    },
+    {
+     "type": "S3",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+     "nodes": [95],
+     "free": true
+    }
+   ],
+   "log_abs_det": 321.85181276730884,
+   "start_log_abs_det": 321.85181276730884,
+   "other_starts": {
+    "warp_blend": 321.8518127673088
+   },
+   "projected_gradient_norm": 1.816512044949814e-11,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 20.533566829650365,
+   "seconds": 0.5009916117414832
+  },
+  "fekete/d3/p1": {
+   "dim": 3,
+   "order": 1,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    }
+   ],
+   "log_abs_det": 4.61138144598737,
+   "start_log_abs_det": 4.61138144598737,
+   "other_starts": {
+    "recursive interior": 4.61138144598737
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.0000000000000009,
+   "seconds": 0.07450729142874479
+  },
+  "fekete_free/d3/p1": {
+   "dim": 3,
+   "order": 1,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    }
+   ],
+   "log_abs_det": 4.61138144598737,
+   "start_log_abs_det": 4.61138144598737,
+   "other_starts": {
+    "warp_blend": 4.61138144598737
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 1.0000000000000009,
+   "seconds": 0.0686869416385889
+  },
+  "fekete/d3/p2": {
+   "dim": 3,
+   "order": 2,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [9, 8, 5, 7, 6, 4],
+     "free": false
+    }
+   ],
+   "log_abs_det": 16.697117765524087,
+   "start_log_abs_det": 16.697117765524087,
+   "other_starts": {
+    "recursive interior": 16.697117765524087
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.000000000000001,
+   "seconds": 0.10602739080786705
+  },
+  "fekete_free/d3/p2": {
+   "dim": 3,
+   "order": 2,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [9, 8, 5, 7, 6, 4],
+     "free": true
+    }
+   ],
+   "log_abs_det": 16.697117765524087,
+   "start_log_abs_det": 16.697117765524087,
+   "other_starts": {
+    "warp_blend": 16.697117765524087
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.000000000000001,
+   "seconds": 0.10478523466736078
+  },
+  "fekete/d3/p3": {
+   "dim": 3,
+   "order": 3,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.27639320225002095, 0.723606797749979],
+     "nodes": [15, 14, 13, 7, 12, 6, 11, 9, 5, 10, 8, 4],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [19, 18, 17, 16],
+     "free": false
+    }
+   ],
+   "log_abs_det": 40.23177865074147,
+   "start_log_abs_det": 40.23177865074147,
+   "other_starts": {
+    "recursive interior": 40.23177865074147
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.932783472384755,
+   "seconds": 0.0989990346133709
+  },
+  "fekete_free/d3/p3": {
+   "dim": 3,
+   "order": 3,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.27639320225002095, 0.723606797749979],
+     "nodes": [15, 14, 13, 7, 12, 6, 11, 9, 5, 10, 8, 4],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [19, 18, 17, 16],
+     "free": true
+    }
+   ],
+   "log_abs_det": 40.23177865074147,
+   "start_log_abs_det": 40.23177865074147,
+   "other_starts": {
+    "warp_blend": 40.23177865074147
+   },
+   "projected_gradient_norm": 1.7041923427996153e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 2.932783472384755,
+   "seconds": 0.10524271987378597
+  },
+  "fekete/d3/p4": {
+   "dim": 3,
+   "order": 4,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.17267316464601135, 0.8273268353539887],
+     "nodes": [21, 19, 18, 9, 16, 7, 15, 12, 6, 13, 10, 4],
+     "free": false
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [20, 17, 8, 14, 11, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.21654236465910048, 0.21654236465910048, 0.0, 0.566915270681799],
+     "nodes": [30, 33, 27, 26, 32, 29, 24, 23, 22, 31, 28, 25],
+     "free": false
+    },
+    {
+     "type": "S4",
+     "barycentric": [0.25, 0.25, 0.25, 0.25],
+     "nodes": [34],
+     "free": true
+    }
+   ],
+   "log_abs_det": 79.40418554949764,
+   "start_log_abs_det": 79.40418554949764,
+   "other_starts": {
+    "recursive interior": 79.40418554949764
+   },
+   "projected_gradient_norm": 0.0,
+   "optimizer": {
+    "status": 0,
+    "message": "no free parameters",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 4.153359512501627,
+   "seconds": 0.10254856199026108
+  },
+  "fekete_free/d3/p4": {
+   "dim": 3,
+   "order": 4,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.17267316464601148, 0.8273268353539885],
+     "nodes": [21, 19, 18, 9, 16, 7, 15, 12, 6, 13, 10, 4],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [20, 17, 8, 14, 11, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.21654236465911741, 0.21654236465911741, 0.0, 0.5669152706817652],
+     "nodes": [30, 33, 27, 26, 32, 29, 24, 23, 22, 31, 28, 25],
+     "free": true
+    },
+    {
+     "type": "S4",
+     "barycentric": [0.25, 0.25, 0.25, 0.25],
+     "nodes": [34],
+     "free": true
+    }
+   ],
+   "log_abs_det": 79.40418554949767,
+   "start_log_abs_det": 79.366997048071,
+   "other_starts": {
+    "fekete": 79.40418554949764
+   },
+   "projected_gradient_norm": 1.0572320796597978e-11,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 5,
+    "evaluations": 6,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 4.153359512501424,
+   "seconds": 0.11168073955923319
+  },
+  "fekete/d3/p5": {
+   "dim": 3,
+   "order": 5,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.11747233803526763, 0.8825276619647324],
+     "nodes": [27, 24, 23, 11, 20, 8, 19, 15, 7, 16, 12, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.35738424175967715, 0.6426157582403229],
+     "nodes": [26, 25, 22, 10, 21, 9, 18, 14, 6, 17, 13, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.14801947131513382, 0.14801947131513382, 0.0, 0.7039610573697324],
+     "nodes": [45, 51, 39, 36, 48, 42, 33, 30, 28, 46, 40, 34],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.420825539292557, 0.420825539292557, 0.0, 0.158348921414886],
+     "nodes": [41, 47, 35, 37, 49, 43, 29, 31, 32, 50, 44, 38],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.17799821111842687, 0.17799821111842687, 0.17799821111842687, 0.46600536664471937],
+     "nodes": [55, 54, 53, 52],
+     "free": true
+    }
+   ],
+   "log_abs_det": 138.60966459888175,
+   "start_log_abs_det": 138.54026291832713,
+   "other_starts": {
+    "recursive interior": 138.60966459888175
+   },
+   "projected_gradient_norm": 3.2135405447775156e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 5,
+    "evaluations": 6,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 5.996172233680452,
+   "seconds": 0.11650627851486206
+  },
+  "fekete_free/d3/p5": {
+   "dim": 3,
+   "order": 5,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.11747233803526763, 0.8825276619647324],
+     "nodes": [27, 24, 23, 11, 20, 8, 19, 15, 7, 16, 12, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.35738424175967715, 0.6426157582403229],
+     "nodes": [26, 25, 22, 10, 21, 9, 18, 14, 6, 17, 13, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.14801947131513382, 0.14801947131513382, 0.0, 0.7039610573697324],
+     "nodes": [45, 51, 39, 36, 48, 42, 33, 30, 28, 46, 40, 34],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.420825539292557, 0.420825539292557, 0.0, 0.158348921414886],
+     "nodes": [41, 47, 35, 37, 49, 43, 29, 31, 32, 50, 44, 38],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.17799821111842684, 0.17799821111842684, 0.17799821111842684, 0.4660053666447195],
+     "nodes": [55, 54, 53, 52],
+     "free": true
+    }
+   ],
+   "log_abs_det": 138.60966459888175,
+   "start_log_abs_det": 138.60966459888175,
+   "other_starts": {
+    "warp_blend": 138.60966459888175
+   },
+   "projected_gradient_norm": 2.7777780076121417e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 5.996172233680452,
+   "seconds": 0.1268780743703246
+  },
+  "fekete/d3/p6": {
+   "dim": 3,
+   "order": 6,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.08488805186071652, 0.9151119481392835],
+     "nodes": [33, 29, 28, 13, 24, 9, 23, 18, 8, 19, 14, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.2655756032646428, 0.7344243967353572],
+     "nodes": [32, 30, 27, 12, 25, 10, 22, 17, 7, 20, 15, 5],
+     "free": false
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [31, 26, 11, 21, 16, 6],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.10633546837602398, 0.10633546837602398, 0.0, 0.787329063247952],
+     "nodes": [63, 73, 53, 47, 67, 57, 43, 37, 34, 64, 54, 44],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.11718091712788214, 0.3162697959354518, 0.5665492869366661],
+     "nodes": [42, 40, 41, 36, 38, 35, 52, 50, 62, 72, 60, 70, 51, 46, 61, 71, 56, 66, 48, 45, 58, 68, 55, 65],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [69, 59, 49, 39],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.12934503888104093, 0.12934503888104093, 0.12934503888104093, 0.6119648833568772],
+     "nodes": [83, 79, 76, 74],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.13692804587992619, 0.13692804587992619, 0.3630719541200738, 0.3630719541200738],
+     "nodes": [82, 81, 78, 80, 77, 75],
+     "free": true
+    }
+   ],
+   "log_abs_det": 222.4129182125297,
+   "start_log_abs_det": 222.0901711044927,
+   "other_starts": {
+    "recursive interior": 222.4129182125297
+   },
+   "projected_gradient_norm": 1.9643833781834985e-10,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 6,
+    "evaluations": 7,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 8.89033227143771,
+   "seconds": 0.14011857099831104
+  },
+  "fekete_free/d3/p6": {
+   "dim": 3,
+   "order": 6,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.08488805186071652, 0.9151119481392835],
+     "nodes": [33, 29, 28, 13, 24, 9, 23, 18, 8, 19, 14, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.2655756032646428, 0.7344243967353572],
+     "nodes": [32, 30, 27, 12, 25, 10, 22, 17, 7, 20, 15, 5],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [31, 26, 11, 21, 16, 6],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.10633546837602398, 0.10633546837602398, 0.0, 0.787329063247952],
+     "nodes": [63, 73, 53, 47, 67, 57, 43, 37, 34, 64, 54, 44],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.11718091712788214, 0.3162697959354518, 0.5665492869366661],
+     "nodes": [42, 40, 41, 36, 38, 35, 52, 50, 62, 72, 60, 70, 51, 46, 61, 71, 56, 66, 48, 45, 58, 68, 55, 65],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [69, 59, 49, 39],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.12934503888104873, 0.12934503888104873, 0.12934503888104873, 0.6119648833568538],
+     "nodes": [83, 79, 76, 74],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.13692804587992857, 0.13692804587992857, 0.3630719541200714, 0.3630719541200714],
+     "nodes": [82, 81, 78, 80, 77, 75],
+     "free": true
+    }
+   ],
+   "log_abs_det": 222.4129182125297,
+   "start_log_abs_det": 222.4129182125297,
+   "other_starts": {
+    "warp_blend": 222.4129182125297
+   },
+   "projected_gradient_norm": 1.845504860042979e-10,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 1,
+    "evaluations": 2,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 8.890332271437211,
+   "seconds": 0.15852825716137886
+  },
+  "fekete/d3/p7": {
+   "dim": 3,
+   "order": 7,
+   "variant": "fekete",
+   "start": "recursive interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.06412992574519594, 0.9358700742548041],
+     "nodes": [39, 34, 33, 15, 28, 10, 27, 21, 9, 22, 16, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.2041499092834289, 0.7958500907165711],
+     "nodes": [38, 35, 32, 14, 29, 11, 26, 20, 8, 23, 17, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.39535039104876046, 0.6046496089512395],
+     "nodes": [37, 36, 31, 13, 30, 12, 25, 19, 7, 24, 18, 6],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.07958850688018437, 0.07958850688018437, 0.0, 0.8408229862396313],
+     "nodes": [84, 99, 69, 59, 89, 74, 54, 44, 40, 85, 70, 55],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.08894304745543402, 0.24336464311503872, 0.6676923094295273],
+     "nodes": [53, 48, 52, 43, 45, 41, 68, 63, 83, 98, 78, 93, 67, 58, 82, 97, 73, 88, 60, 56, 75, 90, 71, 86],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4539853440609244, 0.4539853440609244, 0.0, 0.09202931187815122],
+     "nodes": [72, 87, 57, 64, 94, 79, 42, 49, 51, 96, 81, 66],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.26320910495693195, 0.26320910495693195, 0.0, 0.4735817900861361],
+     "nodes": [80, 95, 65, 62, 92, 77, 50, 47, 46, 91, 76, 61],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.09685305446227382, 0.09685305446227382, 0.09685305446227382, 0.7094408366131786],
+     "nodes": [119, 109, 103, 100],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.10536892543303836, 0.10536892543303836, 0.2832524847828391, 0.5060096643510843],
+     "nodes": [118, 115, 117, 108, 112, 106, 116, 107, 102, 110, 104, 101],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.2964293218035848, 0.2964293218035848, 0.2964293218035848, 0.11071203458924561],
+     "nodes": [105, 111, 113, 114],
+     "free": true
+    }
+   ],
+   "log_abs_det": 335.5174735330522,
+   "start_log_abs_det": 335.22001359901833,
+   "other_starts": {
+    "warp_blend interior": 335.51747353305217
+   },
+   "projected_gradient_norm": 3.3323899195636386e-12,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 11,
+    "evaluations": 12,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 11.643159523184469,
+   "seconds": 0.1879253713414073
+  },
+  "fekete_free/d3/p7": {
+   "dim": 3,
+   "order": 7,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.06412992574519594, 0.9358700742548041],
+     "nodes": [39, 34, 33, 15, 28, 10, 27, 21, 9, 22, 16, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.2041499092834289, 0.7958500907165711],
+     "nodes": [38, 35, 32, 14, 29, 11, 26, 20, 8, 23, 17, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.39535039104876046, 0.6046496089512395],
+     "nodes": [37, 36, 31, 13, 30, 12, 25, 19, 7, 24, 18, 6],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.07958850688018437, 0.07958850688018437, 0.0, 0.8408229862396313],
+     "nodes": [84, 99, 69, 59, 89, 74, 54, 44, 40, 85, 70, 55],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.08894304745543402, 0.24336464311503872, 0.6676923094295273],
+     "nodes": [53, 48, 52, 43, 45, 41, 68, 63, 83, 98, 78, 93, 67, 58, 82, 97, 73, 88, 60, 56, 75, 90, 71, 86],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4539853440609244, 0.4539853440609244, 0.0, 0.09202931187815122],
+     "nodes": [72, 87, 57, 64, 94, 79, 42, 49, 51, 96, 81, 66],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.26320910495693195, 0.26320910495693195, 0.0, 0.4735817900861361],
+     "nodes": [80, 95, 65, 62, 92, 77, 50, 47, 46, 91, 76, 61],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.09685305446227382, 0.09685305446227382, 0.09685305446227382, 0.7094408366131786],
+     "nodes": [119, 109, 103, 100],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.10536892543303833, 0.10536892543303833, 0.2832524847828391, 0.5060096643510843],
+     "nodes": [118, 115, 117, 108, 112, 106, 116, 107, 102, 110, 104, 101],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.2964293218035848, 0.2964293218035848, 0.2964293218035848, 0.11071203458924561],
+     "nodes": [105, 111, 113, 114],
+     "free": true
+    }
+   ],
+   "log_abs_det": 335.5174735330522,
+   "start_log_abs_det": 335.5174735330522,
+   "other_starts": {
+    "warp_blend": 335.51747353305217
+   },
+   "projected_gradient_norm": 3.3323899195636386e-12,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 11.643159523184469,
+   "seconds": 0.2211952516809106
+  },
+  "fekete/d3/p8": {
+   "dim": 3,
+   "order": 8,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.050121002294269856, 0.9498789977057301],
+     "nodes": [45, 39, 38, 17, 32, 11, 31, 24, 10, 25, 18, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.16140686024463147, 0.8385931397553685],
+     "nodes": [44, 40, 37, 16, 33, 12, 30, 23, 9, 26, 19, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.318441268086911, 0.681558731913089],
+     "nodes": [43, 41, 36, 15, 34, 13, 29, 22, 8, 27, 20, 6],
+     "free": false
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [42, 35, 14, 28, 21, 7],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.061574217960423894, 0.061574217960423894, 0.0, 0.8768515640791522],
+     "nodes": [108, 129, 87, 72, 114, 93, 66, 51, 46, 109, 88, 67],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.06925625617396225, 0.19177433731167803, 0.7389694065143597],
+     "nodes": [65, 56, 64, 50, 52, 47, 86, 77, 107, 128, 98, 119, 85, 71, 106, 127, 92, 113, 73, 68, 94, 115, 89, 110],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.0730459071685417, 0.3672402635006292, 0.5597138293308291],
+     "nodes": [63, 60, 61, 49, 57, 48, 84, 81, 105, 126, 102, 123, 82, 70, 103, 124, 91, 112, 78, 69, 99, 120, 90, 111],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.21022161435326178, 0.21022161435326178, 0.0, 0.5795567712934764],
+     "nodes": [104, 125, 83, 76, 118, 97, 62, 55, 53, 116, 95, 74],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.39181716668345684, 0.39181716668345684, 0.0, 0.21636566663308632],
+     "nodes": [96, 117, 75, 79, 121, 100, 54, 58, 59, 122, 101, 80],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.07462253374881032, 0.07462253374881032, 0.07462253374881032, 0.7761323987535691],
+     "nodes": [164, 144, 134, 130],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.08233312913640764, 0.08233312913640764, 0.22413166368763257, 0.6112020780395521],
+     "nodes": [163, 154, 162, 143, 148, 138, 161, 142, 133, 145, 135, 131],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.08486842313530235, 0.08486842313530235, 0.41513157686469765, 0.41513157686469765],
+     "nodes": [160, 157, 141, 155, 139, 132],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.24019832298755378, 0.24019832298755378, 0.08869344674069402, 0.4309099072841984],
+     "nodes": [156, 140, 158, 152, 137, 147, 159, 153, 151, 136, 146, 149],
+     "free": true
+    },
+    {
+     "type": "S4",
+     "barycentric": [0.25, 0.25, 0.25, 0.25],
+     "nodes": [150],
+     "free": true
+    }
+   ],
+   "log_abs_det": 482.74178763245436,
+   "start_log_abs_det": 479.6660807982586,
+   "other_starts": {
+    "recursive interior": 482.74178763245436
+   },
+   "projected_gradient_norm": 8.433531650808845e-14,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 14,
+    "evaluations": 15,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 15.835277791007798,
+   "seconds": 0.2830143114551902
+  },
+  "fekete_free/d3/p8": {
+   "dim": 3,
+   "order": 8,
+   "variant": "fekete_free",
+   "start": "warp_blend",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.050121002294269905, 0.9498789977057301],
+     "nodes": [45, 39, 38, 17, 32, 11, 31, 24, 10, 25, 18, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.16140686024463108, 0.838593139755369],
+     "nodes": [44, 40, 37, 16, 33, 12, 30, 23, 9, 26, 19, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.3184412680869109, 0.6815587319130891],
+     "nodes": [43, 41, 36, 15, 34, 13, 29, 22, 8, 27, 20, 6],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [42, 35, 14, 28, 21, 7],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0615742179604239, 0.0615742179604239, 0.0, 0.8768515640791522],
+     "nodes": [108, 129, 87, 72, 114, 93, 66, 51, 46, 109, 88, 67],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.06925625617396218, 0.19177433731167814, 0.7389694065143597],
+     "nodes": [65, 56, 64, 50, 52, 47, 86, 77, 107, 128, 98, 119, 85, 71, 106, 127, 92, 113, 73, 68, 94, 115, 89, 110],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.07304590716854178, 0.3672402635006292, 0.5597138293308289],
+     "nodes": [63, 60, 61, 49, 57, 48, 84, 81, 105, 126, 102, 123, 82, 70, 103, 124, 91, 112, 78, 69, 99, 120, 90, 111],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.2102216143532618, 0.2102216143532618, 0.0, 0.5795567712934764],
+     "nodes": [104, 125, 83, 76, 118, 97, 62, 55, 53, 116, 95, 74],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.39181716668345684, 0.39181716668345684, 0.0, 0.21636566663308632],
+     "nodes": [96, 117, 75, 79, 121, 100, 54, 58, 59, 122, 101, 80],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.0746225337488103, 0.0746225337488103, 0.0746225337488103, 0.7761323987535691],
+     "nodes": [164, 144, 134, 130],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.08233312913640767, 0.08233312913640767, 0.22413166368763257, 0.6112020780395521],
+     "nodes": [163, 154, 162, 143, 148, 138, 161, 142, 133, 145, 135, 131],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.08486842313530236, 0.08486842313530236, 0.41513157686469765, 0.41513157686469765],
+     "nodes": [160, 157, 141, 155, 139, 132],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.24019832298755378, 0.24019832298755378, 0.08869344674069399, 0.4309099072841985],
+     "nodes": [156, 140, 158, 152, 137, 147, 159, 153, 151, 136, 146, 149],
+     "free": true
+    },
+    {
+     "type": "S4",
+     "barycentric": [0.25, 0.25, 0.25, 0.25],
+     "nodes": [150],
+     "free": true
+    }
+   ],
+   "log_abs_det": 482.74178763245436,
+   "start_log_abs_det": 478.9158325513946,
+   "other_starts": {
+    "fekete": 482.7417876324543
+   },
+   "projected_gradient_norm": 3.5534075681908917e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 23,
+    "evaluations": 24,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 15.835277791007764,
+   "seconds": 0.3245700690895319
+  },
+  "fekete/d3/p9": {
+   "dim": 3,
+   "order": 9,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.04023304591676957, 0.9597669540832304],
+     "nodes": [51, 44, 43, 19, 36, 12, 35, 27, 11, 28, 20, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.130613067447248, 0.869386932552752],
+     "nodes": [50, 45, 42, 18, 37, 13, 34, 26, 10, 29, 21, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.26103752509477796, 0.738962474905222],
+     "nodes": [49, 46, 41, 17, 38, 14, 33, 25, 9, 30, 22, 6],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.4173605211668065, 0.5826394788331934],
+     "nodes": [48, 47, 40, 16, 39, 15, 32, 24, 8, 31, 23, 7],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.04893456955473369, 0.04893456955473369, 0.0, 0.9021308608905326],
+     "nodes": [135, 163, 107, 86, 142, 114, 79, 58, 52, 136, 108, 80],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.05517580791650345, 0.1543901944104743, 0.7904339976730222],
+     "nodes": [78, 64, 77, 57, 59, 53, 106, 92, 134, 162, 120, 148, 105, 85, 133, 161, 113, 141, 87, 81, 115, 143, 109, 137],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.058856487894272835, 0.30102421098731325, 0.6401193011184141],
+     "nodes": [76, 69, 74, 56, 65, 54, 104, 97, 132, 160, 125, 153, 102, 84, 130, 158, 112, 140, 93, 82, 121, 149, 110, 138],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4699587644167645, 0.4699587644167645, 0.0, 0.06008247116647103],
+     "nodes": [111, 139, 83, 98, 154, 126, 55, 70, 73, 157, 129, 101],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.17043182009314317, 0.17043182009314317, 0.0, 0.6591363598137137],
+     "nodes": [131, 159, 103, 91, 147, 119, 75, 63, 60, 144, 116, 88],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.17843375880792733, 0.32524348995619423, 0.49632275123587843],
+     "nodes": [72, 68, 71, 62, 66, 61, 100, 96, 128, 156, 124, 152, 99, 90, 127, 155, 118, 146, 94, 89, 122, 150, 117, 145],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [151, 123, 95, 67],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.05894803055249476, 0.05894803055249476, 0.05894803055249476, 0.8231559083425157],
+     "nodes": [219, 184, 169, 164],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.06551351521814212, 0.06551351521814212, 0.18036402157980586, 0.6886089479839098],
+     "nodes": [218, 199, 217, 183, 189, 174, 216, 182, 168, 185, 170, 165],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.06874041494477036, 0.06874041494477036, 0.3422794375419402, 0.5202397325685192],
+     "nodes": [215, 209, 212, 181, 203, 178, 210, 179, 167, 200, 175, 166],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.1958512442844808, 0.1958512442844808, 0.07154075352589, 0.5367567579051483],
+     "nodes": [211, 180, 213, 197, 173, 188, 214, 198, 193, 171, 186, 190],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.3627502677609154, 0.3627502677609154, 0.07350970926499166, 0.20098975521317755],
+     "nodes": [187, 172, 194, 204, 176, 201, 196, 206, 208, 177, 202, 207],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.20833237878259314, 0.20833237878259314, 0.20833237878259314, 0.3750028636522206],
+     "nodes": [205, 195, 192, 191],
+     "free": true
+    }
+   ],
+   "log_abs_det": 669.0002633144675,
+   "start_log_abs_det": 662.2561764766831,
+   "other_starts": {
+    "recursive interior": 669.0002633144675
+   },
+   "projected_gradient_norm": 2.395236786689736e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 18,
+    "evaluations": 20,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 22.32866080183104,
+   "seconds": 0.579002508893609
+  },
+  "fekete_free/d3/p9": {
+   "dim": 3,
+   "order": 9,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.04023304591676957, 0.9597669540832304],
+     "nodes": [51, 44, 43, 19, 36, 12, 35, 27, 11, 28, 20, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.130613067447248, 0.869386932552752],
+     "nodes": [50, 45, 42, 18, 37, 13, 34, 26, 10, 29, 21, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.26103752509477796, 0.738962474905222],
+     "nodes": [49, 46, 41, 17, 38, 14, 33, 25, 9, 30, 22, 6],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.4173605211668065, 0.5826394788331934],
+     "nodes": [48, 47, 40, 16, 39, 15, 32, 24, 8, 31, 23, 7],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.04893456955473369, 0.04893456955473369, 0.0, 0.9021308608905326],
+     "nodes": [135, 163, 107, 86, 142, 114, 79, 58, 52, 136, 108, 80],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.05517580791650345, 0.1543901944104743, 0.7904339976730222],
+     "nodes": [78, 64, 77, 57, 59, 53, 106, 92, 134, 162, 120, 148, 105, 85, 133, 161, 113, 141, 87, 81, 115, 143, 109, 137],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.05885648789427282, 0.3010242109873132, 0.6401193011184141],
+     "nodes": [76, 69, 74, 56, 65, 54, 104, 97, 132, 160, 125, 153, 102, 84, 130, 158, 112, 140, 93, 82, 121, 149, 110, 138],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4699587644167645, 0.4699587644167645, 0.0, 0.06008247116647103],
+     "nodes": [111, 139, 83, 98, 154, 126, 55, 70, 73, 157, 129, 101],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.17043182009314317, 0.17043182009314317, 0.0, 0.6591363598137137],
+     "nodes": [131, 159, 103, 91, 147, 119, 75, 63, 60, 144, 116, 88],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.17843375880792733, 0.32524348995619423, 0.49632275123587843],
+     "nodes": [72, 68, 71, 62, 66, 61, 100, 96, 128, 156, 124, 152, 99, 90, 127, 155, 118, 146, 94, 89, 122, 150, 117, 145],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0],
+     "nodes": [151, 123, 95, 67],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.05894803055249476, 0.05894803055249476, 0.05894803055249476, 0.8231559083425157],
+     "nodes": [219, 184, 169, 164],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.06551351521814214, 0.06551351521814214, 0.18036402157980586, 0.6886089479839098],
+     "nodes": [218, 199, 217, 183, 189, 174, 216, 182, 168, 185, 170, 165],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.06874041494477034, 0.06874041494477034, 0.3422794375419402, 0.5202397325685192],
+     "nodes": [215, 209, 212, 181, 203, 178, 210, 179, 167, 200, 175, 166],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.1958512442844808, 0.1958512442844808, 0.07154075352589001, 0.5367567579051483],
+     "nodes": [211, 180, 213, 197, 173, 188, 214, 198, 193, 171, 186, 190],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.36275026776091535, 0.36275026776091535, 0.07350970926499167, 0.20098975521317763],
+     "nodes": [187, 172, 194, 204, 176, 201, 196, 206, 208, 177, 202, 207],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.20833237878259314, 0.20833237878259314, 0.20833237878259314, 0.3750028636522206],
+     "nodes": [205, 195, 192, 191],
+     "free": true
+    }
+   ],
+   "log_abs_det": 669.0002633144675,
+   "start_log_abs_det": 669.0002633144675,
+   "other_starts": {
+    "warp_blend": 669.0002633144675
+   },
+   "projected_gradient_norm": 1.0151511575795524e-11,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 22.328660801831024,
+   "seconds": 0.664893563836813
+  },
+  "fekete/d3/p10": {
+   "dim": 3,
+   "order": 10,
+   "variant": "fekete",
+   "start": "warp_blend interior",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.032999284795970196, 0.9670007152040299],
+     "nodes": [57, 49, 48, 21, 40, 13, 39, 30, 12, 31, 22, 4],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.10775826316842796, 0.892241736831572],
+     "nodes": [56, 50, 47, 20, 41, 14, 38, 29, 11, 32, 23, 5],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.21738233650189753, 0.7826176634981025],
+     "nodes": [55, 51, 46, 19, 42, 15, 37, 28, 10, 33, 24, 6],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.35212093220653007, 0.6478790677934699],
+     "nodes": [54, 52, 45, 18, 43, 16, 36, 27, 9, 34, 25, 7],
+     "free": false
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [53, 44, 17, 35, 26, 8],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.03975769834485604, 0.03975769834485604, 0.0, 0.9204846033102879],
+     "nodes": [165, 201, 129, 101, 173, 137, 93, 65, 58, 166, 130, 94],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04484046909888406, 0.12663286553480613, 0.8285266653663098],
+     "nodes": [92, 72, 91, 64, 66, 59, 128, 108, 164, 200, 144, 180, 127, 100, 163, 199, 136, 172, 102, 95, 138, 174, 131, 167],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04815844363062838, 0.2501276619107099, 0.7017138944586617],
+     "nodes": [90, 78, 88, 63, 73, 60, 126, 114, 162, 198, 150, 186, 124, 99, 160, 196, 135, 171, 109, 96, 145, 181, 132, 168],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04981334506519475, 0.39722268836264885, 0.5529639665721564],
+     "nodes": [87, 83, 84, 62, 79, 61, 123, 119, 159, 195, 155, 191, 120, 98, 156, 192, 134, 170, 115, 97, 151, 187, 133, 169],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.1402669565469637, 0.1402669565469637, 0.0, 0.7194660869060726],
+     "nodes": [161, 197, 125, 107, 179, 143, 89, 71, 67, 175, 139, 103],
+     "free": false
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.14841000524992465, 0.2721868240558658, 0.5794031706942095],
+     "nodes": [86, 77, 85, 70, 74, 68, 122, 113, 158, 194, 149, 185, 121, 106, 157, 193, 142, 178, 110, 104, 146, 182, 140, 176],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4244361566385097, 0.4244361566385097, 0.0, 0.1511276867229806],
+     "nodes": [141, 177, 105, 116, 188, 152, 69, 80, 82, 190, 154, 118],
+     "free": false
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.28323397407105344, 0.28323397407105344, 0.0, 0.4335320518578931],
+     "nodes": [153, 189, 117, 112, 184, 148, 81, 76, 75, 183, 147, 111],
+     "free": false
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.04757236270618762, 0.04757236270618762, 0.04757236270618762, 0.8572829118814371],
+     "nodes": [285, 229, 208, 202],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.05305638020916979, 0.05305638020916979, 0.14754326662663755, 0.7463439729550229],
+     "nodes": [284, 250, 283, 228, 235, 214, 282, 227, 207, 230, 209, 203],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.056279201054006446, 0.056279201054006446, 0.2848690980926514, 0.6025724997993357],
+     "nodes": [281, 265, 278, 226, 255, 219, 276, 224, 206, 251, 215, 204],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.057349506712809944, 0.057349506712809944, 0.4426504932871901, 0.4426504932871901],
+     "nodes": [275, 269, 223, 266, 220, 205],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.16139794181277972, 0.16139794181277972, 0.05837631283473627, 0.6188278035397043],
+     "nodes": [277, 225, 279, 248, 213, 234, 280, 249, 240, 210, 231, 236],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.060973922763311136, 0.16827983650563424, 0.30560025570491994, 0.4651459850261346],
+     "nodes": [274, 264, 272, 247, 259, 244, 273, 263, 268, 222, 254, 218, 270, 245, 267, 221, 233, 212, 256, 241, 252, 216, 232, 211],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3125006893252037, 0.3125006893252037, 0.3125006893252037, 0.062497932024388914],
+     "nodes": [217, 253, 260, 262],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.173859421912965, 0.173859421912965, 0.173859421912965, 0.478421734261105],
+     "nodes": [271, 246, 239, 237],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.1779737140745598, 0.1779737140745598, 0.3220262859254402, 0.3220262859254402],
+     "nodes": [261, 258, 243, 257, 242, 238],
+     "free": true
+    }
+   ],
+   "log_abs_det": 899.2878528946561,
+   "start_log_abs_det": 886.3270159074553,
+   "other_starts": {
+    "recursive interior": 899.2878528946561
+   },
+   "projected_gradient_norm": 3.6463887465032485e-13,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "iterations": 24,
+    "evaluations": 28,
+    "newton_steps": 1
+   },
+   "lebesgue_estimate": 32.13590666254821,
+   "seconds": 1.1601724326610565
+  },
+  "fekete_free/d3/p10": {
+   "dim": 3,
+   "order": 10,
+   "variant": "fekete_free",
+   "start": "fekete",
+   "orbits": [
+    {
+     "type": "S31",
+     "barycentric": [0.0, 0.0, 0.0, 1.0],
+     "nodes": [3, 2, 1, 0],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.032999284795970196, 0.9670007152040299],
+     "nodes": [57, 49, 48, 21, 40, 13, 39, 30, 12, 31, 22, 4],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.10775826316842796, 0.892241736831572],
+     "nodes": [56, 50, 47, 20, 41, 14, 38, 29, 11, 32, 23, 5],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.21738233650189753, 0.7826176634981025],
+     "nodes": [55, 51, 46, 19, 42, 15, 37, 28, 10, 33, 24, 6],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.0, 0.0, 0.35212093220653007, 0.6478790677934699],
+     "nodes": [54, 52, 45, 18, 43, 16, 36, 27, 9, 34, 25, 7],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.0, 0.0, 0.5, 0.5],
+     "nodes": [53, 44, 17, 35, 26, 8],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.03975769834485604, 0.03975769834485604, 0.0, 0.9204846033102879],
+     "nodes": [165, 201, 129, 101, 173, 137, 93, 65, 58, 166, 130, 94],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04484046909888406, 0.12663286553480613, 0.8285266653663098],
+     "nodes": [92, 72, 91, 64, 66, 59, 128, 108, 164, 200, 144, 180, 127, 100, 163, 199, 136, 172, 102, 95, 138, 174, 131, 167],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04815844363062838, 0.2501276619107099, 0.7017138944586617],
+     "nodes": [90, 78, 88, 63, 73, 60, 126, 114, 162, 198, 150, 186, 124, 99, 160, 196, 135, 171, 109, 96, 145, 181, 132, 168],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.04981334506519475, 0.39722268836264885, 0.5529639665721564],
+     "nodes": [87, 83, 84, 62, 79, 61, 123, 119, 159, 195, 155, 191, 120, 98, 156, 192, 134, 170, 115, 97, 151, 187, 133, 169],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.1402669565469637, 0.1402669565469637, 0.0, 0.7194660869060726],
+     "nodes": [161, 197, 125, 107, 179, 143, 89, 71, 67, 175, 139, 103],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.0, 0.14841000524992465, 0.2721868240558658, 0.5794031706942095],
+     "nodes": [86, 77, 85, 70, 74, 68, 122, 113, 158, 194, 149, 185, 121, 106, 157, 193, 142, 178, 110, 104, 146, 182, 140, 176],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.4244361566385097, 0.4244361566385097, 0.0, 0.1511276867229806],
+     "nodes": [141, 177, 105, 116, 188, 152, 69, 80, 82, 190, 154, 118],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.28323397407105344, 0.28323397407105344, 0.0, 0.4335320518578931],
+     "nodes": [153, 189, 117, 112, 184, 148, 81, 76, 75, 183, 147, 111],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.04757236270618764, 0.04757236270618764, 0.04757236270618764, 0.8572829118814371],
+     "nodes": [285, 229, 208, 202],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.05305638020916981, 0.05305638020916981, 0.14754326662663753, 0.7463439729550229],
+     "nodes": [284, 250, 283, 228, 235, 214, 282, 227, 207, 230, 209, 203],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.05627920105400647, 0.05627920105400647, 0.2848690980926514, 0.6025724997993357],
+     "nodes": [281, 265, 278, 226, 255, 219, 276, 224, 206, 251, 215, 204],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.05734950671280992, 0.05734950671280992, 0.4426504932871901, 0.4426504932871901],
+     "nodes": [275, 269, 223, 266, 220, 205],
+     "free": true
+    },
+    {
+     "type": "S211",
+     "barycentric": [0.16139794181277972, 0.16139794181277972, 0.058376312834736266, 0.6188278035397043],
+     "nodes": [277, 225, 279, 248, 213, 234, 280, 249, 240, 210, 231, 236],
+     "free": true
+    },
+    {
+     "type": "S1111",
+     "barycentric": [0.06097392276331115, 0.16827983650563427, 0.30560025570491994, 0.4651459850261346],
+     "nodes": [274, 264, 272, 247, 259, 244, 273, 263, 268, 222, 254, 218, 270, 245, 267, 221, 233, 212, 256, 241, 252, 216, 232, 211],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.3125006893252037, 0.3125006893252037, 0.3125006893252037, 0.062497932024388914],
+     "nodes": [217, 253, 260, 262],
+     "free": true
+    },
+    {
+     "type": "S31",
+     "barycentric": [0.173859421912965, 0.173859421912965, 0.173859421912965, 0.478421734261105],
+     "nodes": [271, 246, 239, 237],
+     "free": true
+    },
+    {
+     "type": "S22",
+     "barycentric": [0.1779737140745598, 0.1779737140745598, 0.3220262859254402, 0.3220262859254402],
+     "nodes": [261, 258, 243, 257, 242, 238],
+     "free": true
+    }
+   ],
+   "log_abs_det": 899.2878528946561,
+   "start_log_abs_det": 899.2878528946561,
+   "other_starts": {
+    "warp_blend": 899.287852894656
+   },
+   "projected_gradient_norm": 4.11972539415828e-12,
+   "optimizer": {
+    "status": 0,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "iterations": 0,
+    "evaluations": 1,
+    "newton_steps": 0
+   },
+   "lebesgue_estimate": 32.13590666254821,
+   "seconds": 1.086941140703857
+  }
+ }
+}

@@ -53,3 +53,4 @@ testpaths = ["tests"]
 
 [tool.setuptools.package-data]
 "hybridge.core" = ["geometries/*.geo"]
+"hybridge.core.simplex" = ["data/*.json"]
