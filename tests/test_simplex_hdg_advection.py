@@ -35,7 +35,6 @@ from simplex_hdg_transport import (
     local_solve,
     polynomial_gradient,
     transport_face_weights,
-    volume_loads,
 )
 
 VOLUME_BASES = (
@@ -172,7 +171,7 @@ def test_local_solve_reproduces_polynomials_and_the_exact_flux(dim, order, basis
     beta = BETA[dim]
     exact = random_polynomial(dim, order, seed=11 * dim + order)
     gradient = polynomial_gradient(dim, order, seed=11 * dim + order)
-    loads = volume_loads(reference, lambda x: gradient(x) @ beta + ALPHA * exact(x))
+    loads = volume_load(reference, lambda x: gradient(x) @ beta + ALPHA * exact(x))[None]
     uhat = trace_coefficients(reference, trace, exact)
     points = random_interior_points(dim, 50, seed=3)
     basis_values = np.asarray(_evaluate_basis(reference.basis_type, order, points), dtype=np.float64)
@@ -277,7 +276,7 @@ def test_face_orientation_changes_the_condensed_matrix_by_the_orientation_matric
         rotations = reference.trace_tables(trace).orientation_matrices.astype(np.float64)
         exact = random_polynomial(dim, order, seed=5)
         gradient = polynomial_gradient(dim, order, seed=5)
-        loads = volume_loads(reference, lambda x: gradient(x) @ BETA[dim] + ALPHA * exact(x))
+        loads = volume_load(reference, lambda x: gradient(x) @ BETA[dim] + ALPHA * exact(x))[None]
         points = random_interior_points(dim, 20, seed=9)
         basis_values = np.asarray(_evaluate_basis("orthonormal", order, points), dtype=np.float64)
         for stabilization in STABILIZATIONS:
@@ -301,8 +300,9 @@ def test_blocks_of_stacked_elements_equal_the_blocks_of_each_element(dim):
     """One call on E elements returns, for each element, the blocks of a call on that element alone.
 
     The geometric inputs are arbitrary arrays (not those of a real element); this
-    checks only the element-batched layout that phase 2 will use, including
-    broadcasting of inputs given for one element.
+    checks only the element-batched layout, including broadcasting of inputs given
+    for one element. The geometry of real cells is checked in
+    ``test_simplex_hdg_advection_geometry.py``.
     """
     reference = _reference(dim, 2, "bernstein")
     rng = np.random.default_rng(2)
@@ -329,13 +329,6 @@ def test_blocks_of_stacked_elements_equal_the_blocks_of_each_element(dim):
     broadcast = element_geometry(reference, beta=inputs["beta"], alpha=1.0)
     assert broadcast["inverse_jacobians"].shape == (count, dim, dim)
     assert np.array_equal(broadcast["normals"][3], reference.reference_normals)
-    jacobians = rng.standard_normal((count, dim, dim))
-    offsets = rng.standard_normal((count, dim))
-    exact = random_polynomial(dim, 2, seed=1)
-    loads = volume_loads(reference, exact, jacobians=jacobians, offsets=offsets)
-    for e in range(count):
-        mapped = volume_load(reference, lambda xi: exact(offsets[e] + xi @ jacobians[e].T))
-        assert np.allclose(loads[e], abs(np.linalg.det(jacobians[e])) * mapped, rtol=1e-13, atol=1e-13)
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +407,7 @@ def test_triangle_blocks_equal_the_numpy_transport_assembly(order, basis, kind, 
             interior_mass = advection_interior_trace_mass_blocks_from_weight(space, gamma_face, trace_space=trace_space)
 
             a, b, c, d = _blocks(reference, trace, beta=beta, stabilization=stabilization)
-            loads = volume_loads(reference, lambda x: gradient(x) @ beta + ALPHA * exact(x))[0]
+            loads = volume_load(reference, lambda x: gradient(x) @ beta + ALPHA * exact(x))
             label = (sign, stabilization)
             # The driver keeps only A^{-1}; its inverse differs from A by about cond(A) times the rounding unit.
             a_present = np.linalg.inv(present.local_solver[0])

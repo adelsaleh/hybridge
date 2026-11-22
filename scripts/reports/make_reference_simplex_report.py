@@ -2,7 +2,7 @@
 
 Usage::
 
-    python scripts/reports/make_reference_simplex_report.py --out DIR [--stages AB] [--pmax-2d 10] [--pmax-3d 8]
+    python scripts/reports/make_reference_simplex_report.py --out DIR [--stages ABC] [--pmax-2d 10] [--pmax-3d 8]
 
 The report is one multi-page PDF ``DIR/report.pdf`` plus ``DIR/summary.json``
 with the numbers behind every figure. ``--png`` also writes one PNG per page.
@@ -23,7 +23,10 @@ Pages:
 9-12. stage B: HDG for ``alpha u = f`` on affine cells, patches and Kuhn box meshes
    (``reference_simplex_stage_b.py``: solutions, orientation matrices,
    convergence in h and p, and the numbers of the geometry tests);
-13. sizes of the local spaces and tables.
+13-16. stage C: HDG for ``beta . grad u + alpha u = f`` on affine cells and Kuhn box meshes
+   (``reference_simplex_stage_c.py``: solutions, convergence in h and p, condition number
+   of the interior trace matrix, and the numbers of the geometry tests);
+17. sizes of the local spaces and tables.
 """
 
 from __future__ import annotations
@@ -53,6 +56,7 @@ from hybridge.core.simplex.reference import (  # noqa: E402
 from hybridge.io import reference_plots as rp  # noqa: E402
 from hybridge.io.figures import publication_style  # noqa: E402
 from reference_simplex_stage_b import add_stage_b_pages  # noqa: E402
+from reference_simplex_stage_c import add_stage_c_pages  # noqa: E402
 
 MODAL = ("dub_orth", "orthonormal", "bernstein", "hier_C0")
 FAMILIES = ("equispaced", "warp_blend", "recursive", "fekete", "fekete_free")
@@ -380,7 +384,7 @@ def main(argv=None) -> int:
     """Parse the options, draw the selected pages into ``report.pdf`` and write ``summary.json``."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, type=Path, help="output directory")
-    parser.add_argument("--stages", default="AB", help="HDG stages to include (letters A, B)")
+    parser.add_argument("--stages", default="ABC", help="HDG stages to include (letters A, B, C)")
     parser.add_argument("--pmax-2d", type=int, default=10)
     parser.add_argument("--pmax-3d", type=int, default=8)
     parser.add_argument("--png", action="store_true", help="also write one PNG per page")
@@ -402,6 +406,8 @@ def main(argv=None) -> int:
         pages.append(("stage_a", lambda pdf: page_stage_a(pdf, summary, args.pmax_2d, args.pmax_3d)))
     if "B" in args.stages:
         pages.append(("stage_b", lambda pdf: add_stage_b_pages(pdf, summary)))
+    if "C" in args.stages:
+        pages.append(("stage_c", lambda pdf: add_stage_c_pages(pdf, summary)))
     pages.append(("sizes", lambda pdf: page_sizes(pdf, summary)))
 
     class _Pages:

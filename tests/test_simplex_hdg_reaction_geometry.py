@@ -32,16 +32,18 @@ from hybridge.core.quadrature import _evaluate_basis, _evaluate_simplex_basis
 from hybridge.core.simplex.reference import face_permutations, reference_simplex
 from simplex_hdg_helpers import random_polynomial, reaction_blocks
 from simplex_hdg_mesh import (
+    CELL_KINDS,
     MESH_NAMES,
     cell_load,
+    cell_vertices,
     evaluate_cells,
     face_trace_projection,
-    kuhn_box_mesh,
     named_mesh,
-    perturb_interior_vertices,
+    one_cell_mesh,
     polynomial_data,
     quadratic_alpha,
     reaction_convergence,
+    reference_coordinates,
     reference_element,
     relabel_cells,
     sample_points,
@@ -51,6 +53,7 @@ from simplex_hdg_mesh import (
     solve_polynomial_problem,
     solve_reaction,
     two_cell_patch,
+    two_dimensional_meshes,
     volume_rule,
 )
 
@@ -64,52 +67,6 @@ TAU = 2.3
 # ---------------------------------------------------------------------------
 # (a) One affine cell: geometry and blocks against direct quadrature
 # ---------------------------------------------------------------------------
-
-
-def _cell_vertices(dim: int, kind: str, seed: int) -> np.ndarray:
-    """Vertex coordinates ``(d + 1, d)`` of one affine cell of the given kind.
-
-    ``random``: Gaussian vertices; ``rotated``: a scaled, rotated and shifted
-    reference simplex; ``thin``: one direction scaled by 1e-2, then rotated;
-    ``sliver`` (3D: four nearly coplanar vertices of a square; 2D: a flat triangle);
-    ``reflected``: the random cell with two vertices exchanged (``det A_K < 0``).
-    """
-    rng = np.random.default_rng(seed)
-    rotation, _ = np.linalg.qr(rng.standard_normal((dim, dim)))
-    base = reference_simplex(dim).vertices
-    if kind == "random":
-        return rng.standard_normal((dim + 1, dim))
-    if kind == "rotated":
-        return 0.3 * base @ rotation.T + rng.standard_normal(dim)
-    if kind == "thin":
-        scale = np.ones(dim)
-        scale[1] = 1e-2
-        return (base * scale) @ rotation.T + rng.standard_normal(dim)
-    if kind == "sliver":
-        if dim == 2:
-            return np.array([[0.0, 0.0], [1.0, 0.0], [0.5, 1e-2]]) @ rotation.T
-        return np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 1e-2], [1.0, 1.0, 0.0], [0.0, 1.0, 1e-2]]) @ rotation.T
-    if kind == "reflected":
-        vertices = rng.standard_normal((dim + 1, dim))
-        return vertices[[1, 0] + list(range(2, dim + 1))]
-    raise ValueError(kind)
-
-
-def _one_cell_mesh(vertices: np.ndarray, seed: int):
-    """A mesh of one cell whose vertices carry random distinct mesh numbers (so its faces have random orientations)."""
-    dim = vertices.shape[1]
-    numbers = np.random.default_rng(seed).choice(12, size=dim + 1, replace=False)
-    coordinates = np.zeros((12, dim))
-    coordinates[numbers] = vertices
-    return simplex_mesh(coordinates, numbers[None, :]), numbers
-
-
-def _reference_coordinates(vertices: np.ndarray, points: np.ndarray) -> np.ndarray:
-    """Reference coordinates of physical points, from their barycentric coordinates in the cell ``vertices``."""
-    dim = vertices.shape[1]
-    system = np.vstack((vertices.T, np.ones(dim + 1)))
-    lam = np.linalg.solve(system, np.vstack((points.T, np.ones(len(points))))).T
-    return reference_simplex(dim).from_barycentric(lam)
 
 
 def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
@@ -128,7 +85,7 @@ def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
     points, weights = reference._generic_volume_rule
     measure = abs(np.linalg.det((vertices[1:] - vertices[0]).T)) / factorial(dim)
     x = simplex.barycentric(points) @ vertices
-    phi = np.asarray(_evaluate_basis(reference.basis_type, order, _reference_coordinates(vertices, x)), dtype=np.float64)
+    phi = np.asarray(_evaluate_basis(reference.basis_type, order, reference_coordinates(vertices, x)), dtype=np.float64)
     w = weights * measure / simplex.measure
     a = alpha * phi.T @ (w[:, None] * phi)
     face_points, face_weights = reference._generic_face_rule
@@ -142,7 +99,7 @@ def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
         else:
             area = 0.5 * np.linalg.norm(np.cross(corners[1] - corners[0], corners[2] - corners[0]))
         xf = face_simplex.barycentric(face_points) @ corners
-        phi_f = np.asarray(_evaluate_basis(reference.basis_type, order, _reference_coordinates(vertices, xf)), dtype=np.float64)
+        phi_f = np.asarray(_evaluate_basis(reference.basis_type, order, reference_coordinates(vertices, xf)), dtype=np.float64)
         wf = face_weights * area / face_simplex.measure
         a += tau * phi_f.T @ (wf[:, None] * phi_f)
         columns.append(tau * phi_f.T @ (wf[:, None] * mu))
@@ -155,16 +112,13 @@ def _direct_blocks(vertices, numbers, reference, trace, alpha, tau):
     return a, b, b.T, d
 
 
-CELL_KINDS = ("random", "rotated", "thin", "sliver", "reflected")
-
-
 @pytest.mark.parametrize("dim", (2, 3))
 @pytest.mark.parametrize("kind", CELL_KINDS)
 def test_cell_geometry_equals_direct_formulas(dim, kind):
     """J_K, r_{K,f}, the outward normals and the orientations of one cell equal formulas computed from its vertices."""
     for seed in range(4):
-        vertices = _cell_vertices(dim, kind, seed)
-        mesh, numbers = _one_cell_mesh(vertices, seed)
+        vertices = cell_vertices(dim, kind, seed)
+        mesh, numbers = one_cell_mesh(vertices, seed)
         simplex = reference_simplex(dim)
         volume = abs(np.linalg.det((vertices[1:] - vertices[0]).T)) / factorial(dim)
         assert np.isclose(mesh.jacobians[0], volume / simplex.measure, rtol=1e-13)
@@ -195,8 +149,8 @@ def test_cell_blocks_equal_direct_quadrature(dim, kind, trace):
         for basis in ("orthonormal", "bernstein", "lagrange_warp_blend"):
             reference = reference_element(dim, order, basis)
             for seed in range(2):
-                vertices = _cell_vertices(dim, kind, 10 * seed + order)
-                mesh, numbers = _one_cell_mesh(vertices, seed + order)
+                vertices = cell_vertices(dim, kind, 10 * seed + order)
+                mesh, numbers = one_cell_mesh(vertices, seed + order)
                 blocks = reaction_blocks(reference, trace, alpha=ALPHA, tau=TAU, orientations=mesh.orientations[0],
                                          jacobian=mesh.jacobians[0], face_ratios=mesh.face_ratios[0])
                 direct = _direct_blocks(vertices, numbers, reference, trace, ALPHA, TAU)
@@ -212,8 +166,8 @@ def test_one_cell_reproduces_polynomials(dim, kind):
     for order in ORDERS[dim]:
         for basis in ("orthonormal", "hier_C0", "lagrange_fekete"):
             reference = reference_element(dim, order, basis)
-            vertices = _cell_vertices(dim, kind, order)
-            mesh, _ = _one_cell_mesh(vertices, order)
+            vertices = cell_vertices(dim, kind, order)
+            mesh, _ = one_cell_mesh(vertices, order)
             exact = random_polynomial(dim, order, seed=order + 3)
             solution = solve_reaction(mesh, reference, "lagrange_warp_blend", alpha=ALPHA, tau=TAU,
                                       source=lambda x: ALPHA * exact(x), boundary=exact)
@@ -390,17 +344,6 @@ def test_p_convergence_on_the_kuhn_box(dim):
 # ---------------------------------------------------------------------------
 
 
-def _two_dimensional_meshes():
-    """A rectangle mesh and a perturbed Kuhn mesh, as DGMesh objects."""
-    from hybridge.core.mesh import DGMesh, rectangle_mesh
-
-    perturbed = perturb_interior_vertices(kuhn_box_mesh(2, 3), 0.1, seed=2)
-    return {
-        "rectangle": rectangle_mesh(3, 2, xlim=(0.0, 2.0), ylim=(-1.0, 0.5)),
-        "perturbed": DGMesh.from_arrays(perturbed.vertices, perturbed.cells),
-    }
-
-
 TWO_D_TRACES = (("legacy-lagrange", "lagrange_warp_blend"), ("legendre-modal", "dub_orth"))
 
 
@@ -424,7 +367,7 @@ def test_two_dimensional_blocks_equal_the_present_assembly(order, basis, kind, t
         element_boundary_mats_from_trace_weight,
     )
 
-    for dg_mesh in _two_dimensional_meshes().values():
+    for dg_mesh in two_dimensional_meshes().values():
         mesh = simplex_mesh(dg_mesh.node_coords, dg_mesh.triangles)
         space = DGSpace(dg_mesh, order, basis_type=basis)
         trace_space = space.trace_space(kind)
@@ -466,7 +409,7 @@ def test_two_dimensional_solution_equals_solve_advection_reaction_hdg(order, bas
     from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
 
     boundary = random_polynomial(2, order, seed=41)
-    for dg_mesh in _two_dimensional_meshes().values():
+    for dg_mesh in two_dimensional_meshes().values():
         mesh = simplex_mesh(dg_mesh.node_coords, dg_mesh.triangles)
         reference = reference_element(2, order, basis)
         moments = cell_load(mesh, reference, smooth_source, volume_rule(2, 2 * order + 8))

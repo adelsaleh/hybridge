@@ -50,15 +50,39 @@ and every block is returned stacked over it, so that one call serves many
 elements. The defaults describe the reference element itself: ``J = I``,
 ``det J = 1``, the reference face ratios and unit outward normals, and the
 identity orientation on every face.
+
+**Meshes.** :func:`mesh_transport_blocks` takes the geometry of a
+:class:`simplex_hdg_mesh.SimplexMesh` (``J = A_K``), :func:`solve_transport`
+solves on a mesh with the trace prescribed on every boundary face (as
+``boundary_mode="eliminate"`` of ``solve_advection_reaction_hdg``), and
+:func:`transport_convergence` measures L2 errors on Kuhn box meshes for a smooth
+solution.
 """
 
 from __future__ import annotations
 
+from math import factorial
+
 import numpy as np
 
-from hybridge.core.quadrature import ReferenceElementData, _evaluate_basis
+from hybridge.core.quadrature import ReferenceElementData, _evaluate_simplex_basis
+from hybridge.core.simplex.reference import reference_simplex
 from hybridge.hdg.stabilization import upwind_factor
 from simplex_hdg_helpers import monomial_exponents
+from simplex_hdg_mesh import (
+    SimplexMesh,
+    cell_load,
+    cell_weighted_mass,
+    face_rule,
+    face_trace_projection,
+    kuhn_box_mesh,
+    l2_error,
+    reference_coordinates,
+    reference_element,
+    smooth_solution,
+    solve_condensed,
+    volume_rule,
+)
 
 
 def _stacked(value, default, tail_ndim: int) -> np.ndarray:
@@ -209,31 +233,6 @@ def advection_reaction_blocks(
     return a, b, c, d
 
 
-def volume_loads(reference: ReferenceElementData, source, *, jacobians=None, offsets=None, rule=None) -> np.ndarray:
-    """Return ``F_i = int_K f phi_i dx`` on ``E`` affine elements, shape ``(E, n_u)``.
-
-    ``source`` maps physical points ``(n, d)`` to values ``(n,)``. The element
-    ``K`` is the image of the reference element under ``x = J xi + c`` with
-    ``jacobians`` ``J`` (``(d, d)`` or ``(E, d, d)``, default the identity) and
-    ``offsets`` ``c`` (``(d,)`` or ``(E, d)``, default zero), so
-    ``F_i = |det J| int_K^ f(J xi + c) phi_i(xi) dxi``. ``rule`` is
-    ``(points, weights)`` on the reference element; the default is exact for
-    degree ``2p``, so pass a finer rule when ``f`` is not a polynomial of degree
-    at most ``p``.
-    """
-    dim = reference.dim
-    points, weights = reference._generic_volume_rule if rule is None else rule
-    jacobian = _stacked(jacobians, np.eye(dim), 2)
-    offset = _stacked(offsets, np.zeros(dim), 1)
-    count = max(jacobian.shape[0], offset.shape[0])
-    jacobian = np.broadcast_to(jacobian, (count, dim, dim))
-    offset = np.broadcast_to(offset, (count, dim))
-    mapped = offset[:, None, :] + np.einsum("Ekl,ql->Eqk", jacobian, points)
-    values = np.asarray(source(mapped.reshape(-1, dim)), dtype=np.float64).reshape(count, len(weights))
-    basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, points), dtype=np.float64)
-    return np.abs(np.linalg.det(jacobian))[:, None] * ((values * weights) @ basis)
-
-
 def local_solve(a, b, loads, uhat) -> np.ndarray:
     """Return the element coefficients ``u = A^{-1} (F + B uhat)`` of every element, shape ``(E, n_u)``."""
     rhs = np.asarray(loads, dtype=np.float64) + np.einsum("Eia,Ea->Ei", b, np.asarray(uhat, dtype=np.float64))
@@ -266,3 +265,190 @@ def polynomial_gradient(dim: int, degree: int, seed: int):
         return gradient
 
     return evaluate
+
+
+# ---------------------------------------------------------------------------
+# One physical cell: blocks by quadrature on the cell itself
+# ---------------------------------------------------------------------------
+
+
+def _face_weights_from_formula(normal_flux: float, stabilization) -> tuple[float, float]:
+    """``(tau, gamma)`` of one face from ``beta.n``: ``|beta.n|``, ``2 |beta.n|`` or the given absolute value."""
+    if stabilization is None:
+        tau = abs(normal_flux)
+    elif stabilization == "lax-friedrichs":
+        tau = 2.0 * abs(normal_flux)
+    else:
+        tau = float(stabilization)
+    return tau, tau - normal_flux
+
+
+def direct_cell_blocks(vertices, numbers, reference, trace, beta, alpha, stabilization):
+    """Blocks ``(A, B, C, D)`` of ``beta . grad u + alpha u = f`` on one physical cell by quadrature on the cell itself.
+
+    ``vertices`` ``(d + 1, d)`` are the cell corners in local order, ``numbers``
+    ``(d + 1,)`` their mesh numbers (which fix the global vertex order of every
+    face), ``beta`` ``(d,)`` the velocity and ``stabilization`` ``None`` (upwind),
+    ``"lax-friedrichs"`` or an absolute ``tau``. The blocks have no element axis.
+    This is an independent check of :func:`mesh_transport_blocks`: nothing here
+    comes from :class:`simplex_hdg_mesh.SimplexMesh`. Volume points are
+    ``x_q = sum_k lambda_k(xi_q) X_k`` with weights scaled by ``|K| / |K^|``; basis values
+    and reference gradients are taken at the reference point of ``x_q`` found from its
+    barycentric coordinates, and the derivative along ``beta`` is
+    ``grad^ phi(xi(x_q)) . (xi(x_q + beta) - xi(x_q))``, exact for an affine map. The unit
+    normal of a face comes from its corners (a rotated edge or a cross product) and points
+    away from the cell centroid; the face is parametrized with its vertices sorted by mesh
+    number (the global order) and its weights scaled by ``|F| / |F^|``.
+
+    ``A_ij = alpha (phi_j, phi_i) - (phi_j, beta . grad phi_i) + sum_f tau_f <phi_j, phi_i>_f``,
+    ``B_ia = gamma_f <mu_a, phi_i>_f``, ``C_ai = tau_f <phi_i, mu_a>_f``, ``D_ab = gamma_f <mu_b, mu_a>_f``.
+    """
+    dim = vertices.shape[1]
+    simplex = reference_simplex(dim)
+    face_simplex = reference_simplex(dim - 1)
+    points, weights = reference._generic_volume_rule
+    measure = abs(np.linalg.det((vertices[1:] - vertices[0]).T)) / factorial(dim)
+    x = simplex.barycentric(points) @ vertices
+    xi = reference_coordinates(vertices, x)
+    phi = np.asarray(reference.basis_at(xi), dtype=np.float64)
+    gradients = np.asarray(reference.gradients_at(xi), dtype=np.float64)  # (nq, n_u, d)
+    step = reference_coordinates(vertices, x + beta) - xi  # A_K^{-1} beta in every row
+    derivative = np.einsum("qik,qk->qi", gradients, step)
+    w = weights * measure / simplex.measure
+    a = alpha * phi.T @ (w[:, None] * phi) - derivative.T @ (w[:, None] * phi)
+    face_points, face_weights = reference._generic_face_rule
+    mu = np.asarray(_evaluate_simplex_basis(trace, dim - 1, reference.order, face_points, gradients=False),
+                    dtype=np.float64)
+    centroid = vertices.mean(axis=0)
+    columns, rows, diagonal = [], [], []
+    for local in simplex.face_vertices:
+        corners = vertices[sorted(local, key=lambda k: numbers[k])]
+        if dim == 2:
+            tangent = corners[1] - corners[0]
+            area = np.linalg.norm(tangent)
+            normal = np.array([tangent[1], -tangent[0]]) / area
+        else:
+            cross = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+            area = 0.5 * np.linalg.norm(cross)
+            normal = cross / np.linalg.norm(cross)
+        if normal @ (corners.mean(axis=0) - centroid) < 0.0:
+            normal = -normal
+        tau, gamma = _face_weights_from_formula(float(beta @ normal), stabilization)
+        xf = face_simplex.barycentric(face_points) @ corners
+        phi_f = np.asarray(reference.basis_at(reference_coordinates(vertices, xf)), dtype=np.float64)
+        wf = face_weights * area / face_simplex.measure
+        a += tau * phi_f.T @ (wf[:, None] * phi_f)
+        columns.append(gamma * phi_f.T @ (wf[:, None] * mu))
+        rows.append(tau * mu.T @ (wf[:, None] * phi_f))
+        diagonal.append(gamma * mu.T @ (wf[:, None] * mu))
+    n_t = mu.shape[1]
+    d = np.zeros((len(diagonal) * n_t,) * 2)
+    for f, block in enumerate(diagonal):
+        d[f * n_t:(f + 1) * n_t, f * n_t:(f + 1) * n_t] = block
+    return a, np.concatenate(columns, axis=1), np.concatenate(rows, axis=0), d
+
+
+# ---------------------------------------------------------------------------
+# Meshes: blocks with the geometry of a SimplexMesh, global solve, convergence
+# ---------------------------------------------------------------------------
+
+
+def mesh_transport_blocks(mesh: SimplexMesh, reference: ReferenceElementData, trace_basis: str, *, beta, alpha,
+                          stabilization=None):
+    """Return ``(A, B, C, D)`` of every cell of ``mesh``, stacked over the cells (shapes of :func:`advection_reaction_blocks`).
+
+    The geometry is that of :class:`simplex_hdg_mesh.SimplexMesh`: the inverse
+    ``A_K^{-1}`` of the matrix of the affine map ``x_K(xi) = A_K xi + b_K``, the
+    Jacobian ``|det A_K|``, the ratios ``r_{K,f}``, the unit outward normals and the
+    orientation of every cell face. ``beta`` ``(d,)`` or ``(n_K, d)`` and ``alpha``
+    (scalar or ``(n_K,)``) are constant on each cell.
+    """
+    return advection_reaction_blocks(
+        reference, trace_basis, beta=beta, alpha=alpha, stabilization=stabilization,
+        inverse_jacobians=np.linalg.inv(mesh.affine_matrices), determinants=mesh.jacobians,
+        face_ratios=mesh.face_ratios, normals=mesh.normals, orientations=mesh.orientations,
+    )
+
+
+def solve_transport(mesh: SimplexMesh, reference: ReferenceElementData, trace_basis: str, *, beta, alpha, source,
+                    boundary, stabilization=None, rule=None, face_rule=None):
+    """Solve the HDG discretization of ``beta . grad u + alpha u = f`` on ``mesh``; return a ``CondensedSolution``.
+
+    The blocks are those of :func:`mesh_transport_blocks`, the loads
+    ``int_K f phi_i`` (:func:`simplex_hdg_mesh.cell_load` on ``rule``), and the
+    trace on every boundary face, inflow and outflow, is the L2 projection of
+    ``g = boundary`` (:func:`simplex_hdg_mesh.face_trace_projection` on
+    ``face_rule``); :func:`simplex_hdg_mesh.solve_condensed` solves for the
+    interior faces. This is the treatment of ``boundary_mode="eliminate"`` of
+    :func:`hybridge.solvers.advection_reaction.solve_advection_reaction_hdg`, which
+    prescribes the projected data on every boundary edge (``"penalty"`` does the
+    same through a large diagonal entry). With the upwind ``tau = |beta.n|`` an
+    outflow face (``beta.n > 0``) has ``gamma = 0``, so its columns of ``B`` and
+    ``D`` vanish and the prescribed trace does not enter ``u_h``: the flux there is
+    ``beta.n u``, the natural outflow condition. With ``tau = k |beta.n|``, ``k > 1``,
+    or an absolute ``tau`` the trace of an outflow face enters ``u_h``, as in hybridge.
+    ``source`` and ``boundary`` are callables of physical points ``(n, d)``.
+    """
+    blocks = mesh_transport_blocks(mesh, reference, trace_basis, beta=beta, alpha=alpha, stabilization=stabilization)
+    loads = (cell_load(mesh, reference, source, rule), np.zeros((mesh.num_cells, blocks[1].shape[2])))
+    boundary_trace = face_trace_projection(mesh, reference, trace_basis, boundary, face_rule)
+    return solve_condensed(mesh, blocks, loads, boundary_trace)
+
+
+def interior_trace_matrix(mesh: SimplexMesh, solution) -> np.ndarray:
+    """Return the dense matrix ``S_II`` of the trace system restricted to the interior faces (the matrix that is solved)."""
+    n_t = solution.uhat.shape[1]
+    free = np.flatnonzero(np.repeat(~mesh.boundary_faces, n_t))
+    return solution.matrix[free][:, free].toarray()
+
+
+def smooth_gradient(x: np.ndarray) -> np.ndarray:
+    """Gradient ``(n, d)`` of :func:`simplex_hdg_mesh.smooth_solution` ``u = exp(s / 2) cos(pi x_1 / 2)``, ``s = x_1 + ... + x_d``.
+
+    ``d_1 u = exp(s / 2) (cos(pi x_1 / 2) / 2 - (pi / 2) sin(pi x_1 / 2))`` and
+    ``d_k u = u / 2`` for ``k >= 2``.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    growth = np.exp(0.5 * np.sum(x, axis=1))
+    angle = 0.5 * np.pi * x[:, 0]
+    gradient = np.repeat((0.5 * growth * np.cos(angle))[:, None], x.shape[1], axis=1)
+    gradient[:, 0] -= 0.5 * np.pi * growth * np.sin(angle)
+    return gradient
+
+
+def smooth_transport_source(beta, alpha: float):
+    """Return the callable ``f = beta . grad u + alpha u`` of :func:`simplex_hdg_mesh.smooth_solution` at points ``(n, d)``."""
+    beta = np.asarray(beta, dtype=np.float64)
+
+    def source(x: np.ndarray) -> np.ndarray:
+        """Evaluate ``f`` at physical points ``(n, d)``."""
+        return smooth_gradient(x) @ beta + alpha * smooth_solution(x)
+
+    return source
+
+
+def transport_convergence(dim: int, order: int, subdivisions, *, beta, alpha: float = 1.0, stabilization=None,
+                          basis: str = "orthonormal", trace_basis: str = "orthonormal"):
+    """L2 errors of ``u_h`` and of the L2 projection of ``u`` on Kuhn box meshes of ``[-1, 1]^d``.
+
+    The problem is ``beta . grad u + alpha u = f`` with the solution
+    :func:`simplex_hdg_mesh.smooth_solution` (also the boundary data ``g``) and
+    the source :func:`smooth_transport_source`; ``subdivisions`` lists the numbers
+    ``N`` of cubes per direction. Loads, boundary projections and errors use rules
+    exact for degree ``2p + 6``. Returns two lists of floats, the errors of ``u_h``
+    and of the projection, one per ``N``.
+    """
+    rule, rule_on_faces = volume_rule(dim, 2 * order + 6), face_rule(dim, 2 * order + 6)
+    reference = reference_element(dim, order, basis)
+    source = smooth_transport_source(beta, alpha)
+    errors, projection_errors = [], []
+    for n in subdivisions:
+        mesh = kuhn_box_mesh(dim, n)
+        solution = solve_transport(mesh, reference, trace_basis, beta=beta, alpha=alpha, source=source,
+                                   boundary=smooth_solution, stabilization=stabilization, rule=rule,
+                                   face_rule=rule_on_faces)
+        errors.append(l2_error(mesh, reference, solution.u, smooth_solution, rule))
+        mass = cell_weighted_mass(mesh, reference, 1.0, rule)
+        projection = np.linalg.solve(mass, cell_load(mesh, reference, smooth_solution, rule)[:, :, None])[:, :, 0]
+        projection_errors.append(l2_error(mesh, reference, projection, smooth_solution, rule))
+    return errors, projection_errors
