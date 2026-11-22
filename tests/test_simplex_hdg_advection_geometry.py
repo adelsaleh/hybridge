@@ -196,6 +196,40 @@ def test_mesh_reproduces_polynomials(dim, name, trace):
 
 @pytest.mark.parametrize("dim", (2, 3))
 @pytest.mark.parametrize("name", MESH_NAMES)
+def test_outflow_boundary_trace_enters_u_h_only_without_upwind(dim, name):
+    """Changing the prescribed trace on the outflow boundary faces leaves u_h unchanged for tau = |beta.n| only.
+
+    On an outflow face (``beta.n > 0``) the upwind ``gamma = tau - beta.n`` is zero, so
+    the columns of ``B`` and ``D`` of that face vanish: prescribing ``uhat`` there, as
+    ``boundary_mode="eliminate"`` does, is the natural outflow condition. With
+    ``tau = 2 |beta.n|`` or an absolute ``tau`` the outflow trace enters ``u_h``.
+    """
+    mesh = named_mesh(name, dim)
+    reference = reference_element(dim, 2, "orthonormal")
+    trace = "orthonormal"
+    beta = BETA[dim]
+    first = mesh.face_cells[:, 0], mesh.face_sides[:, 0]
+    outflow = mesh.boundary_faces & (mesh.normals[first] @ beta > 0.0)
+    assert outflow.any() and (mesh.boundary_faces & ~outflow).any()
+    source, boundary, rule, rule_on_faces = polynomial_data(dim, 2)
+    data = face_trace_projection(mesh, reference, trace, boundary, rule_on_faces)
+    changed = data.copy()
+    changed[outflow] += np.random.default_rng(3).standard_normal(changed[outflow].shape)
+    loads = cell_load(mesh, reference, source, rule)
+    for stabilization in STABILIZATIONS:
+        blocks = mesh_transport_blocks(mesh, reference, trace, beta=beta, alpha=ALPHA, stabilization=stabilization)
+        zero = np.zeros((mesh.num_cells, blocks[1].shape[2]))
+        u = solve_condensed(mesh, blocks, (loads, zero), data).u
+        u_changed = solve_condensed(mesh, blocks, (loads, zero), changed).u
+        difference = np.abs(u_changed - u).max() / np.abs(u).max()
+        if stabilization is None:
+            assert difference <= 1e-13, difference
+        else:
+            assert difference >= 1e-3, (stabilization, difference)
+
+
+@pytest.mark.parametrize("dim", (2, 3))
+@pytest.mark.parametrize("name", MESH_NAMES)
 def test_interior_trace_matrix_is_nonsingular(dim, name):
     """The trace matrix S_II of the interior faces (the one that is solved) is nonsingular; its condition stays moderate.
 
@@ -339,11 +373,13 @@ TWO_D_TRACES = (("legacy-lagrange", "lagrange_warp_blend"), ("legendre-modal", "
 @pytest.mark.parametrize("basis", ("bernstein", "hier_C0", "dub_orth"))
 @pytest.mark.parametrize("kind, trace", TWO_D_TRACES)
 def test_two_dimensional_solution_equals_solve_advection_reaction_hdg(order, basis, kind, trace):
-    """For beta != 0, ``solve_advection_reaction_hdg`` (NumPy, eliminate) solves the same system: equal u_h and uhat.
+    """For beta != 0, ``solve_advection_reaction_hdg`` (NumPy) solves the same system: equal u_h and uhat.
 
     On ``rectangle_mesh`` and a perturbed Kuhn ``DGMesh``, with the velocity as two
     constant callables and the stabilizations ``None`` (upwind), ``"lax-friedrichs"``
-    and the absolute ``tau = 2.3``. Both solves get the same source moments (the
+    and the absolute ``tau = 2.3``, for ``boundary_mode="eliminate"``, and for
+    ``"penalty"`` (boundary trace imposed by a diagonal entry of ``1e20``) with the
+    upwind tau. Both solves get the same source moments (the
     smooth source on a fine rule) and polynomial boundary data of degree p, which
     both project exactly. hybridge orients an edge by ``DGMesh.edges``; the trace of
     an edge whose ``DGMesh`` direction runs against the increasing vertex order is
@@ -368,13 +404,14 @@ def test_two_dimensional_solution_equals_solve_advection_reaction_hdg(order, bas
             blocks = mesh_transport_blocks(mesh, reference, trace, beta=beta, alpha=ALPHA, stabilization=stabilization)
             ours = solve_condensed(mesh, blocks, (moments, np.zeros((mesh.num_cells, blocks[1].shape[2]))),
                                    face_trace_projection(mesh, reference, trace, boundary))
-            result = solve_advection_reaction_hdg(
-                moments, (lambda x, y: np.full_like(x, beta[0]), lambda x, y: np.full_like(x, beta[1])), ALPHA,
-                lambda x, y: boundary(np.column_stack((np.ravel(x), np.ravel(y)))).reshape(np.shape(x)),
-                space, solver="direct", boundary_mode="eliminate", advection_stabilization=stabilization,
-                trace_basis=kind, verbose=False)
-            scale = max(1.0, np.abs(ours.u).max())
-            assert np.abs(np.asarray(result.field.coeffs) - ours.u).max() <= 1e-11 * scale, stabilization
-            present = np.asarray(result.trace).reshape(dg_mesh.num_edg, -1)
-            present = np.where(against[:, None], present @ rotation[1].T, present)
-            assert np.abs(present[edge_of_face] - ours.uhat).max() <= 1e-11 * scale, stabilization
+            for mode in ("eliminate", "penalty") if stabilization is None else ("eliminate",):
+                result = solve_advection_reaction_hdg(
+                    moments, (lambda x, y: np.full_like(x, beta[0]), lambda x, y: np.full_like(x, beta[1])), ALPHA,
+                    lambda x, y: boundary(np.column_stack((np.ravel(x), np.ravel(y)))).reshape(np.shape(x)),
+                    space, solver="direct", boundary_mode=mode, advection_stabilization=stabilization,
+                    trace_basis=kind, verbose=False)
+                scale = max(1.0, np.abs(ours.u).max())
+                assert np.abs(np.asarray(result.field.coeffs) - ours.u).max() <= 1e-11 * scale, (stabilization, mode)
+                present = np.asarray(result.trace).reshape(dg_mesh.num_edg, -1)
+                present = np.where(against[:, None], present @ rotation[1].T, present)
+                assert np.abs(present[edge_of_face] - ours.uhat).max() <= 1e-11 * scale, (stabilization, mode)
