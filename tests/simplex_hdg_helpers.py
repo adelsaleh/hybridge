@@ -50,11 +50,28 @@ def random_interior_points(dim: int, count: int, seed: int) -> np.ndarray:
     return -1.0 + 2.0 * bary[:, 1:]
 
 
-def volume_load(reference: ReferenceElementData, source) -> np.ndarray:
-    """Return ``F_i = int_K^ f phi_i`` on the reference element for a callable ``f(points) -> (n,)``."""
-    points, weights = reference._generic_volume_rule
+def volume_load(reference: ReferenceElementData, source, rule=None) -> np.ndarray:
+    """Return ``F_i = int_K^ f phi_i`` on the reference element for a callable ``f(points) -> (n,)``.
+
+    ``rule`` is ``(points, weights)``; the default is the rule of ``reference``
+    exact for degree ``2p``, so pass a finer rule when ``f`` is not a polynomial.
+    """
+    points, weights = reference._generic_volume_rule if rule is None else rule
     basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, points), dtype=np.float64)
-    return basis.T @ (weights * source(points))
+    return basis.T @ (weights * np.asarray(source(points), dtype=np.float64))
+
+
+def weighted_mass(reference: ReferenceElementData, weight, rule=None) -> np.ndarray:
+    """Return ``int_K^ w phi_i phi_j`` for a constant or a callable ``w(points) -> (n,)``, shape ``(n_u, n_u)``.
+
+    ``rule`` is ``(points, weights)``; the default is the rule of ``reference``
+    exact for degree ``2p`` (exact for a constant ``w``).
+    """
+    points, weights = reference._generic_volume_rule if rule is None else rule
+    basis = np.asarray(_evaluate_basis(reference.basis_type, reference.order, points), dtype=np.float64)
+    values = weight(points) if callable(weight) else weight
+    values = np.broadcast_to(np.asarray(values, dtype=np.float64), weights.shape)
+    return basis.T @ ((weights * values)[:, None] * basis)
 
 
 def trace_coefficients(reference: ReferenceElementData, trace_basis: str, function, orientations=None) -> np.ndarray:
@@ -92,8 +109,12 @@ def reaction_blocks(
         orientations=None,
         jacobian: float = 1.0,
         face_ratios=None,
+        alpha_mass=None,
 ):
     """Return ``(A, B, C, D)`` of the HDG discretization of ``alpha u = f`` on one element.
+
+    ``alpha_mass`` replaces ``alpha J M`` by a given matrix ``int_K alpha phi_i phi_j``
+    (from :func:`weighted_mass`) when ``alpha`` varies in space.
 
     The local problem is ``(alpha u, v)_K + <tau (u - uhat), v>_dK = (f, v)_K`` and the
     transmission row is ``<tau (u - uhat), mu>_dK``. With ``r_f`` the face-measure
@@ -115,7 +136,8 @@ def reaction_blocks(
     lift = tables.trace_element_coupling.astype(np.float64)
     trace_mass = tables.trace_mass.astype(np.float64)
     n_t = trace_mass.shape[0]
-    a = alpha * jacobian * mass + tau * np.einsum("f,fij->ij", ratios, face_mass)
+    volume = alpha * jacobian * mass if alpha_mass is None else np.asarray(alpha_mass, dtype=np.float64)
+    a = volume + tau * np.einsum("f,fij->ij", ratios, face_mass)
     b = np.concatenate([tau * ratios[f] * coupling[orientations[f], f] for f in range(num_faces)], axis=1)
     c = np.concatenate([tau * ratios[f] * lift[orientations[f] * num_faces + f] for f in range(num_faces)], axis=0)
     d = np.zeros((num_faces * n_t, num_faces * n_t))

@@ -730,6 +730,7 @@ class ReferenceElementData:
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
             volume_degree: int | None = None,
+            face_degree: int | None = None,
     ) -> "ReferenceElementData":
         """Build reference data for a triangular DG space.
 
@@ -737,6 +738,9 @@ class ReferenceElementData:
         rest of the package.  ``polynomial_order`` is passed through as
         ``order`` and the returned object contains all volume, edge, and
         preweighted reference tensors needed by :class:`DGSpace`.
+        ``face_degree`` sets the exactness of the edge rule of the
+        dimension-generic tables (``face_mass``, ``trace_tables``; default
+        ``2 * polynomial_order``); it does not change the legacy edge tables.
         """
         return cls(
             polynomial_order,
@@ -747,6 +751,7 @@ class ReferenceElementData:
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
             volume_degree=volume_degree,
+            face_degree=face_degree,
         )
 
     @classmethod
