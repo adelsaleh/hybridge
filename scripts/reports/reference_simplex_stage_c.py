@@ -94,14 +94,27 @@ def solve_smooth(mesh, order: int, basis: str = "orthonormal", trace: str = "ort
 
 
 def interior_condition_estimate(mesh, solution) -> float:
-    """Estimate of the 1-norm condition number of ``S_II`` (``scipy.sparse.linalg.onenormest`` of ``S_II`` and of its inverse by LU)."""
+    """Estimate of the 1-norm condition number ``norm_1(S_II) norm_1(S_II^{-1})`` of the interior trace matrix.
+
+    ``norm_1(S_II)`` (the largest column sum of absolute values) is exact;
+    ``norm_1(S_II^{-1})`` is the lower bound of ``scipy.sparse.linalg.onenormest``
+    applied to solves with an LU factorization of ``S_II``. ``onenormest`` draws
+    random vectors from the global NumPy generator, which is seeded with 0 for the
+    call and restored afterwards, so the report is reproducible.
+    """
     n_t = solution.uhat.shape[1]
     free = np.flatnonzero(np.repeat(~mesh.boundary_faces, n_t))
     matrix = solution.matrix[free][:, free].tocsc()
     factor = scipy.sparse.linalg.splu(matrix)
     inverse = scipy.sparse.linalg.LinearOperator(matrix.shape, matvec=factor.solve,
                                                  rmatvec=lambda x: factor.solve(x, trans="T"), dtype=np.float64)
-    return float(scipy.sparse.linalg.onenormest(matrix) * scipy.sparse.linalg.onenormest(inverse))
+    state = np.random.get_state()
+    np.random.seed(0)
+    try:
+        inverse_norm = scipy.sparse.linalg.onenormest(inverse)
+    finally:
+        np.random.set_state(state)
+    return float(scipy.sparse.linalg.norm(matrix, 1) * inverse_norm)
 
 
 def _draw_velocity(ax, beta) -> None:
@@ -262,8 +275,8 @@ def page_conditioning(pdf, summary) -> None:
         result["p"][name] = {"orders": list(P_ORDERS[dim]), "condition": values}
     rp.plot_series(ax, xs, series, xlabel="p", ylabel="cond_1(S_II)", title="against the degree")
     figure.suptitle("Stage C: condition number of the interior trace matrix (orthonormal bases, upwind tau)")
-    figure.supxlabel("cond_1 = norm_1(S_II) norm_1(S_II^{-1}), estimated by scipy.sparse.linalg.onenormest with an LU "
-                     "factorization of S_II.", fontsize=7)
+    figure.supxlabel("cond_1 = norm_1(S_II) norm_1(S_II^{-1}); norm_1(S_II^{-1}) is the lower estimate of "
+                     "scipy.sparse.linalg.onenormest with an LU factorization of S_II (seeded, reproducible).", fontsize=7)
     pdf.savefig(figure)
     summary.setdefault("stage_c", {})["conditioning"] = result
 
