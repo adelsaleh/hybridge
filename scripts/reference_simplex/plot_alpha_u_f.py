@@ -138,7 +138,7 @@ def solve(problem: Problem, dim: int, order: int, *, basis: str, trace: str, tau
     squares = np.zeros(2)
     segment = segment_points(dim, 400)[1]
     max_error = float(np.abs(problem.u(segment) - evaluate(reference, coefficients, segment)).max())
-    for points, weights, values in basis_blocks(reference, rule):
+    for _, points, weights, values in basis_blocks(reference, rule):
         errors = problem.u(points)[:, None] - values @ both
         squares += weights @ errors**2
         max_error = max(max_error, float(np.abs(errors[:, 0]).max()))
