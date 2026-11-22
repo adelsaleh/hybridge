@@ -344,6 +344,75 @@ def named_mesh(name: str, dim: int) -> SimplexMesh:
     raise ValueError(f"unknown mesh name {name!r}; expected one of {MESH_NAMES}")
 
 
+CELL_KINDS = ("random", "rotated", "thin", "sliver", "reflected")
+
+
+def cell_vertices(dim: int, kind: str, seed: int) -> np.ndarray:
+    """Vertex coordinates ``(d + 1, d)`` of one affine cell of the given kind (one of :data:`CELL_KINDS`).
+
+    ``random``: Gaussian vertices; ``rotated``: a scaled, rotated and shifted
+    reference simplex; ``thin``: one direction scaled by 1e-2, then rotated;
+    ``sliver`` (3D: four nearly coplanar vertices of a square; 2D: a flat triangle);
+    ``reflected``: the random cell with two vertices exchanged (``det A_K < 0``).
+    """
+    rng = np.random.default_rng(seed)
+    rotation, _ = np.linalg.qr(rng.standard_normal((dim, dim)))
+    base = reference_simplex(dim).vertices
+    if kind == "random":
+        return rng.standard_normal((dim + 1, dim))
+    if kind == "rotated":
+        return 0.3 * base @ rotation.T + rng.standard_normal(dim)
+    if kind == "thin":
+        scale = np.ones(dim)
+        scale[1] = 1e-2
+        return (base * scale) @ rotation.T + rng.standard_normal(dim)
+    if kind == "sliver":
+        if dim == 2:
+            return np.array([[0.0, 0.0], [1.0, 0.0], [0.5, 1e-2]]) @ rotation.T
+        return np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 1e-2], [1.0, 1.0, 0.0], [0.0, 1.0, 1e-2]]) @ rotation.T
+    if kind == "reflected":
+        vertices = rng.standard_normal((dim + 1, dim))
+        return vertices[[1, 0] + list(range(2, dim + 1))]
+    raise ValueError(kind)
+
+
+def one_cell_mesh(vertices: np.ndarray, seed: int):
+    """A mesh of one cell whose vertices carry random distinct mesh numbers (so its faces have random orientations).
+
+    Returns ``(mesh, numbers)`` with ``numbers`` ``(d + 1,)`` the mesh numbers of the
+    local vertices, drawn from ``range(12)``.
+    """
+    dim = vertices.shape[1]
+    numbers = np.random.default_rng(seed).choice(12, size=dim + 1, replace=False)
+    coordinates = np.zeros((12, dim))
+    coordinates[numbers] = vertices
+    return simplex_mesh(coordinates, numbers[None, :]), numbers
+
+
+def reference_coordinates(vertices: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Reference coordinates ``(n, d)`` of physical points ``(n, d)``, from their barycentric coordinates in the cell ``vertices``."""
+    dim = vertices.shape[1]
+    system = np.vstack((vertices.T, np.ones(dim + 1)))
+    lam = np.linalg.solve(system, np.vstack((points.T, np.ones(len(points))))).T
+    return reference_simplex(dim).from_barycentric(lam)
+
+
+def two_dimensional_meshes() -> dict:
+    """Two triangle meshes as ``DGMesh`` objects: ``"rectangle"`` (``rectangle_mesh``) and ``"perturbed"`` (a Kuhn mesh).
+
+    ``"rectangle"`` is ``rectangle_mesh(3, 2)`` of ``[0, 2] x [-1, 0.5]``;
+    ``"perturbed"`` is the Kuhn mesh of ``[-1, 1]^2`` with 3 squares per direction
+    and its interior vertices moved by up to 0.1 per coordinate.
+    """
+    from hybridge.core.mesh import DGMesh, rectangle_mesh
+
+    perturbed = perturb_interior_vertices(kuhn_box_mesh(2, 3), 0.1, seed=2)
+    return {
+        "rectangle": rectangle_mesh(3, 2, xlim=(0.0, 2.0), ylim=(-1.0, 0.5)),
+        "perturbed": DGMesh.from_arrays(perturbed.vertices, perturbed.cells),
+    }
+
+
 def sample_points(mesh: SimplexMesh, count: int = 6, seed: int = 4) -> np.ndarray:
     """Random physical points inside every cell (the same barycentric coordinates in each), shape ``(n_K, count, d)``."""
     rng = np.random.default_rng(seed)
