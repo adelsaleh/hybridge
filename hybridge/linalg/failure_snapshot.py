@@ -8,8 +8,10 @@ equation-independent; transport-specific data and analysis are added by
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import tempfile
+from typing import Any
 
 import numpy as np
 
@@ -118,6 +120,80 @@ def system_snapshot_arrays(assembly, *, initial_guess=None, best_solution=None) 
         if value is not None:
             arrays[name] = _host(value)
     return arrays
+
+
+@dataclass(frozen=True)
+class SavedReducedSystem:
+    """A reduced trace system A x = b read back from a failure archive.
+
+    ``matrix_format`` is ``"bsr"`` (``data`` of shape (number of blocks, b, b) with
+    ``indptr`` and ``indices``), ``"csr"`` or ``"coo"`` (``rows`` and ``cols``).
+    ``rhs`` is the unscaled right-hand side b. ``initial_guess`` and ``best_solution``
+    are the vectors the failed solve held, or None when the archive has none.
+    The attribute names are those of the device assemblies, so a device copy can be
+    passed to :func:`hybridge.linalg.amgx.device_solver.solve_reduced_system_amgx_device`.
+    """
+
+    matrix_format: str
+    data: Any
+    rhs: Any
+    indptr: Any = None
+    indices: Any = None
+    rows: Any = None
+    cols: Any = None
+    boundary_trace: Any = None
+    initial_guess: Any = None
+    best_solution: Any = None
+
+    def host_matrix(self):
+        """Return A as a SciPy sparse matrix on the host, built from the stored arrays only."""
+        from scipy.sparse import bsr_matrix, coo_matrix, csr_matrix
+
+        data = _host(self.data)
+        n = int(_host(self.rhs).size)
+        if self.matrix_format == "bsr":
+            return bsr_matrix((data, _host(self.indices), _host(self.indptr)), shape=(n, n)).tocsr()
+        if self.matrix_format == "csr":
+            return csr_matrix((data, _host(self.indices), _host(self.indptr)), shape=(n, n))
+        if self.matrix_format == "coo":
+            return coo_matrix((data, (_host(self.rows), _host(self.cols))), shape=(n, n)).tocsr()
+        raise ValueError(f"Unsupported matrix format {self.matrix_format!r}")
+
+    def relative_residual(self, x, matrix=None) -> float:
+        """Return ||b - A x||_2 / ||b||_2 computed on the host in float64.
+
+        This check does not use the solver that produced ``x``. Pass ``matrix``
+        (from :meth:`host_matrix`) to avoid rebuilding A for several vectors.
+        """
+        matrix = self.host_matrix() if matrix is None else matrix
+        b = _host(self.rhs).astype(np.float64, copy=False)
+        r = b - matrix @ _host(x).astype(np.float64, copy=False).reshape(-1)
+        norm_b = float(np.linalg.norm(b))
+        return float(np.linalg.norm(r)) / norm_b if norm_b else float(np.linalg.norm(r))
+
+
+def load_system_snapshot(path, *, device: bool = False) -> SavedReducedSystem:
+    """Read an archive written by :func:`save_system_snapshot`.
+
+    With ``device=True`` every array is copied to the current CUDA device with
+    CuPy; otherwise the arrays stay NumPy arrays. Archives of another
+    ``format_version`` are rejected.
+    """
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {name: archive[name] for name in archive.files}
+    version = int(arrays.pop("format_version"))
+    if version != 1:
+        raise ValueError(f"Unsupported system snapshot version {version}")
+    matrix_format = str(arrays.pop("matrix_format").item())
+    if device:
+        from hybridge.runtime.optional import require_cupy
+
+        cp = require_cupy()
+        arrays = {name: cp.asarray(value) for name, value in arrays.items()}
+    known = {"data", "rhs", "indptr", "indices", "rows", "cols", "boundary_trace",
+             "initial_guess", "best_solution"}
+    return SavedReducedSystem(matrix_format=matrix_format,
+                              **{name: value for name, value in arrays.items() if name in known})
 
 
 def analyze_system_snapshot(arrays) -> dict:

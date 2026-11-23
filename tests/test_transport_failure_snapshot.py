@@ -104,6 +104,28 @@ def test_snapshot_roundtrips_matrix_and_iterates_without_solver(tmp_path):
     assert list(tmp_path.iterdir()) == [path]
 
 
+@pytest.mark.parametrize('fmt', ['bsr', 'csr'])
+def test_loaded_snapshot_rebuilds_the_saved_system_on_the_host(tmp_path, fmt):
+    from hybridge.linalg.failure_snapshot import load_system_snapshot, save_system_snapshot
+
+    rng = np.random.default_rng(3)
+    dense = np.kron(np.eye(3), np.ones((2, 2))) + 4*np.eye(6) + 0.1*rng.standard_normal((6, 6))
+    matrix = sparse.bsr_matrix(dense, blocksize=(2, 2)) if fmt == 'bsr' else sparse.csr_matrix(dense)
+    exact = rng.standard_normal(6)
+    assembly = SimpleNamespace(matrix_format=fmt, data=matrix.data, indptr=matrix.indptr,
+                               indices=matrix.indices, rhs=dense @ exact)
+    best = exact + 1e-3
+    path = tmp_path/'failed.npz'
+    save_system_snapshot(path, assembly, best_solution=best)
+    system = load_system_snapshot(path)
+    assert system.matrix_format == fmt and system.initial_guess is None
+    np.testing.assert_array_equal(system.best_solution, best)
+    np.testing.assert_allclose(system.host_matrix().toarray(), dense, rtol=0, atol=1e-15)
+    assert system.relative_residual(exact) < 1e-14
+    expected = np.linalg.norm(dense @ (exact - best)) / np.linalg.norm(dense @ exact)
+    assert system.relative_residual(best) == pytest.approx(expected, rel=1e-12)
+
+
 def test_snapshot_survives_analysis_failure(tmp_path, monkeypatch):
     import hybridge.transport.diagnostics as diagnostics
     def fail(_):

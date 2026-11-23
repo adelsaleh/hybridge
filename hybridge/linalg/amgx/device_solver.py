@@ -640,10 +640,11 @@ def _pyamgx_solve_csr_device(
         maxiter: int | None = None,
         verbose: bool | int = 0,
         borrow_csr: bool = False,
+        residual_history_limit: int | None = 64,
 ):
     """Solve a device CSR system with PyAMGX without staging through host CSR."""
     solver = PyAMGXCsrDeviceSolver(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose,
-                                   borrow_csr=borrow_csr)
+                                   borrow_csr=borrow_csr, residual_history_limit=residual_history_limit)
     try:
         setup_elapsed = solver.setup(matrix)
         x, info = solver.solve(rhs, initial_guess=initial_guess)
@@ -689,8 +690,13 @@ def _solve_reduced_system_amgx_device_once(
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
+    residual_history_limit: int | None = 64,
 ):
-    """Solve a CUDA-resident reduced trace system with device CSR and PyAMGX."""
+    """Solve a CUDA-resident reduced trace system with device CSR and PyAMGX.
+
+    ``residual_history_limit`` is the number of final AMGX residual norms kept
+    when the configuration stores the history; None keeps every iteration.
+    """
     cp = require_cupy()
     sparse = require_cupyx_sparse()
     total_start = time.perf_counter()
@@ -850,6 +856,7 @@ def _solve_reduced_system_amgx_device_once(
                 maxiter=maxiter,
                 verbose=verbose,
                 borrow_csr=borrow_csr,
+                residual_history_limit=residual_history_limit,
             )
         else:
             setup_elapsed = 0.0
@@ -1127,8 +1134,16 @@ def solve_reduced_system_amgx_device(
     verbose: bool | int = 0,
     failure_snapshot=None,
     borrow_csr: bool = False,
+    record_attempt_details: bool = False,
 ):
     """Solve one assembled device system, optionally retrying without reassembly.
+
+    With ``record_attempt_details=True`` each entry of ``amgx_attempts`` also
+    holds ``residual_history`` (every AMGX residual norm of that attempt, when
+    the configuration stores the history) and ``solution`` (a host copy of the
+    attempt's complete iterate, after any residual correction). These entries
+    hold arrays, so a caller that writes attempts to step records must leave
+    this off; it is meant for offline replays of saved systems.
 
     ``retry_seed_solution`` initializes the wrapper's single best-candidate
     slot from a failed upstream solver.  Its physical residual is evaluated
@@ -1377,6 +1392,8 @@ def solve_reduced_system_amgx_device(
                         retry_solver_cache[cache_key] = attempt_solver
                     replace_coefficients = bool(attempt_solver.is_setup)
 
+                if record_attempt_details and attempt_solver is not None:
+                    attempt_solver.residual_history_limit = None
                 if attempt["backend"] == "cusolver-qr":
                     result, solution = _solve_reduced_system_cusolver_qr_device_once(
                         assembly, tolerance=tolerance, check_rtol=check_rtol, atol=atol,
@@ -1403,6 +1420,7 @@ def solve_reduced_system_amgx_device(
                         raise_on_nonconvergence=False,
                         materialize_host_solution=materialize_host_solution,
                         verbose=verbose,
+                        residual_history_limit=None if record_attempt_details else 64,
                     )
                 if base_solution is not None:
                     result.amgx_correction_info = int(result.info)
@@ -1487,6 +1505,10 @@ def solve_reduced_system_amgx_device(
                         "physical_target": result.physical_residual_target,
                     }
                 )
+                if record_attempt_details:
+                    attempt_log[-1]["residual_history"] = [
+                        float(value) for value in (getattr(result, "residual_history", None) or ())]
+                    attempt_log[-1]["solution"] = cp.asnumpy(solution)
                 last_result = result
                 last_solution = solution
                 if verbose_level and len(attempts) > 1:

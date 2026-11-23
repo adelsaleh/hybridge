@@ -673,8 +673,9 @@ This remains the highest-priority new shared-API design project after the unstea
 
 ### Coefficient Inputs
 
-- [ ] Verify device evaluation of a scalar element coefficient as the density in the explicit HDG transport residual. Needed by guiding-center-cg-hdg for the first residual of an IMEX-ARK3 step with analytic initial data (2026-11-23).
+- [x] Verify device evaluation of a scalar element coefficient as the density in the explicit HDG transport residual. Needed by guiding-center-cg-hdg for the first residual of an IMEX-ARK3 step with analytic initial data (2026-11-23).
   Current workaround: none. Acceptance: the device case of `test_residual_uses_element_density_at_its_volume_and_trace_points` matches the host residual and trace at the stated tolerances. The host case passes.
+  Done 2026-11-23: on an H200 with `HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1`, the device cases of `tests/test_transport_quadrature_coefficients.py` pass with none skipped.
 
 - [ ] Qualify direct element-local state-dependent scalar/tensor diffusion together with source/reaction updates across ADR assembly, sidewise stabilization and recovery, with an explicit coefficient-version/cache-invalidation contract. Needed by `guiding-center-cg-hdg/guiding_center_cg_hdg/campaigns/gc_turbulence_nonlinear/plan.md` for semi-implicit nonlinear density transport (2026-11-02).
   Current workaround: `guiding-center-cg-hdg/guiding_center_cg_hdg/hdg/runtime/density_adr.py` sets D as a DG field each stage with `reuse_static_coefficients=False`; `guiding-center-cg-hdg/guiding_center_cg_hdg/campaigns/gc_turbulence_nonlinear/device_parity.py` matched host and raw CUDA through p9 on small meshes (2026-11-02). Existing `ElementCoefficient` support for source/reaction/beta does not establish the diffusion path. Acceptance: an evolving positive DG state produces matching volume/face/recovery samples and fresh-versus-reused matrices/solutions on NumPy/Numba and raw CUDA, including changed coefficient data with retained object identity, SPD bounds, and p9 coverage before the demanding campaign.

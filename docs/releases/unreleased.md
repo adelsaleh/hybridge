@@ -129,6 +129,15 @@ feature does nothing unless an option or an environment variable asks for it.
 20. **ADR: further AMGX attempts after a rejected solve.**
     `amgx_retry_attempts` on the ADR options, with raw-CUDA assembly only,
     lists the attempts to make when a solve is rejected.
+21. **Replaying a saved failed system.**
+    `hybridge.linalg.failure_snapshot.load_system_snapshot(path, device=...)`
+    reads an archive written after a failed solve into a `SavedReducedSystem`,
+    which can be passed back to `solve_reduced_system_amgx_device`. Its
+    `relative_residual(x)` computes ||b - A x||_2 / ||b||_2 on the host with SciPy,
+    independently of the solver that produced x. With
+    `record_attempt_details=True`, `solve_reduced_system_amgx_device` adds to
+    every attempt record its complete AMGX residual history and a host copy of
+    its iterate; it is off by default because step records store the attempts.
 
 ## Kernel tuning
 
