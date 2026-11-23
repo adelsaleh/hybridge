@@ -34,6 +34,23 @@ def test_rotated_gradient_has_tangent_boundary_zero_divergence_and_normal_contin
     assert metrics["velocity_boundary_speed_l2"] > 4.0
 
 
+@pytest.mark.parametrize("volume_points", [None, 7])
+def test_quadrature_error_is_separate_from_drift_incompatibility(volume_points):
+    from hybridge.diagnostics.hdg_identities import transport_enstrophy_terms
+
+    s = DGSpace(space().mesh, 3, basis_type="dub_orth", volume_quad_1d=volume_points)
+    coefficients = np.random.default_rng(6).normal(size=(s.mesh.num_tri, s.el_dof))
+    density = s.field(coefficients)
+    trace = np.zeros((s.mesh.int_edges_inds.size, s.order + 1))
+    terms = transport_enstrophy_terms(tangent_velocity(s), density, trace, separate_quadrature_defect=True)
+    assert abs(terms["geometric_defect"]) < TOL
+    assert terms["defect"] == pytest.approx(terms["geometric_defect"] + terms["quadrature_defect"], abs=TOL)
+    if volume_points is None:
+        assert abs(terms["quadrature_defect"]) > 1.e-3
+    else:
+        assert abs(terms["quadrature_defect"]) < TOL
+
+
 def test_non_tangent_constant_velocity_has_exact_boundary_integrals():
     s = space()
     velocity = VectorDGField((s.constant(1.0), s.constant(2.0)))

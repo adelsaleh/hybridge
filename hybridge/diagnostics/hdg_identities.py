@@ -69,12 +69,16 @@ def transport_enstrophy_terms(velocity: VectorDGField, density: DGField, trace_r
                               trace_basis: str = "legacy-lagrange",
                               stabilization="conflict-averaged-upwind",
                               boundary_mode: str = "zero-flux",
+                              separate_quadrature_defect: bool = False,
                               backend: str = "auto") -> dict[str, float]:
     """D_h and G_h (and the parts of G_h) for velocity ``b``, density ``z`` and interior trace ``lambda``.
 
     ``trace_reduced`` holds the interior-edge trace coefficients in the order of
     ``mesh.int_edges_inds`` (as ``solution_trace(result, space, reduced=True)``).
     Only zero-flux walls are supported (no density trace on the wall).
+    With ``separate_quadrature_defect``, differentiate the velocity polynomial to
+    measure the integral of ``div(b) z^2``. Subtracting this integral from the
+    volume term measures the error in quadrature integration by parts.
     """
     from hybridge.hdg.stabilization import effective_advection_normal_flux
     from hybridge.transport.advection_field import advection_field_reference, advection_field_space
@@ -129,7 +133,16 @@ def transport_enstrophy_terms(velocity: VectorDGField, density: DGField, trace_r
                        * (bx_volume * gradient[0] + by_volume * gradient[1]))
     volume_term = -2.0 * advection + xp.sum(weights * speed * z_f ** 2)
     defect = volume_term - jump_term - wall_term + correction
-    values = xp.stack([dissipation, defect, volume_term, jump_term, wall_term, correction])
+    values = [dissipation, defect, volume_term, jump_term, wall_term, correction]
+    keys = ["dissipation", "defect", "defect_divergence", "defect_trace_jump", "defect_wall", "defect_conflict"]
+    if separate_quadrature_defect:
+        from hybridge.core.field_ops import field_gradient_at_ref
+        points = space.quad_data.Krf_quads
+        divergence = sum(field_gradient_at_ref(field, points, device=xp is not np)[axis]
+                         for axis, field in enumerate(velocity.components))
+        geometry_volume = xp.sum(mesh.aff_jacs[:, None] * xp.asarray(quad.Krf_w) * divergence * z_volume**2)
+        values += [geometry_volume, geometry_volume - jump_term - wall_term + correction, volume_term - geometry_volume]
+        keys += ["divergence_pairing", "geometric_defect", "quadrature_defect"]
+    values = xp.stack(values)
     values = values if xp is np else xp.asnumpy(values)
-    keys = ("dissipation", "defect", "defect_divergence", "defect_trace_jump", "defect_wall", "defect_conflict")
     return {key: float(value) for key, value in zip(keys, values)}

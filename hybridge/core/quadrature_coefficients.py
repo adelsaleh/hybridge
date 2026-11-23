@@ -255,6 +255,14 @@ class QuadratureScalar:
         moments = self.volume @ self.space.quad_data.weighted_phi
         return np.ascontiguousarray(moments * self.space.mesh.aff_jacs[:, None])
 
+    def l2_squared(self) -> float:
+        """Sum the squared samples with the physical volume weights of each element."""
+        space = self.space
+        if self.on_device:
+            from hybridge.core.device import as_cupy_space
+            space = as_cupy_space(space, device=int(self.volume.device.id))
+        return float((self.volume**2 @ space.quad_data.Krf_w) @ space.mesh.aff_jacs)
+
     def project(self, *, name: str | None = None):
         """Return the DG field of ``space`` with the same moments (element L2 projection), same residency."""
         from hybridge.core.projection import field_from_moments

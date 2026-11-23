@@ -71,6 +71,8 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
             safe_key = "".join(ch if ch.isalnum() else "_" for ch in str(key)).strip("_")
             row[f"{prefix}_detail_{safe_key}"] = float(value)
     if global_solve is not None:
+        if hasattr(global_solve, "status"):
+            row[f"{prefix}_solver_status"] = global_solve.status
         attempts = getattr(global_solve, "amgx_attempts", None)
         if attempts is not None:
             row[f"{prefix}_amgx_attempt_count"] = int(

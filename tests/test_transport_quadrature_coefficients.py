@@ -50,6 +50,40 @@ cuda_only = pytest.mark.skipif(not (CUDA and _cuda_available()),
                                reason="set HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 on a CUDA machine")
 
 
+@pytest.mark.parametrize("backend", ["host", pytest.param("device", marks=cuda_only)])
+def test_residual_uses_element_density_at_its_volume_and_trace_points(backend):
+    from hybridge.core.element_coefficients import ElementCoefficient, physical_points
+    from hybridge.runtime.optional import asnumpy
+    from hybridge.transport.residual import UpwindHDGTransportResidual
+
+    space, _, (_, beta, _), _ = _problem(2)
+    workspace = UpwindHDGTransportResidual(space, backend=backend)
+
+    def coefficient(law):
+        def on_elements(reference, *, xp, t=None):
+            points = physical_points(space, reference, xp=xp)
+            return law(points[..., 0], points[..., 1])
+        return ElementCoefficient(on_elements, space.mesh)
+
+    polynomial = lambda x, y: 1.0 + x*y
+    field, trace = workspace.evaluate(coefficient(polynomial), beta)
+    expected_field, expected_trace = workspace.evaluate(space.project_callable(polynomial), beta)
+    np.testing.assert_allclose(field.coeffs, expected_field.coeffs, rtol=1e-11, atol=1e-11)
+    np.testing.assert_allclose(asnumpy(trace), asnumpy(expected_trace), rtol=1e-11, atol=1e-11)
+
+    def smooth_density(x, y):
+        return 1.0 / (1.0 + 3.0*x*x + 2.0*y*y)
+
+    exact = coefficient(smooth_density)
+    result, trace = workspace.evaluate(exact, beta)
+    np.testing.assert_allclose(asnumpy(workspace.u_volume), exact.volume_values(space))
+    np.testing.assert_allclose(asnumpy(workspace.u_face), exact.face_values(space, workspace.trace_host))
+    host = UpwindHDGTransportResidual(space)
+    reference, reference_trace = host.evaluate(exact, beta)
+    np.testing.assert_allclose(result.coeffs, reference.coeffs, rtol=1e-11, atol=1e-11)
+    np.testing.assert_allclose(asnumpy(trace), reference_trace, rtol=1e-11, atol=1e-11)
+
+
 def _problem(order, *, beta_order=None, basis="dub_orth", trace_basis="legacy-lagrange", mesh=None,
              constant_reaction=False):
     """DG coefficients and their quadrature-point samples on one small mesh."""

@@ -215,6 +215,8 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
     def evaluate(self, density, beta, boundary=None):
         """Return F(rho) and its algebraically consistent reduced trace.
 
+        A scalar ElementCoefficient supplies density values at the volume and
+        face points of the residual. A DGField is evaluated from its coefficients.
         On inactive faces the trace is irrelevant and set to zero. A singular
         active face constraint is an error, never silently regularized into a
         different transport operator.
@@ -224,12 +226,20 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
 
     def _evaluate(self, density, beta, boundary):
         """Apply the volume and numerical-face fluxes, then the package mass inverse."""
+        from hybridge.core.element_coefficients import ElementCoefficient
+
         xp, mesh, q = self.xp, self.mesh, self.q
-        rho = self._coefficients(density)
         if beta.dim != 2:
             raise ValueError("transport residual requires two velocity components")
-        self.u_volume[:] = rho @ q.bas_of_quads
-        self.u_face[:] = xp.einsum("ki,fiq->kfq", rho, self.face_basis)
+        if isinstance(density, ElementCoefficient):
+            if density.components != 1:
+                raise ValueError("the transport density must have one component")
+            self.u_volume[:] = density.volume_values(self.space, xp=xp)
+            self.u_face[:] = density.face_values(self.space, self.trace_host, xp=xp)
+        else:
+            rho = self._coefficients(density)
+            self.u_volume[:] = rho @ q.bas_of_quads
+            self.u_face[:] = xp.einsum("ki,fiq->kfq", rho, self.face_basis)
         from hybridge.core.quadrature_coefficients import QuadratureVectorField
         if isinstance(beta, QuadratureVectorField):
             beta.check(self.space, self.trace_host)

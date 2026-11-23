@@ -40,7 +40,11 @@ and primal postprocessing. The raw-CUDA path calls the function with
 `xp=cupy`, so the samples stay on the device; a function that raises
 `TypeError` for CuPy input falls back to host evaluation and upload. Instances
 are deliberately not callable, so they are never mistaken for `(x, y)` laws.
-Other solver families do not accept them yet.
+
+`UpwindHDGTransportResidual.evaluate` also accepts a scalar
+`ElementCoefficient` for the transported density. It evaluates the function at
+the volume points for the advection integral and on each element side at the
+trace quadrature points for the upwind flux.
 
 ### Compiled pointwise coefficients (host Numba)
 
