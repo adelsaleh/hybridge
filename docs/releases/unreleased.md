@@ -138,6 +138,11 @@ feature does nothing unless an option or an environment variable asks for it.
     `record_attempt_details=True`, `solve_reduced_system_amgx_device` adds to
     every attempt record its complete AMGX residual history and a host copy of
     its iterate; it is off by default because step records store the attempts.
+22. **Host PARDISO as the last device retry.**
+    A retry `{"backend": "pypardiso"}`, placed last like `cusolver-qr`, copies
+    the original unscaled system to the host as CSR, solves it with oneMKL
+    PARDISO (general LU, `MKL_NUM_THREADS` threads) and accepts the solution only
+    if ||A x - b|| measured again on the device meets the physical tolerance.
 
 ## Kernel tuning
 

@@ -65,6 +65,32 @@ def rejection(cp, assembly):
 
 
 @pytest.mark.parametrize("fmt", ["csr", "bsr"])
+def test_host_pardiso_retry_solves_the_unscaled_device_system(cp, fmt):
+    pytest.importorskip("pypardiso")
+    from hybridge.linalg.amgx.device_solver import _solve_reduced_system_pypardiso_host_once
+
+    assembly, dense, exact, rtol = system(cp, fmt)
+    original = assembly.data.copy()
+    result, solution = _solve_reduced_system_pypardiso_host_once(
+        assembly, check_rtol=rtol, materialize_host_solution=False,
+    )
+    assert result.converged and result.physical_residual_target_met
+    assert result.backend == "pypardiso-host"
+    assert result.x is None and isinstance(solution, cp.ndarray)
+    np.testing.assert_allclose(cp.asnumpy(solution), exact, atol=rtol*5, rtol=rtol*5)
+    cp.testing.assert_array_equal(assembly.data, original)
+
+
+def test_pardiso_must_be_the_final_unscaled_retry(cp):
+    from hybridge.linalg.amgx.device_solver import solve_reduced_system_amgx_device
+
+    assembly, _, _, rtol = system(cp)
+    with pytest.raises(ValueError, match="pypardiso must be the final"):
+        solve_reduced_system_amgx_device(
+            assembly, retry_attempts=({"backend": "pypardiso"}, {"backend": "amgx"}), tolerance=rtol)
+
+
+@pytest.mark.parametrize("fmt", ["csr", "bsr"])
 def test_device_qr_solves_nonsymmetric_scaled_rows_without_host_solution(cp, fmt):
     from hybridge.linalg.amgx.device_solver import (
             _solve_reduced_system_cusolver_qr_device_once,

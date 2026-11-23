@@ -1093,6 +1093,71 @@ def _solve_reduced_system_cusolver_qr_device_once(
     ), solution
 
 
+# Direct backends allowed as the final retry of solve_reduced_system_amgx_device: device sparse
+# QR (cuSOLVER) and host sparse LU (oneMKL PARDISO through PyPardiso).
+DIRECT_RETRY_BACKENDS = ("cusolver-qr", "pypardiso")
+
+
+def _solve_reduced_system_pypardiso_host_once(
+    assembly,
+    *,
+    tolerance: float = 1e-13,
+    check_rtol: float | None = None,
+    atol: float = 0.0,
+    materialize_host_solution: bool = True,
+):
+    """Last-resort host sparse LU (oneMKL PARDISO) of the original, unscaled device system.
+
+    The matrix and right-hand side are copied to the host as CSR, factorized and
+    solved by :func:`hybridge.linalg.direct.solve_pypardiso_system` (general
+    nonsymmetric type 11), and the solution is copied back. PARDISO uses the MKL
+    threads of the process: ``MKL_NUM_THREADS``, which the campaign environment
+    sets to the CPUs of the job. The residual ||A x - b|| is measured again on the
+    device against the original system and must meet ``check_rtol``/``atol``.
+    """
+    import os
+
+    from hybridge.linalg.direct import solve_pypardiso_system
+
+    cp, sparse = require_cupy(), require_cupyx_sparse()
+    started = time.perf_counter()
+    rtol = float(tolerance if check_rtol is None else check_rtol)
+    if not np.isfinite(rtol) or rtol < 0.0 or not np.isfinite(atol) or atol < 0.0:
+        raise ValueError("direct residual tolerances must be finite and nonnegative")
+    if not bool(cp.all(cp.isfinite(assembly.data)).get()) or not bool(cp.all(cp.isfinite(assembly.rhs)).get()):
+        raise ValueError("direct system contains non-finite values")
+    matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+    scalarized = isinstance(matrix, _DeviceBsrMatrixView)
+    csr = (_scalarize_device_bsr_matrix(matrix, sparse, cp) if scalarized
+           else _as_cupyx_csr_matrix(matrix, sparse, cp).copy())
+    host_matrix, host_rhs = csr.get(), cp.asnumpy(assembly.rhs)
+    setup_elapsed = time.perf_counter() - started
+    host = solve_pypardiso_system(host_matrix, host_rhs, rtol=rtol, atol=atol)
+    solution = cp.asarray(host.x, dtype=assembly.rhs.dtype)
+    residual = _device_compressed_matvec(matrix, solution, sparse, cp) - assembly.rhs
+    norm, rhs_norm, relative, target = _residual_stats_cp(residual, assembly.rhs, rtol=rtol, atol=atol)
+    finite = bool(cp.all(cp.isfinite(solution)).get())
+    result = SolveResult(
+        x=np.asarray(host.x) if materialize_host_solution else None,
+        residual_norm=norm, info=0, preconditioner=None,
+        total_elapsed_seconds=time.perf_counter() - started,
+        preconditioner_elapsed_seconds=setup_elapsed, solve_elapsed_seconds=host.solve_elapsed_seconds,
+        rhs_norm=rhs_norm, relative_residual_norm=relative, residual_target=target,
+        solver_residual_norm=norm, solver_rhs_norm=rhs_norm,
+        solver_relative_residual_norm=relative, solver_residual_target=target,
+        physical_residual_norm=norm, physical_rhs_norm=rhs_norm,
+        physical_relative_residual_norm=relative, physical_residual_target=target,
+        rtol=rtol, atol=atol,
+    )
+    result.device_scale_mode = "none"
+    result.amgx_bsr_scalarized = scalarized
+    result.pardiso_threads = os.environ.get("MKL_NUM_THREADS")
+    return finalize_solve_result(
+        result, backend="pypardiso-host", backend_info=0,
+        backend_success=True, solution_is_finite=finite, raise_on_nonconvergence=False,
+    ), solution
+
+
 def _device_transport_matrix_diagnostics(assembly) -> dict[str, float | int]:
     """Cheap row-scale diagnostics on failure; these are not condition estimates."""
     cp, sparse = require_cupy(), require_cupyx_sparse()
@@ -1202,15 +1267,15 @@ def solve_reduced_system_amgx_device(
     ]
     for index, retry in enumerate(configured_retries, start=1):
         backend = str(retry.get("backend", "amgx"))
-        if backend not in {"amgx", "cusolver-qr"}:
+        if backend not in {"amgx", *DIRECT_RETRY_BACKENDS}:
             raise ValueError(f"unsupported device retry backend {backend!r}")
-        if backend == "cusolver-qr" and (
+        if backend in DIRECT_RETRY_BACKENDS and (
             index != len(configured_retries)
             or retry.get("residual_correction", False)
             or retry.get("reuse_preconditioner", False)
             or _normalize_device_scale_mode(retry.get("scale_system", False)) != "none"
         ):
-            raise ValueError("cusolver-qr must be the final, unscaled direct retry without preconditioner reuse or correction")
+            raise ValueError(f"{backend} must be the final, unscaled direct retry without preconditioner reuse or correction")
         use_initial_guess = bool(retry.get("use_initial_guess", True))
         reuse_primary_solver = bool(retry.get("reuse_primary_solver", False))
         if reuse_primary_solver and (
@@ -1225,7 +1290,7 @@ def solve_reduced_system_amgx_device(
             )
         retry_config = retry.get("config", config)
         retry_scale_mode = _normalize_device_scale_mode(
-            retry.get("scale_system", False if backend == "cusolver-qr" else scale_system)
+            retry.get("scale_system", False if backend in DIRECT_RETRY_BACKENDS else scale_system)
         )
         if reuse_primary_solver and (
             retry_config != config
@@ -1394,7 +1459,12 @@ def solve_reduced_system_amgx_device(
 
                 if record_attempt_details and attempt_solver is not None:
                     attempt_solver.residual_history_limit = None
-                if attempt["backend"] == "cusolver-qr":
+                if attempt["backend"] == "pypardiso":
+                    result, solution = _solve_reduced_system_pypardiso_host_once(
+                        assembly, tolerance=tolerance, check_rtol=check_rtol, atol=atol,
+                        materialize_host_solution=materialize_host_solution,
+                    )
+                elif attempt["backend"] == "cusolver-qr":
                     result, solution = _solve_reduced_system_cusolver_qr_device_once(
                         assembly, tolerance=tolerance, check_rtol=check_rtol, atol=atol,
                         materialize_host_solution=materialize_host_solution,
