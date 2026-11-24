@@ -116,7 +116,10 @@ def test_loaded_snapshot_rebuilds_the_saved_system_on_the_host(tmp_path, fmt):
                                indices=matrix.indices, rhs=dense @ exact)
     best = exact + 1e-3
     path = tmp_path/'failed.npz'
-    save_system_snapshot(path, assembly, best_solution=best)
+    # Transport snapshots also store string metadata and mesh arrays; the loader ignores them.
+    save_system_snapshot(path, assembly, best_solution=best,
+                         extra_arrays={'advection_stabilization': np.array('conflict-averaged-upwind'),
+                                       'triangles': np.zeros((2, 3), dtype=np.int64)})
     system = load_system_snapshot(path)
     assert system.matrix_format == fmt and system.initial_guess is None
     np.testing.assert_array_equal(system.best_solution, best)
@@ -124,6 +127,13 @@ def test_loaded_snapshot_rebuilds_the_saved_system_on_the_host(tmp_path, fmt):
     assert system.relative_residual(exact) < 1e-14
     expected = np.linalg.norm(dense @ (exact - best)) / np.linalg.norm(dense @ exact)
     assert system.relative_residual(best) == pytest.approx(expected, rel=1e-12)
+    cp = pytest.importorskip('cupy')
+    try:
+        cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError:
+        pytest.skip('CUDA runtime unavailable')
+    on_device = load_system_snapshot(path, device=True)
+    assert isinstance(on_device.data, cp.ndarray) and on_device.relative_residual(exact) < 1e-14
 
 
 def test_snapshot_survives_analysis_failure(tmp_path, monkeypatch):

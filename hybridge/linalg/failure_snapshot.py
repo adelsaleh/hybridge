@@ -179,21 +179,22 @@ def load_system_snapshot(path, *, device: bool = False) -> SavedReducedSystem:
     CuPy; otherwise the arrays stay NumPy arrays. Archives of another
     ``format_version`` are rejected.
     """
+    # Only the system's own arrays are read; equation-specific extras saved beside them
+    # (mesh, coefficients, fluxes and string metadata) stay in the archive.
+    known = ("data", "rhs", "indptr", "indices", "rows", "cols", "boundary_trace",
+             "initial_guess", "best_solution")
     with np.load(path, allow_pickle=False) as archive:
-        arrays = {name: archive[name] for name in archive.files}
-    version = int(arrays.pop("format_version"))
-    if version != 1:
-        raise ValueError(f"Unsupported system snapshot version {version}")
-    matrix_format = str(arrays.pop("matrix_format").item())
+        version = int(archive["format_version"])
+        if version != 1:
+            raise ValueError(f"Unsupported system snapshot version {version}")
+        matrix_format = str(archive["matrix_format"].item())
+        arrays = {name: archive[name] for name in known if name in archive.files}
     if device:
         from hybridge.runtime.optional import require_cupy
 
         cp = require_cupy()
         arrays = {name: cp.asarray(value) for name, value in arrays.items()}
-    known = {"data", "rhs", "indptr", "indices", "rows", "cols", "boundary_trace",
-             "initial_guess", "best_solution"}
-    return SavedReducedSystem(matrix_format=matrix_format,
-                              **{name: value for name, value in arrays.items() if name in known})
+    return SavedReducedSystem(matrix_format=matrix_format, **arrays)
 
 
 def analyze_system_snapshot(arrays) -> dict:

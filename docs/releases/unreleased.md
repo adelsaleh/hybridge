@@ -131,8 +131,10 @@ feature does nothing unless an option or an environment variable asks for it.
     lists the attempts to make when a solve is rejected.
 21. **Replaying a saved failed system.**
     `hybridge.linalg.failure_snapshot.load_system_snapshot(path, device=...)`
-    reads an archive written after a failed solve into a `SavedReducedSystem`,
-    which can be passed back to `solve_reduced_system_amgx_device`. Its
+    reads the matrix, right-hand side and saved iterates of an archive written
+    after a failed solve into a `SavedReducedSystem` (other arrays, such as the
+    mesh and string metadata of transport archives, stay in the file); it can be
+    passed back to `solve_reduced_system_amgx_device`. Its
     `relative_residual(x)` computes ||b - A x||_2 / ||b||_2 on the host with SciPy,
     independently of the solver that produced x. With
     `record_attempt_details=True`, `solve_reduced_system_amgx_device` adds to
