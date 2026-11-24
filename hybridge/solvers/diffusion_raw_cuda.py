@@ -8,6 +8,7 @@ the fields, reusing the operator, local factors and solvers cached on the
 
 from __future__ import annotations
 
+import json
 import time
 
 import numpy as np
@@ -65,6 +66,15 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
             f"fb_hp_mg_preconditioner_policy={native_policy!r} requires "
             "solver='fb-hp-mg-pcg'"
         )
+    native_tuning = options.fb_hp_mg_preconditioner_tuning
+    if native_tuning is not None and not native_requested:
+        raise ValueError(
+            "fb_hp_mg_preconditioner_tuning requires solver='fb-hp-mg-pcg'"
+        )
+    from hybridge.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
+    native_parameters = face_hp_mg_preconditioner_parameters(
+        native_policy, overrides=native_tuning,
+    )
     if native_requested and matrix_format != "bsr":
         raise ValueError("solver='fb-hp-mg-pcg' requires raw_matrix_format='auto' or 'bsr'")
     if native_requested and str(options.trace_basis).replace("_", "-").lower() != "legendre-modal":
@@ -334,6 +344,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     native_metrics: dict[str, float] = {}
     native_key = (
         operator_key, int(assembly_result.rhs.size), native_policy,
+        json.dumps(native_parameters, sort_keys=True),
     )
     if native_requested and owner._raw_cuda_fb_hp_mg_failed_key != native_key:
         try:
@@ -368,6 +379,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
                     degree=owner.space.order,
                     diagonal_positions=diagonal_positions,
                     preconditioner_policy=native_policy,
+                    preconditioner_tuning=native_tuning,
                     verbose=verbosity,
                 )
                 cp.cuda.get_current_stream().synchronize()

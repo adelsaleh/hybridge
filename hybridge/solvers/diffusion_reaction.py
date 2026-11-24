@@ -237,6 +237,7 @@ class DiffusionReactionHDGOptions:
     fb_hp_mg_true_residual_every: int = 10
     fb_hp_mg_residual_history: bool = True
     fb_hp_mg_preconditioner_policy: Literal["standard", "fast", "robust"] = "standard"
+    fb_hp_mg_preconditioner_tuning: dict[str, Any] | None = None
     cache_device_matrix: bool = True
     cache_local_factors: LocalFactorCachePolicy = "none"
     ilu_drop_tol: float = 1e-10
@@ -1433,6 +1434,7 @@ def solve_diffusion_reaction_hdg(
         amgx_config: dict | None = None,
         amgx_retry_attempts: tuple[dict[str, Any], ...] | None = None,
         fb_hp_mg_preconditioner_policy: Literal["standard", "fast", "robust"] = "standard",
+        fb_hp_mg_preconditioner_tuning: dict[str, Any] | None = None,
         fb_hp_mg_true_residual_every: int = 10,
         fb_hp_mg_residual_history: bool = True,
         cache_device_matrix: bool = False,

@@ -35,10 +35,21 @@ Standalone fixed-work tuning is available through
 `FaceBlockHpMgPcgSolver(..., preconditioner_policy="standard",
 preconditioner_tuning={"chebyshev_order": 3})`. The shared policy resolver
 also accepts `sweeps`, `coarse_sweeps`, and `coarse_cycle` (`V` or `W`).
+The `schedule` override selects `direct-to-zero` or `halve` independently of
+these settings. For example, `preconditioner_tuning={"schedule": "halve"}`
+with the standard policy replaces `p -> 0` by
+`p -> floor(p/2) -> ... -> 1 -> 0`, retaining the same Chebyshev order,
+sweep counts and scalar AMG configuration at degree zero. This permits a
+comparison of degree schedules without also changing the relaxation.
 Sweep counts always remain balanced; the hierarchy still applies exactly one
 coarse cycle and retains its symmetry/positive-curvature gates. Omitted tuning
 leaves production defaults unchanged. The resolved settings are exposed as
 `preconditioner_parameters` for reproducible benchmark records.
+
+For `DiffusionReactionHDGSolver`, pass the same dictionary through
+`DiffusionReactionHDGOptions(fb_hp_mg_preconditioner_tuning=...)`.
+Changing these settings rebuilds the multigrid hierarchy; changing only the
+right-hand side reuses it.
 
 In the diffusion solve, every native true check uses the original assembled
 matrix action, not the separately stored orthonormal congruence. Its norm is

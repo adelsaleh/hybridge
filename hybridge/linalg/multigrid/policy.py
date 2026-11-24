@@ -49,10 +49,11 @@ def robust_scalar_p0_amgx_config() -> dict:
 
 
 def face_hp_mg_preconditioner_parameters(policy: str = "standard", *, overrides=None) -> dict:
-    """Resolve a policy plus optional fixed-work tuning, without device imports.
+    """Return the degree schedule, smoothing and coarse-solve settings.
 
-    Overrides preserve the degree schedule and balanced pre/post smoothing.
-    They do not modify the baseline policies or introduce adaptive inner solves.
+    Overrides can change the degree schedule independently of relaxation.
+    Pre/post sweep counts remain equal, and the coarse solve applies one fixed
+    cycle. The named policies and the caller's overrides are left unchanged.
     """
     normalized = str(policy).replace("_", "-").lower()
     if normalized in {"standard", "fast"}:
@@ -65,9 +66,14 @@ def face_hp_mg_preconditioner_parameters(policy: str = "standard", *, overrides=
     else:
         raise ValueError("FB-HP-MG preconditioner policy must be 'standard', 'fast' or 'robust'")
     tuning = copy.deepcopy(overrides or {})
-    unknown = set(tuning)-{"chebyshev_order", "sweeps", "coarse_sweeps", "coarse_cycle"}
+    unknown = set(tuning)-{"schedule", "chebyshev_order", "sweeps", "coarse_sweeps", "coarse_cycle"}
     if unknown:
         raise ValueError(f"Unknown face hp tuning parameters: {sorted(unknown)}")
+    if "schedule" in tuning:
+        schedule = str(tuning["schedule"]).replace("_", "-").lower()
+        if schedule not in {"direct-to-zero", "halve"}:
+            raise ValueError("schedule must be 'direct-to-zero' or 'halve'")
+        parameters["schedule"] = schedule
     for name in ("chebyshev_order", "sweeps", "coarse_sweeps"):
         if name in tuning:
             try:
